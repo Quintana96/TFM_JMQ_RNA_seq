@@ -1280,7 +1280,7 @@ ui <- page_navbar(
               div(
                 tags$strong("Uso"),
                 tags$p(class = "text-muted small",
-                       "Carga una matriz externa o usa la pestana Resultados para revisar ejecuciones previas guardadas automaticamente en outputs/.")
+                       "Carga una matriz externa o usa la pestaña Resultados para revisar ejecuciones previas guardadas automaticamente en outputs/.")
               )
             ),
             div(
@@ -1433,7 +1433,7 @@ server <- function(input, output, session) {
                stringsAsFactors = FALSE, check.names = FALSE)
   )
 
-  # Navegacion entre pestanas
+  # Navegacion entre pestañas
   process_unlocked <- reactiveVal(FALSE)
   analysis_done    <- reactiveVal(FALSE)
   config_snap      <- reactiveVal(list())
@@ -1914,7 +1914,7 @@ server <- function(input, output, session) {
       loaded_dir <- dirname(input$upload_counts$datapath)
     }
     if (is.null(counts)) {
-      showNotification("No se pudo cargar la matriz de conteos. Verifica el formato o usa la pestana Resultados para abrir ejecuciones previas.",
+      showNotification("No se pudo cargar la matriz de conteos. Verifica el formato o usa la pestaña Resultados para abrir ejecuciones previas.",
                        type="error"); return()
     }
     counts <- round(counts)
@@ -1964,7 +1964,7 @@ server <- function(input, output, session) {
   output$tab2_content <- renderUI({
     if (!process_unlocked())
       return(div(class="alert alert-info mt-4", icon("arrow-left-long"),
-                 " Completa la pestana 1 antes de continuar."))
+                 " Completa la pestaña 1 antes de continuar."))
     cfg <- config_snap()
     if (length(cfg) == 0) return(NULL)
 
@@ -2499,7 +2499,7 @@ server <- function(input, output, session) {
   output$tab3_content <- renderUI({
     if (!analysis_done() && !length(available_result_choices()))
       return(div(class="alert alert-info mt-4", icon("clock"),
-                 " Ejecuta el workflow en la pestana 2 para ver los resultados o usa una ejecucion previa guardada en outputs/."))
+                 " Ejecuta el workflow en la pestaña 2 para ver los resultados o usa una ejecucion previa guardada en outputs/."))
     p <- selected_result_params()
     if (!length(p)) return(NULL)
     s <- selected_result_summary()
@@ -2699,7 +2699,7 @@ server <- function(input, output, session) {
     }
     if (!is.na(s$fastqc_fail)) {
       items <- c(items, list(tags$li(tags$b("Checks FastQC fallidos: "), s$fastqc_fail,
-                                if (s$fastqc_fail > 0) tags$span(class="text-warning", "  Revisar pestana Calidad.") else NULL)))
+                                if (s$fastqc_fail > 0) tags$span(class="text-warning", "  Revisar pestaña Calidad.") else NULL)))
     }
 
     tagList(
