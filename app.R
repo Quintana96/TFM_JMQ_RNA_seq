@@ -30,6 +30,8 @@ HAS_TXIMPORT   <- pkg_ok("tximport")
 FASTQ_R1_SUFFIXES <- c("_1.fastq.gz", "_R1.fastq.gz", "_1.fastq", "_R1.fastq")
 FASTQ_R2_SUFFIXES <- c("_2.fastq.gz", "_R2.fastq.gz", "_2.fastq", "_R2.fastq")
 FASTQ_R1_PATTERN <- "(_1\\.fastq\\.gz$|_R1\\.fastq\\.gz$|_1\\.fastq$|_R1\\.fastq$)"
+FASTQ_R2_PATTERN <- "(_2\\.fastq\\.gz$|_R2\\.fastq\\.gz$|_2\\.fastq$|_R2\\.fastq$)"
+FASTQ_ANY_PATTERN <- "(\\.fastq\\.gz$|\\.fastq$)"
 
 sample_fastq_paths <- function(dir_path, samples, suffixes) {
   file.path(dir_path, as.vector(outer(samples, suffixes, paste0)))
@@ -39,14 +41,35 @@ sample_name_from_r1 <- function(files) {
   sub(FASTQ_R1_PATTERN, "", basename(files), ignore.case = TRUE)
 }
 
-detect_samples <- function(dir_path) {
+sample_name_from_fastq <- function(files) {
+  x <- basename(files)
+  x <- sub(FASTQ_R1_PATTERN, "", x, ignore.case = TRUE)
+  x <- sub(FASTQ_ANY_PATTERN, "", x, ignore.case = TRUE)
+  x
+}
+
+read_type_label <- function(read_type) {
+  if (identical(read_type, "se")) "Single-end" else "Paired-end"
+}
+
+detect_samples <- function(dir_path, read_type = "pe") {
   if (!nzchar(dir_path) || !dir.exists(dir_path)) return(character(0))
-  files <- list.files(
-    dir_path,
-    pattern = FASTQ_R1_PATTERN,
-    full.names = FALSE, ignore.case = TRUE
-  )
-  sample_name_from_r1(files)
+  if (identical(read_type, "se")) {
+    files <- list.files(
+      dir_path,
+      pattern = FASTQ_ANY_PATTERN,
+      full.names = FALSE, ignore.case = TRUE
+    )
+    files <- files[!grepl(FASTQ_R2_PATTERN, files, ignore.case = TRUE)]
+    unique(sample_name_from_fastq(files))
+  } else {
+    files <- list.files(
+      dir_path,
+      pattern = FASTQ_R1_PATTERN,
+      full.names = FALSE, ignore.case = TRUE
+    )
+    unique(sample_name_from_r1(files))
+  }
 }
 
 missing_r2 <- function(dir_path, samples) {
@@ -56,10 +79,15 @@ missing_r2 <- function(dir_path, samples) {
   }, logical(1))
 }
 
-sample_fastq_sizes <- function(dir_path, samples) {
+sample_fastq_sizes <- function(dir_path, samples, read_type = "pe") {
   if (length(samples) == 0 || !dir.exists(dir_path)) return(setNames(numeric(0), samples))
   sapply(samples, function(s) {
-    candidates <- sample_fastq_paths(dir_path, s, c(FASTQ_R1_SUFFIXES, FASTQ_R2_SUFFIXES))
+    suffixes <- if (identical(read_type, "se")) {
+      c(".fastq.gz", ".fastq", FASTQ_R1_SUFFIXES)
+    } else {
+      c(FASTQ_R1_SUFFIXES, FASTQ_R2_SUFFIXES)
+    }
+    candidates <- sample_fastq_paths(dir_path, s, suffixes)
     sum(file.info(candidates)$size, na.rm = TRUE)
   }, USE.NAMES = TRUE)
 }
@@ -1273,6 +1301,12 @@ ui <- page_navbar(
                          "Pseudoalineamiento" = "pseudo"),
             selected = "alignment"
           ),
+          radioButtons(
+            "read_type", "Tipo de lectura",
+            choices = c("Paired-end" = "pe", "Single-end" = "se"),
+            selected = "pe",
+            inline = TRUE
+          ),
           conditionalPanel(
             "input.analysis_type === 'alignment'",
             tags$p(class = "text-muted small mb-0",
@@ -1282,7 +1316,15 @@ ui <- page_navbar(
             "input.analysis_type === 'pseudo'",
             selectInput("pseudo_tool", "Herramienta",
                         choices  = c("Salmon" = "salmon", "Kallisto" = "kallisto"),
-                        selected = "salmon")
+                        selected = "salmon"),
+            conditionalPanel(
+              "input.pseudo_tool === 'kallisto' && input.read_type === 'se'",
+              layout_columns(
+                col_widths = c(6, 6),
+                numericInput("fragment_length", "Longitud media fragmento", value = 200, min = 1, step = 1),
+                numericInput("fragment_sd", "SD fragmento", value = 20, min = 1, step = 1)
+              )
+            )
           )
         ),
 
@@ -1623,7 +1665,7 @@ server <- function(input, output, session) {
   input_dir_debounced <- debounce(reactive(input_dir_val()), 600)
   samples_live <- reactive({
     dir_val <- input_dir_debounced()
-    detect_samples(dir_val)
+    detect_samples(dir_val, input$read_type %||% "pe")
   })
 
   output$sample_preview_ui <- renderUI({
@@ -1636,15 +1678,19 @@ server <- function(input, output, session) {
     samples <- samples_live()
     if (length(samples) == 0)
       return(div(class="alert alert-warning", icon("triangle-exclamation"),
-                 " No se encontraron FASTQ (*_1.fastq.gz / *_R1.fastq.gz)."))
+                 if (isTRUE(input$read_type == "se"))
+                   " No se encontraron FASTQ single-end (*.fastq.gz / *.fastq)."
+                 else
+                   " No se encontraron FASTQ paired-end (*_1.fastq.gz / *_R1.fastq.gz)."))
 
     # Buenas practicas: advertir nombres con caracteres problematicos
     bad <- bad_sample_chars(samples)
-    r2_miss <- missing_r2(dir_val, samples)
+    r2_miss <- if (isTRUE(input$read_type == "se")) rep(FALSE, length(samples)) else missing_r2(dir_val, samples)
 
     tagList(
       div(class="alert alert-info py-2",
-          icon("circle-check"), sprintf(" %d muestra(s) detectadas.", length(samples))),
+          icon("circle-check"), sprintf(" %d muestra(s) %s detectadas.",
+                                        length(samples), read_type_label(input$read_type %||% "pe"))),
       if (length(bad) > 0)
         div(class="alert alert-warning py-2", icon("triangle-exclamation"),
             " Nombres con caracteres especiales (espacios, @, etc.) pueden causar",
@@ -1654,12 +1700,13 @@ server <- function(input, output, session) {
             " Faltan R2 para: ", tags$b(paste(samples[r2_miss], collapse=", "))),
       tags$table(
         class="table table-sm table-striped",
-        tags$thead(tags$tr(tags$th("Muestra"), tags$th("R1"), tags$th("R2"))),
+        tags$thead(tags$tr(tags$th("Muestra"), tags$th("Lectura 1 / FASTQ"), tags$th("R2"))),
         tags$tbody(lapply(seq_along(samples), function(i) {
           tags$tr(
             tags$td(samples[i]),
             tags$td(tags$span(style="color:#315342;font-weight:700;","\u2713")),
-            tags$td(if (!r2_miss[[i]]) tags$span(style="color:#315342;font-weight:700;","\u2713")
+            tags$td(if (isTRUE(input$read_type == "se")) tags$span(class="text-muted", "No aplica")
+                    else if (!r2_miss[[i]]) tags$span(style="color:#315342;font-weight:700;","\u2713")
                     else tags$span(style="color:#8A2F2F;font-weight:700;","\u2717 falta"))
           )
         }))
@@ -1678,10 +1725,10 @@ server <- function(input, output, session) {
     if (!nzchar(dir_in))           errs <- c(errs, "Directorio de FASTQs: campo vacio.")
     else if (!dir.exists(dir_in))  errs <- c(errs, "Directorio de FASTQs: no existe.")
     else {
-      samps <- detect_samples(dir_in)
+      samps <- detect_samples(dir_in, input$read_type %||% "pe")
       if (length(samps) == 0)
-        errs <- c(errs, "No se encontraron archivos FASTQ R1.")
-      else {
+        errs <- c(errs, if (isTRUE(input$read_type == "se")) "No se encontraron archivos FASTQ single-end." else "No se encontraron archivos FASTQ R1.")
+      else if (!isTRUE(input$read_type == "se")) {
         bad <- samps[missing_r2(dir_in, samps)]
         if (length(bad)) errs <- c(errs, paste("Faltan R2 para:", paste(bad, collapse=", ")))
       }
@@ -1695,10 +1742,18 @@ server <- function(input, output, session) {
       if (!nzchar(af))            errs <- c(errs, "Anotacion GFF/GTF: campo vacio.")
       else if (!file.exists(af))  errs <- c(errs, "Anotacion GFF/GTF: no existe.")
     }
+    if (isTRUE(input$analysis_type == "pseudo") &&
+        identical(input$pseudo_tool %||% "salmon", "kallisto") &&
+        isTRUE(input$read_type == "se")) {
+      fl <- input$fragment_length %||% NA_real_
+      fsd <- input$fragment_sd %||% NA_real_
+      if (is.na(fl) || fl <= 0)
+        errs <- c(errs, "Kallisto single-end: longitud media de fragmento invalida.")
+      if (is.na(fsd) || fsd <= 0)
+        errs <- c(errs, "Kallisto single-end: desviacion estandar de fragmento invalida.")
+    }
     if (!dir.exists(outputs_dir))
       errs <- c(errs, paste0("No se pudo acceder a la carpeta de salidas: ", outputs_dir))
-    if (isTRUE(input$read_type == "se"))
-      errs <- c(errs, "Single-end no soportado por workflow.sh actual.")
     if (!file.exists(workflow_path))
       errs <- c(errs, paste0("workflow.sh no encontrado en: ", workflow_path))
     errs
@@ -1710,8 +1765,9 @@ server <- function(input, output, session) {
     dir_ok <- nzchar(dir_in) && dir.exists(dir_in)
     samples_ok <- FALSE
     if (dir_ok) {
-      samps <- detect_samples(dir_in)
-      samples_ok <- length(samps) > 0 && !any(missing_r2(dir_in, samps))
+      samps <- detect_samples(dir_in, input$read_type %||% "pe")
+      samples_ok <- length(samps) > 0 &&
+        (isTRUE(input$read_type == "se") || !any(missing_r2(dir_in, samps)))
     }
     genome_ok <- if (!is.null(input$genome_file_upload) && nrow(input$genome_file_upload) > 0) "ok" else "missing"
     # Annotation: required for alignment, optional for pseudo
@@ -1768,6 +1824,18 @@ server <- function(input, output, session) {
     else input$pseudo_tool %||% "salmon"
   })
 
+  effective_read_type <- reactive({
+    if (isTRUE(input$read_type == "se")) "se" else "pe"
+  })
+
+  effective_fragment_length <- reactive({
+    input$fragment_length %||% 200
+  })
+
+  effective_fragment_sd <- reactive({
+    input$fragment_sd %||% 20
+  })
+
   effective_genome_file <- reactive({
     if (!is.null(input$genome_file_upload) && nrow(input$genome_file_upload) > 0)
       input$genome_file_upload$datapath
@@ -1792,10 +1860,11 @@ server <- function(input, output, session) {
   workflow_cmd <- reactive({
     req(input_dir_val(), output_dir_val())
     sprintf(
-      "bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s --ALIGNMENT_TYPE %s",
+      "bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s --ALIGNMENT_TYPE %s --READ_TYPE %s --FRAGMENT_LENGTH %s --FRAGMENT_SD %s",
       shQuote(workflow_path),
       shQuote(input_dir_val()), shQuote(output_dir_val()),
-      shQuote(effective_genome_file()), shQuote(effective_annotation()), shQuote(effective_tool())
+      shQuote(effective_genome_file()), shQuote(effective_annotation()), shQuote(effective_tool()),
+      shQuote(effective_read_type()), shQuote(effective_fragment_length()), shQuote(effective_fragment_sd())
     )
   })
 
@@ -1803,14 +1872,15 @@ server <- function(input, output, session) {
   observeEvent(input$btn_to_processing, {
     req(length(val_errors()) == 0)
     process_unlocked(TRUE)
-    samps <- detect_samples(input_dir_val())
+    samps <- detect_samples(input_dir_val(), effective_read_type())
     run_output_dir <- create_run_output_dir(outputs_dir, input$analysis_type, effective_tool())
     pending_output_dir(run_output_dir)
     config_snap(list(
       analysis_type = input$analysis_type, tool = effective_tool(),
       input_dir  = input_dir_val(), output_dir = run_output_dir,
       genome_file = effective_genome_file(), annotation = effective_annotation(),
-      n_samples = length(samps), read_type = "Paired-end"
+      n_samples = length(samps), read_type = read_type_label(effective_read_type()),
+      fragment_length = effective_fragment_length(), fragment_sd = effective_fragment_sd()
     ))
     log_text(paste(
       ts_log("=== Configuracion validada ==="),
@@ -1898,10 +1968,12 @@ server <- function(input, output, session) {
     cfg <- config_snap()
     if (length(cfg) == 0) return(NULL)
 
-    r1_files <- list.files(cfg$input_dir,
-                           pattern="(_1\\.fastq\\.gz$|_R1\\.fastq\\.gz$)",
-                           full.names=TRUE, ignore.case=TRUE)
-    total_sz <- if (length(r1_files)) fmt_bytes(sum(file.info(r1_files)$size,na.rm=TRUE)*2) else "—"
+    total_sz <- {
+      cfg_read_type <- if (identical(cfg$read_type, "Single-end")) "se" else "pe"
+      cfg_samples <- detect_samples(cfg$input_dir, cfg_read_type)
+      sizes <- sample_fastq_sizes(cfg$input_dir, cfg_samples, cfg_read_type)
+      if (length(sizes)) fmt_bytes(sum(sizes, na.rm = TRUE)) else "—"
+    }
 
     tagList(
       # ── Fila superior: resumen + progreso ─────────────────────────────
@@ -1917,6 +1989,11 @@ server <- function(input, output, session) {
               "Alineamiento (Bowtie2)" else paste0("Pseudoalineamiento (",cfg$tool,")")),
             tags$dt(class="col-6","Muestras:"), tags$dd(class="col-6", cfg$n_samples),
             tags$dt(class="col-6","Lectura:"),  tags$dd(class="col-6", cfg$read_type),
+            if (identical(cfg$tool, "kallisto") && identical(cfg$read_type, "Single-end"))
+              tagList(
+                tags$dt(class="col-6","Fragmento:"),
+                tags$dd(class="col-6", paste0(cfg$fragment_length, " ± ", cfg$fragment_sd))
+              ),
             tags$dt(class="col-6","Tama\u00f1o est.:"), tags$dd(class="col-6", total_sz),
             tags$dt(class="col-6","Entrada:"),
             tags$dd(class="col-6", tags$code(class="small", cfg$input_dir)),
@@ -2134,18 +2211,20 @@ server <- function(input, output, session) {
     if (is.null(annotation_path)) return()
 
     cmd <- sprintf(
-      "bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s --ALIGNMENT_TYPE %s",
+      "bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s --ALIGNMENT_TYPE %s --READ_TYPE %s --FRAGMENT_LENGTH %s --FRAGMENT_SD %s",
       shQuote(workflow_path), shQuote(input_dir_val()), shQuote(output_dir_val()),
-      shQuote(genome_path), shQuote(annotation_path), shQuote(effective_tool())
+      shQuote(genome_path), shQuote(annotation_path), shQuote(effective_tool()), shQuote(effective_read_type()),
+      shQuote(effective_fragment_length()), shQuote(effective_fragment_sd())
     )
 
     # Snapshot de parametros para Tab 3
-    samps <- detect_samples(input_dir_val())
+    samps <- detect_samples(input_dir_val(), effective_read_type())
     run_params_rv(list(
       analysis_type = input$analysis_type, tool = effective_tool(),
       input_dir = input_dir_val(), output_dir = output_dir_val(),
       genome_file = genome_path, annotation_file = annotation_path,
-      n_samples = length(samps), read_type = "Paired-end",
+      n_samples = length(samps), read_type = read_type_label(effective_read_type()),
+      fragment_length = effective_fragment_length(), fragment_sd = effective_fragment_sd(),
       started_at = Sys.time(),
       r_version = paste(R.version$major, R.version$minor, sep=".")
     ))
@@ -2180,7 +2259,7 @@ server <- function(input, output, session) {
     proc_rv$n_total     <- length(samps)
     proc_rv$samp_stat   <- setNames(as.list(rep("pending", length(samps))), samps)
     proc_rv$cur_sample  <- NULL
-    proc_rv$sample_sizes <- sample_fastq_sizes(input_dir_val(), samps)
+    proc_rv$sample_sizes <- sample_fastq_sizes(input_dir_val(), samps, effective_read_type())
     proc_rv$total_bytes <- sum(proc_rv$sample_sizes)
     proc_rv$bytes_done <- 0
     proc_rv$start_time  <- Sys.time()

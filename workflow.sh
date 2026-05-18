@@ -23,10 +23,13 @@ shopt -s nullglob
 # conda activate pipeline_ecoli
 # ============================================================================
 
-# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto]
+# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>]
 
 # Default values
 ALIGNMENT_TYPE="bowtie2"
+READ_TYPE="pe"
+FRAGMENT_LENGTH=200
+FRAGMENT_SD=20
 
 # Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -36,6 +39,9 @@ while [[ "$#" -gt 0 ]]; do
         --GENOME_FILE) GENOME_FILE="$2"; shift 2 ;;
         --ANNOTATION_FILE) ANNOTATION_FILE="$2"; shift 2 ;;
         --ALIGNMENT_TYPE) ALIGNMENT_TYPE="$2"; shift 2 ;;
+        --READ_TYPE) READ_TYPE="$2"; shift 2 ;;
+        --FRAGMENT_LENGTH) FRAGMENT_LENGTH="$2"; shift 2 ;;
+        --FRAGMENT_SD) FRAGMENT_SD="$2"; shift 2 ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
 done
@@ -43,13 +49,23 @@ done
 # Validate required arguments
 if [[ -z "${INPUT:-}" || -z "${OUTPUT:-}" || -z "${GENOME_FILE:-}" || -z "${ANNOTATION_FILE:-}" ]]; then
     echo "Error: Missing required arguments."
-    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto]"
+    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>]"
     exit 1
 fi
 
 # Validate alignment type
 if [[ ! "$ALIGNMENT_TYPE" =~ ^(bowtie2|salmon|kallisto)$ ]]; then
     echo "Error: Invalid ALIGNMENT_TYPE. Choose: bowtie2, salmon, or kallisto"
+    exit 1
+fi
+
+if [[ ! "$READ_TYPE" =~ ^(pe|se)$ ]]; then
+    echo "Error: Invalid READ_TYPE. Choose: pe or se"
+    exit 1
+fi
+
+if [[ ! "$FRAGMENT_LENGTH" =~ ^[0-9]+([.][0-9]+)?$ || ! "$FRAGMENT_SD" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    echo "Error: FRAGMENT_LENGTH and FRAGMENT_SD must be positive numeric values"
     exit 1
 fi
 
@@ -132,21 +148,41 @@ mkdir -p "$(dirname "$BOWTIE_INDEX")" "$(dirname "$SALMON_INDEX")" "$(dirname "$
 
 FASTQ_FILES=( "$INPUT"/*.fastq.gz "$INPUT"/*.fastq )
 R1_FILES=( "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz "$INPUT"/*_1.fastq "$INPUT"/*_R1.fastq )
+SINGLE_FILES=()
+for fq in "${FASTQ_FILES[@]}"; do
+    [[ -e "$fq" ]] || continue
+    if [[ "$fq" == *_2.fastq.gz || "$fq" == *_R2.fastq.gz || "$fq" == *_2.fastq || "$fq" == *_R2.fastq ]]; then
+        continue
+    fi
+    SINGLE_FILES+=( "$fq" )
+done
 
 if [[ ${#FASTQ_FILES[@]} -eq 0 ]]; then
     log "Error: no se encontraron FASTQ en $INPUT (*.fastq.gz o *.fastq)."
     exit 1
 fi
-if [[ ${#R1_FILES[@]} -eq 0 ]]; then
+if [[ "$READ_TYPE" == "pe" && ${#R1_FILES[@]} -eq 0 ]]; then
     log "Error: no se encontraron archivos R1 en $INPUT (*_1.fastq[.gz] o *_R1.fastq[.gz])."
+    exit 1
+fi
+if [[ "$READ_TYPE" == "se" && ${#SINGLE_FILES[@]} -eq 0 ]]; then
+    log "Error: no se encontraron FASTQ single-end en $INPUT."
     exit 1
 fi
 
 log "Entrada: $INPUT"
 log "Salida: $OUTPUT"
 log "Tipo de alineamiento: $ALIGNMENT_TYPE"
+log "Tipo de lectura: $READ_TYPE"
+if [[ "$READ_TYPE" == "se" && "$ALIGNMENT_TYPE" == "kallisto" ]]; then
+    log "Fragment length for kallisto single-end: mean=$FRAGMENT_LENGTH sd=$FRAGMENT_SD"
+fi
 log "FASTQ detectados: ${#FASTQ_FILES[@]}"
-log "R1 detectados: ${#R1_FILES[@]}"
+if [[ "$READ_TYPE" == "pe" ]]; then
+    log "R1 detectados: ${#R1_FILES[@]}"
+else
+    log "FASTQ single-end detectados: ${#SINGLE_FILES[@]}"
+fi
 
 # Build genome index based on alignment type
 log "Building ${ALIGNMENT_TYPE} index..."
@@ -182,80 +218,129 @@ fi
 log "Control de calidad inicial con FastQC..."
 run_cmd fastqc "${FASTQ_FILES[@]}" -t "$THREADS" -o "$QC"
 
+if [[ "$READ_TYPE" == "pe" ]]; then
+    SAMPLE_FILES=( "${R1_FILES[@]}" )
+else
+    SAMPLE_FILES=( "${SINGLE_FILES[@]}" )
+fi
+
 # Process each sample
-for R1 in "${R1_FILES[@]}"; do
+for READ1 in "${SAMPLE_FILES[@]}"; do
 
-    [ -e "$R1" ] || continue
+    [ -e "$READ1" ] || continue
 
-    SAMPLE=$(basename "$R1")
+    SAMPLE=$(basename "$READ1")
     SAMPLE=${SAMPLE%%_1.fastq.gz}
     SAMPLE=${SAMPLE%%_R1.fastq.gz}
+    SAMPLE=${SAMPLE%%.fastq.gz}
     SAMPLE=${SAMPLE%%_1.fastq}
     SAMPLE=${SAMPLE%%_R1.fastq}
+    SAMPLE=${SAMPLE%%.fastq}
 
-    if [[ "$R1" == *_1.fastq.gz ]]; then
-        R2="${R1%_1.fastq.gz}_2.fastq.gz"
-    elif [[ "$R1" == *_R1.fastq.gz ]]; then
-        R2="${R1%_R1.fastq.gz}_R2.fastq.gz"
-    elif [[ "$R1" == *_1.fastq ]]; then
-        R2="${R1%_1.fastq}_2.fastq"
-    else
-        R2="${R1%_R1.fastq}_R2.fastq"
-    fi
+    if [[ "$READ_TYPE" == "pe" ]]; then
+        if [[ "$READ1" == *_1.fastq.gz ]]; then
+            READ2="${READ1%_1.fastq.gz}_2.fastq.gz"
+        elif [[ "$READ1" == *_R1.fastq.gz ]]; then
+            READ2="${READ1%_R1.fastq.gz}_R2.fastq.gz"
+        elif [[ "$READ1" == *_1.fastq ]]; then
+            READ2="${READ1%_1.fastq}_2.fastq"
+        else
+            READ2="${READ1%_R1.fastq}_R2.fastq"
+        fi
 
-    if [[ ! -s "$R2" ]]; then
-        log "Error: falta R2 para $SAMPLE: $R2"
-        exit 1
+        if [[ ! -s "$READ2" ]]; then
+            log "Error: falta R2 para $SAMPLE: $READ2"
+            exit 1
+        fi
     fi
 
     log "Processing sample: $SAMPLE"
 
     # Adapter trimming and low-quality read filtering
-    run_cmd fastp \
-        -i "$R1" \
-        -I "$R2" \
-        -o "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
-        -O "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
-        --detect_adapter_for_pe \
-        --thread "$THREADS" \
-        --html "${TRIMMED}/${SAMPLE}_fastp.html" \
-        --json "${TRIMMED}/${SAMPLE}_fastp.json"
+    if [[ "$READ_TYPE" == "pe" ]]; then
+        run_cmd fastp \
+            -i "$READ1" \
+            -I "$READ2" \
+            -o "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
+            -O "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
+            --detect_adapter_for_pe \
+            --thread "$THREADS" \
+            --html "${TRIMMED}/${SAMPLE}_fastp.html" \
+            --json "${TRIMMED}/${SAMPLE}_fastp.json"
+    else
+        run_cmd fastp \
+            -i "$READ1" \
+            -o "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz" \
+            --thread "$THREADS" \
+            --html "${TRIMMED}/${SAMPLE}_fastp.html" \
+            --json "${TRIMMED}/${SAMPLE}_fastp.json"
+    fi
 
     # Perform alignment based on alignment type
     if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
         log "  Aligning with Bowtie2..."
-        # Alignment against reference genome
-        log "+ bowtie2 -x $INDEX -1 ${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz -2 ${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz -p $THREADS | samtools sort -@ $THREADS -o ${ALIGNMENTS}/${SAMPLE}.bam"
-        bowtie2 \
-            -x "$INDEX" \
-            -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
-            -2 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
-            -p "$THREADS" \
-        | samtools sort \
-            -@ "$THREADS" \
-            -o "${ALIGNMENTS}/${SAMPLE}.bam"
+        if [[ "$READ_TYPE" == "pe" ]]; then
+            log "+ bowtie2 -x $INDEX -1 ${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz -2 ${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz -p $THREADS | samtools sort -@ $THREADS -o ${ALIGNMENTS}/${SAMPLE}.bam"
+            bowtie2 \
+                -x "$INDEX" \
+                -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
+                -2 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
+                -p "$THREADS" \
+            | samtools sort \
+                -@ "$THREADS" \
+                -o "${ALIGNMENTS}/${SAMPLE}.bam"
+        else
+            log "+ bowtie2 -x $INDEX -U ${TRIMMED}/${SAMPLE}_trimmed.fastq.gz -p $THREADS | samtools sort -@ $THREADS -o ${ALIGNMENTS}/${SAMPLE}.bam"
+            bowtie2 \
+                -x "$INDEX" \
+                -U "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz" \
+                -p "$THREADS" \
+            | samtools sort \
+                -@ "$THREADS" \
+                -o "${ALIGNMENTS}/${SAMPLE}.bam"
+        fi
 
         # Index BAM file for downstream analysis
         run_cmd samtools index "${ALIGNMENTS}/${SAMPLE}.bam"
 
     elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
         log "  Quasi-aligning with Salmon..."
-        run_cmd salmon quant \
-            -i "$SALMON_INDEX" \
-            -l A \
-            -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
-            -2 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
-            -p "$THREADS" \
-            -o "${ALIGNMENTS}/${SAMPLE}"
+        if [[ "$READ_TYPE" == "pe" ]]; then
+            run_cmd salmon quant \
+                -i "$SALMON_INDEX" \
+                -l A \
+                -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
+                -2 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
+                -p "$THREADS" \
+                -o "${ALIGNMENTS}/${SAMPLE}"
+        else
+            run_cmd salmon quant \
+                -i "$SALMON_INDEX" \
+                -l A \
+                -r "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz" \
+                -p "$THREADS" \
+                -o "${ALIGNMENTS}/${SAMPLE}"
+        fi
 
     elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
         log "  Quasi-aligning with kallisto..."
-        run_cmd kallisto quant \
-            -i "$KALLISTO_INDEX" \
-            -o "${ALIGNMENTS}/${SAMPLE}" \
-            -t "$THREADS" \
-            "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
-            "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz"
+        if [[ "$READ_TYPE" == "pe" ]]; then
+            run_cmd kallisto quant \
+                -i "$KALLISTO_INDEX" \
+                -o "${ALIGNMENTS}/${SAMPLE}" \
+                -t "$THREADS" \
+                "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
+                "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz"
+        else
+            run_cmd kallisto quant \
+                -i "$KALLISTO_INDEX" \
+                -o "${ALIGNMENTS}/${SAMPLE}" \
+                -t "$THREADS" \
+                --single \
+                -l "$FRAGMENT_LENGTH" \
+                -s "$FRAGMENT_SD" \
+                "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz"
+        fi
 
     fi
 
@@ -263,6 +348,10 @@ done
 
 # Quality control after trimming
 TRIMMED_FASTQ=( "$TRIMMED"/*.fastq.gz )
+if [[ ${#TRIMMED_FASTQ[@]} -eq 0 ]]; then
+    log "Error: no se encontraron FASTQ recortados en $TRIMMED."
+    exit 1
+fi
 log "Control de calidad post-trimming con FastQC..."
 run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 
@@ -275,16 +364,27 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
         log "Error: no se generaron BAM en $ALIGNMENTS."
         exit 1
     fi
-    run_cmd featureCounts \
-        -T "$THREADS" \
-        -p \
-        --countReadPairs \
-        -s 0 \
-        -t gene \
-        -g locus_tag \
-        -a "$ANNOTATION_FILE" \
-        -o "${COUNTS}/gene_counts.txt" \
-        "${BAM_FILES[@]}"
+    if [[ "$READ_TYPE" == "pe" ]]; then
+        run_cmd featureCounts \
+            -T "$THREADS" \
+            -p \
+            --countReadPairs \
+            -s 0 \
+            -t gene \
+            -g locus_tag \
+            -a "$ANNOTATION_FILE" \
+            -o "${COUNTS}/gene_counts.txt" \
+            "${BAM_FILES[@]}"
+    else
+        run_cmd featureCounts \
+            -T "$THREADS" \
+            -s 0 \
+            -t gene \
+            -g locus_tag \
+            -a "$ANNOTATION_FILE" \
+            -o "${COUNTS}/gene_counts.txt" \
+            "${BAM_FILES[@]}"
+    fi
 
     # Create count matrix in TSV format
     log "+ Crear matriz de conteos: ${COUNTS}/count_matrix.tsv"
