@@ -3,6 +3,7 @@
 #!/bin/bash
 
 set -euo pipefail
+shopt -s nullglob
 
 # ============================================================================
 # E. coli RNA-seq Pipeline
@@ -55,6 +56,66 @@ fi
 # Number of threads to accelerate analysis
 THREADS=8
 
+log() {
+    printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"
+}
+
+run_cmd() {
+    log "+ $*"
+    "$@"
+}
+
+trap 'log "ERROR: fallo en la linea ${LINENO}. Revisa el comando anterior."' ERR
+
+check_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        log "Error: '$1' no encontrado en PATH. Instala el paquete correspondiente o ajusta tu PATH."
+        exit 1
+    fi
+}
+
+validate_salmon() {
+    if ! salmon --version >/dev/null 2>&1; then
+        local version_output
+        version_output=$(salmon --version 2>&1 || true)
+        log "Error: el comando 'salmon' parece ser un paquete Python o una instalación incorrecta."
+        log "Salida detectada: $version_output"
+        log "Asegúrate de instalar el binario Salmon correcto (por ejemplo desde bioconda) y no el paquete Python 'salmon'."
+        exit 1
+    fi
+}
+
+salmon_version() {
+    salmon --version 2>&1 | awk '/^[Ss]almon/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) print $i; exit }'
+}
+
+salmon_index_type() {
+    local version
+    version=$(salmon_version)
+    if [[ "$version" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
+        echo "puff"
+    else
+        echo "quasi"
+    fi
+}
+
+# Validate required tools early
+log "Validando herramientas en PATH..."
+log "PATH=$PATH"
+check_command fastqc
+check_command fastp
+check_command multiqc
+if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
+    check_command bowtie2
+    check_command samtools
+    check_command featureCounts
+elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
+    check_command salmon
+    validate_salmon
+elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
+    check_command kallisto
+fi
+
 # Output subdirectories
 QC="${OUTPUT}/01_quality"
 TRIMMED="${OUTPUT}/02_trimmed_reads"
@@ -69,37 +130,88 @@ KALLISTO_INDEX="${OUTPUT}/indices/kallisto/ecoli.idx"
 mkdir -p "$QC" "$TRIMMED" "$ALIGNMENTS" "$COUNTS"
 mkdir -p "$(dirname "$BOWTIE_INDEX")" "$(dirname "$SALMON_INDEX")" "$(dirname "$KALLISTO_INDEX")"
 
+FASTQ_FILES=( "$INPUT"/*.fastq.gz "$INPUT"/*.fastq )
+R1_FILES=( "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz "$INPUT"/*_1.fastq "$INPUT"/*_R1.fastq )
+
+if [[ ${#FASTQ_FILES[@]} -eq 0 ]]; then
+    log "Error: no se encontraron FASTQ en $INPUT (*.fastq.gz o *.fastq)."
+    exit 1
+fi
+if [[ ${#R1_FILES[@]} -eq 0 ]]; then
+    log "Error: no se encontraron archivos R1 en $INPUT (*_1.fastq[.gz] o *_R1.fastq[.gz])."
+    exit 1
+fi
+
+log "Entrada: $INPUT"
+log "Salida: $OUTPUT"
+log "Tipo de alineamiento: $ALIGNMENT_TYPE"
+log "FASTQ detectados: ${#FASTQ_FILES[@]}"
+log "R1 detectados: ${#R1_FILES[@]}"
+
 # Build genome index based on alignment type
-echo "Building ${ALIGNMENT_TYPE} index..."
+log "Building ${ALIGNMENT_TYPE} index..."
 
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
-    bowtie2-build "$GENOME_FILE" "$BOWTIE_INDEX"
+    if [[ -s "${BOWTIE_INDEX}.1.bt2" && -s "${BOWTIE_INDEX}.2.bt2" && -s "${BOWTIE_INDEX}.3.bt2" && -s "${BOWTIE_INDEX}.4.bt2" && -s "${BOWTIE_INDEX}.rev.1.bt2" && -s "${BOWTIE_INDEX}.rev.2.bt2" ]]; then
+        log "Indice Bowtie2 existente detectado; se reutiliza."
+    else
+        rm -f "${BOWTIE_INDEX}".*.bt2.tmp "${BOWTIE_INDEX}".*.bt2
+        log "Construyendo indice Bowtie2. Este paso puede tardar varios minutos y puede no imprimir progreso continuo."
+        run_cmd bowtie2-build "$GENOME_FILE" "$BOWTIE_INDEX"
+    fi
     INDEX="$BOWTIE_INDEX"
 elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
-    salmon index -t "$GENOME_FILE" -i "$SALMON_INDEX" --type quasi -k 31
+    if [[ -d "$SALMON_INDEX" && -s "${SALMON_INDEX}/versionInfo.json" ]]; then
+        log "Indice Salmon existente detectado; se reutiliza."
+    else
+        rm -rf "$SALMON_INDEX"
+        SALMON_INDEX_TYPE=$(salmon_index_type)
+        log "Using Salmon index type: $SALMON_INDEX_TYPE"
+        run_cmd salmon index -t "$GENOME_FILE" -i "$SALMON_INDEX" --type "$SALMON_INDEX_TYPE" -k 31
+    fi
 elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
-    kallisto index -i "$KALLISTO_INDEX" "$GENOME_FILE"
+    if [[ -s "$KALLISTO_INDEX" ]]; then
+        log "Indice kallisto existente detectado; se reutiliza."
+    else
+        rm -f "$KALLISTO_INDEX"
+        run_cmd kallisto index -i "$KALLISTO_INDEX" "$GENOME_FILE"
+    fi
 fi
 
 # Initial quality control
-fastqc "$INPUT"/*.fastq.gz -t "$THREADS" -o "$QC"
+log "Control de calidad inicial con FastQC..."
+run_cmd fastqc "${FASTQ_FILES[@]}" -t "$THREADS" -o "$QC"
 
 # Process each sample
-for R1 in "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz; do
+for R1 in "${R1_FILES[@]}"; do
 
     [ -e "$R1" ] || continue
 
     SAMPLE=$(basename "$R1")
     SAMPLE=${SAMPLE%%_1.fastq.gz}
     SAMPLE=${SAMPLE%%_R1.fastq.gz}
+    SAMPLE=${SAMPLE%%_1.fastq}
+    SAMPLE=${SAMPLE%%_R1.fastq}
 
-    R2="${R1/_1.fastq.gz/_2.fastq.gz}"
-    R2="${R2/_R1.fastq.gz/_R2.fastq.gz}"
+    if [[ "$R1" == *_1.fastq.gz ]]; then
+        R2="${R1%_1.fastq.gz}_2.fastq.gz"
+    elif [[ "$R1" == *_R1.fastq.gz ]]; then
+        R2="${R1%_R1.fastq.gz}_R2.fastq.gz"
+    elif [[ "$R1" == *_1.fastq ]]; then
+        R2="${R1%_1.fastq}_2.fastq"
+    else
+        R2="${R1%_R1.fastq}_R2.fastq"
+    fi
 
-    echo "Processing sample: $SAMPLE"
+    if [[ ! -s "$R2" ]]; then
+        log "Error: falta R2 para $SAMPLE: $R2"
+        exit 1
+    fi
+
+    log "Processing sample: $SAMPLE"
 
     # Adapter trimming and low-quality read filtering
-    fastp \
+    run_cmd fastp \
         -i "$R1" \
         -I "$R2" \
         -o "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
@@ -111,8 +223,9 @@ for R1 in "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz; do
 
     # Perform alignment based on alignment type
     if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
-        echo "  Aligning with Bowtie2..."
+        log "  Aligning with Bowtie2..."
         # Alignment against reference genome
+        log "+ bowtie2 -x $INDEX -1 ${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz -2 ${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz -p $THREADS | samtools sort -@ $THREADS -o ${ALIGNMENTS}/${SAMPLE}.bam"
         bowtie2 \
             -x "$INDEX" \
             -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
@@ -123,11 +236,11 @@ for R1 in "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz; do
             -o "${ALIGNMENTS}/${SAMPLE}.bam"
 
         # Index BAM file for downstream analysis
-        samtools index "${ALIGNMENTS}/${SAMPLE}.bam"
+        run_cmd samtools index "${ALIGNMENTS}/${SAMPLE}.bam"
 
     elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
-        echo "  Quasi-aligning with Salmon..."
-        salmon quant \
+        log "  Quasi-aligning with Salmon..."
+        run_cmd salmon quant \
             -i "$SALMON_INDEX" \
             -l A \
             -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
@@ -136,8 +249,8 @@ for R1 in "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz; do
             -o "${ALIGNMENTS}/${SAMPLE}"
 
     elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
-        echo "  Quasi-aligning with kallisto..."
-        kallisto quant \
+        log "  Quasi-aligning with kallisto..."
+        run_cmd kallisto quant \
             -i "$KALLISTO_INDEX" \
             -o "${ALIGNMENTS}/${SAMPLE}" \
             -t "$THREADS" \
@@ -149,13 +262,20 @@ for R1 in "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz; do
 done
 
 # Quality control after trimming
-fastqc "$TRIMMED"/*.fastq.gz -t "$THREADS" -o "$QC"
+TRIMMED_FASTQ=( "$TRIMMED"/*.fastq.gz )
+log "Control de calidad post-trimming con FastQC..."
+run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 
 # Generate count matrix based on alignment type
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
-    echo "Generating count matrix from Bowtie2 alignments..."
+    log "Generating count matrix from Bowtie2 alignments..."
     # Count reads per gene
-    featureCounts \
+    BAM_FILES=( "$ALIGNMENTS"/*.bam )
+    if [[ ${#BAM_FILES[@]} -eq 0 ]]; then
+        log "Error: no se generaron BAM en $ALIGNMENTS."
+        exit 1
+    fi
+    run_cmd featureCounts \
         -T "$THREADS" \
         -p \
         --countReadPairs \
@@ -164,15 +284,17 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
         -g locus_tag \
         -a "$ANNOTATION_FILE" \
         -o "${COUNTS}/gene_counts.txt" \
-        "$ALIGNMENTS"/*.bam
+        "${BAM_FILES[@]}"
 
     # Create count matrix in TSV format
-    cut -f1,7- "${COUNTS}/gene_counts.txt" \
+    log "+ Crear matriz de conteos: ${COUNTS}/count_matrix.tsv"
+    awk 'BEGIN { FS=OFS="\t" } !/^#/ { print }' "${COUNTS}/gene_counts.txt" \
+        | cut -f1,7- \
         | sed '1s|.bam||g; 1s|.*/||g' \
         > "${COUNTS}/count_matrix.tsv"
 
 elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
-    echo "Generating count matrix from Salmon quantifications..."
+    log "Generating count matrix from Salmon quantifications..."
     # Extract TPM and counts from Salmon outputs
     {
         # Create header with sample names
@@ -192,7 +314,7 @@ elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
     cp -r "$ALIGNMENTS"/*/*.sf "${COUNTS}/" 2>/dev/null || true
 
 elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
-    echo "Generating count matrix from kallisto abundances..."
+    log "Generating count matrix from kallisto abundances..."
     # Extract counts from kallisto outputs
     {
         # Create header with sample names
@@ -213,12 +335,13 @@ elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
 fi
 
 # Generate combined quality and alignment report
-multiqc "$OUTPUT" -o "$OUTPUT"
+log "Generando informe MultiQC..."
+run_cmd multiqc "$OUTPUT" -o "$OUTPUT"
 
-echo "Analysis completed successfully."
-echo "Alignment type: $ALIGNMENT_TYPE"
-echo "Results saved in: $OUTPUT"
-echo "Quality control: $QC"
-echo "Trimmed reads: $TRIMMED"
-echo "Alignments: $ALIGNMENTS"
-echo "Count matrices: $COUNTS"
+log "Analysis completed successfully."
+log "Alignment type: $ALIGNMENT_TYPE"
+log "Results saved in: $OUTPUT"
+log "Quality control: $QC"
+log "Trimmed reads: $TRIMMED"
+log "Alignments: $ALIGNMENTS"
+log "Count matrices: $COUNTS"
