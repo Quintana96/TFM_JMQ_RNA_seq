@@ -20,23 +20,8 @@ Aplicación Shiny para ejecutar, monitorizar y revisar un workflow de RNA-seq pa
 ### Requisitos de R
 
 - R >= 4.2
-- Paquetes CRAN:
-  - `shiny`
-  - `bslib`
-  - `shinyjs`
-  - `DT`
-  - `ggplot2`
-  - `plotly`
-  - `pheatmap`
-  - `ggrepel`
-  - `RColorBrewer`
-  - `processx`
-  - `shinyFiles`
-- Paquetes Bioconductor recomendados:
-  - `DESeq2`
-  - `tximport`
-  - `clusterProfiler`
-  - `enrichplot`
+- Paquetes CRAN: `shiny`, `bslib`, `shinyjs`, `DT`, `ggplot2`, `plotly`, `pheatmap`, `ggrepel`, `RColorBrewer`, `processx`, `shinyFiles`.
+- Paquetes Bioconductor recomendados: `DESeq2`, `tximport`, `clusterProfiler`, `enrichplot`.
 
 ### Herramientas de línea de comandos
 
@@ -133,7 +118,7 @@ Funciones principales:
 - Detección preliminar de muestras.
 - Aviso de pares R2 ausentes o nombres de muestra potencialmente problemáticos.
 
-Diseño de uso recomendado:
+Uso recomendado:
 
 1. Selecciona el modo de inicio.
 2. Elige alineamiento o pseudoalineamiento.
@@ -169,16 +154,8 @@ Funciones principales:
 
 - Selector de ejecuciones guardadas en `outputs/`.
 - Opción para seleccionar manualmente una carpeta de resultados.
-- Resumen visual del estado de la ejecución:
-  - completado
-  - error
-  - incompleto
-  - sin log
-- Métricas rápidas:
-  - número de muestras
-  - número de genes/transcritos detectados
-  - mapeo medio
-  - tamaño y número de archivos generados
+- Resumen visual del estado de la ejecución: completado, error, incompleto o sin log.
+- Métricas rápidas: número de muestras, genes/transcritos detectados, mapeo medio, tamaño y número de archivos generados.
 - Apertura directa del informe `multiqc_report.html` cuando existe.
 - Tablas interactivas con filtrado, paginación y desplazamiento horizontal.
 - Descarga de tablas y artefactos principales.
@@ -191,10 +168,6 @@ Subsecciones disponibles:
 - **Conteos**: resumen por muestra y genes/transcritos más abundantes.
 - **Informes y archivos**: archivos principales, rutas y listado completo.
 - **Log**: últimas líneas del workflow.
-
-### Guía integrada
-
-La app incluye una pestaña “Guía” con explicación interna del propósito de la aplicación, flujo de uso, características principales, buenas prácticas y estructura de resultados. Esta pestaña permite usar la app como punto de partida oficial sin depender únicamente de documentación externa.
 
 ## Características técnicas principales
 
