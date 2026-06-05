@@ -1,0 +1,81 @@
+#' utils_status.R
+#' Estado de una run a partir de su log y badges visuales.
+
+#' Infiere el estado ("completado" / "error" / "incompleto" / "sin log") leyendo el tail del log
+status_from_log <- function(out_dir) {
+  log_file <- file.path(out_dir, "workflow_live.log")
+  if (!file.exists(log_file)) return("sin log")
+  txt <- read_tail_text(log_file, max_bytes = 512000L)
+  if (grepl("Analysis completed successfully|Analisis finalizado OK", txt, ignore.case = TRUE))
+    return("completado")
+  if (grepl("ERROR|Error \\(codigo|fallo en la linea", txt, ignore.case = TRUE))
+    return("error")
+  "incompleto"
+}
+
+#' Renderiza un badge HTML con color pastel segun el estado
+status_badge <- function(status) {
+  color <- switch(status,
+    completado = "#B8D8BA",
+    error = "#F4A6A6",
+    incompleto = "#F6D58A",
+    "#D7EEF1"
+  )
+  text_color <- switch(status,
+    error = "#5A2323",
+    incompleto = "#5C4A16",
+    "#20332A"
+  )
+  tags$span(
+    style = paste0(
+      "display:inline-block;padding:3px 9px;border-radius:999px;",
+      "color:", text_color, ";background:", color, ";font-weight:700;"
+    ),
+    status
+  )
+}
+
+#' Infiere si una run es Paired-end o Single-end mirando 02_trimmed_reads/.
+#' Devuelve "Paired-end" o "Single-end" (texto). Fallback: "Paired-end".
+infer_read_type_from_dir <- function(out_dir) {
+  trimmed <- file.path(out_dir, "02_trimmed_reads")
+  if (!dir.exists(trimmed)) return("Paired-end")
+  files <- list.files(trimmed, pattern = "_trimmed\\.fastq\\.gz$", full.names = FALSE)
+  if (!length(files)) return("Paired-end")
+  has_r1 <- any(grepl("_R1_trimmed\\.fastq\\.gz$", files))
+  has_r2 <- any(grepl("_R2_trimmed\\.fastq\\.gz$", files))
+  if (has_r1 && has_r2) return("Paired-end")
+  # Si hay *_trimmed.fastq.gz sin R1/R2, es single-end
+  has_se <- any(!grepl("_R[12]_trimmed\\.fastq\\.gz$", files))
+  if (has_se && !has_r1 && !has_r2) return("Single-end")
+  "Paired-end"
+}
+
+#' Infiere parametros de una run pasada solo a partir del directorio de salida.
+#' Util cuando el usuario abre una carpeta de outputs/ sin contexto de sesion.
+infer_result_params <- function(out_dir, workflow_path) {
+  tool <- if (dir.exists(file.path(out_dir, "03_alignments", "bowtie2"))) {
+    "bowtie2"
+  } else if (dir.exists(file.path(out_dir, "03_alignments", "salmon"))) {
+    "salmon"
+  } else if (dir.exists(file.path(out_dir, "03_alignments", "kallisto"))) {
+    "kallisto"
+  } else {
+    "desconocida"
+  }
+  analysis <- if (identical(tool, "bowtie2")) "alignment" else "pseudo"
+  counts <- tryCatch(load_counts_from_workflow(out_dir, tool), error = function(e) NULL)
+  stat <- file.info(out_dir)
+  list(
+    analysis_type = analysis,
+    tool = tool,
+    input_dir = "—",
+    output_dir = out_dir,
+    genome_file = "—",
+    annotation_file = "—",
+    n_samples = if (!is.null(counts)) ncol(counts) else "—",
+    read_type = infer_read_type_from_dir(out_dir),
+    started_at = stat$mtime %||% Sys.time(),
+    r_version = paste(R.version$major, R.version$minor, sep = ".")
+  )
+}

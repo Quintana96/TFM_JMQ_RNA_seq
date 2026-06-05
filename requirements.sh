@@ -66,13 +66,20 @@ required_cran <- c(
 )
 required_bioc <- c(
   "DESeq2",
+  "edgeR",
+  "limma",
   "tximport",
   "clusterProfiler",
   "enrichplot"
 )
+# Opcionales: si no estan, la app advierte pero no falla.
+optional_bioc <- c(
+  "org.EcK12.eg.db"
+)
 installed <- rownames(installed.packages())
 missing_cran <- setdiff(required_cran, installed)
 missing_bioc <- setdiff(required_bioc, installed)
+missing_optional <- setdiff(optional_bioc, installed)
 
 if (length(missing_cran) > 0) {
   message("Instalando paquetes CRAN: ", paste(missing_cran, collapse=", "))
@@ -89,6 +96,14 @@ if (length(missing_bioc) > 0) {
   BiocManager::install(missing_bioc, ask=FALSE, update=FALSE)
 } else {
   message("Todos los paquetes Bioconductor requeridos ya están instalados.")
+}
+
+if (length(missing_optional) > 0) {
+  message("Paquetes opcionales no instalados (la app funcionara sin ellos, ",
+          "pero el enriquecimiento GO podra requerir un OrgDb): ",
+          paste(missing_optional, collapse=", "))
+  message("Para instalarlos: BiocManager::install(c('",
+          paste(missing_optional, collapse="','"), "'))")
 }
 
 message("\nRevisión de paquetes R completada.")
