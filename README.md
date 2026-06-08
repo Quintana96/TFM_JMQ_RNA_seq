@@ -1,4 +1,4 @@
-# RNA-seq Workflow Runner
+# RNA-seq Workflow Runner (Nombre provisional)
 
 Una aplicación web interactiva desarrollada con R Shiny para el análisis integral de datos de RNA-seq. Integra un pipeline bioinformático completo —desde los archivos FASTQ crudos hasta el análisis de expresión diferencial— en una interfaz gráfica accesible.
 
