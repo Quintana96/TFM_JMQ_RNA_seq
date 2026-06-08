@@ -23,7 +23,7 @@ Una aplicación web interactiva desarrollada con R Shiny para el análisis integ
 
 ## Descripción general
 
-RNA-seq Workflow Runner es una aplicación Shiny que actúa como interfaz gráfica para un pipeline de análisis de RNA-seq orientado a *E. coli*. Permite configurar y ejecutar el análisis completo desde la interfaz web, monitorizar el progreso en tiempo real, explorar los resultados de calidad y cuantificación, y realizar análisis de expresión diferencial con múltiples motores estadísticos, todo sin necesidad de escribir código.
+RNA-seq Workflow Runner es una aplicación Shiny que actúa como interfaz gráfica para un pipeline de análisis de RNA-seq. Permite configurar y ejecutar el análisis completo desde la interfaz web, monitorizar el progreso en tiempo real, explorar los resultados de calidad y cuantificación, y realizar análisis de expresión diferencial con múltiples motores estadísticos, todo sin necesidad de escribir código.
 
 La aplicación puede operar en dos modos:
 
