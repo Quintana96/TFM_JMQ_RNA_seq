@@ -1,0 +1,47 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# R
+.Rhistory
+.Rapp.history
+.RData
+.Rproj.user/
+*.Rproj
+
+# Datos de entrada y de prueba (pesados: GitHub rechaza >100 MB)
+data/
+*.tsv
+*.csv
+*.fna
+*.fa
+*.fasta
+*.gff
+*.gff3
+*.gtf
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bam
+*.sam
+*.bai
+*.idx
+
+# Salidas del pipeline
+Output/
+output/
+results/
+01_quality/
+02_trimmed_reads/
+03_alignment/
+04_counts/
+multiqc_data/
+*_fastqc.html
+*_fastqc.zip
+
+# Entorno y credenciales
+.env
+.Renviron
