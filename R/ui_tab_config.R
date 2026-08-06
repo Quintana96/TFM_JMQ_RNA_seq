@@ -149,7 +149,36 @@ ui_tab_config <- function() {
         card_header("Muestras detectadas"),
         style = "min-height:240px; overflow:auto; max-height:420px;",
         uiOutput("sample_preview_ui")
-      )
+      ),
+
+      # Card 7: Potencia a priori. Va en configuracion porque la decision que
+      # informa (cuantas replicas) se toma ANTES de secuenciar, no despues.
+      if (isTRUE(HAS_RNASEQPOWER)) card(
+        card_header("Potencia y tamano muestral"),
+        style = "grid-column: 1 / -1;",
+        tags$p(class = "small text-muted mb-2",
+               paste("El tamano muestral es el determinante mas fuerte de la",
+                     "calidad del resultado. Esta calculadora orienta, no",
+                     "garantiza: ninguna herramienta es fiable cuando se exigen",
+                     "efectos pequenos y potencias altas, porque los parametros",
+                     "no se pueden fijar bien desde datos piloto limitados.")),
+        layout_columns(
+          col_widths = c(3, 3, 3, 3),
+          numericInput("pw_n", "Replicas por grupo", value = 3, min = 2, max = 100, step = 1),
+          numericInput("pw_effect", "Fold-change a detectar", value = 2, min = 1.1,
+                       max = 10, step = 0.1),
+          numericInput("pw_cv", "CV biologico", value = 0.4, min = 0.05, max = 1.5,
+                       step = 0.05),
+          numericInput("pw_depth", "Profundidad media por gen", value = 20, min = 1,
+                       max = 1000, step = 5)
+        ),
+        tags$small(class = "text-muted d-block mb-2",
+                   paste("CV tipico: 0,1 en lineas celulares, 0,4 en muestras",
+                         "humanas. La profundidad es el numero medio de conteos por",
+                         "gen, no el total de lecturas.")),
+        uiOutput("pw_verdict"),
+        plotly::plotlyOutput("pw_curve", height = "300px")
+      ) else NULL
     )
   )
 }

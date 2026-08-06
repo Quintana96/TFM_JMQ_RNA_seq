@@ -570,6 +570,181 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
   c(list(table = out$table, error = NULL), info)
 }
 
+#' Motor Wilcoxon rank-sum sobre CPM normalizados.
+#'
+#' Contexto (docs/REVISION_ESTADISTICA.md, B7), que da para discusion y conviene
+#' contar completo porque la conclusion ha cambiado tres veces:
+#'   1. Li et al. (2022) reportaron que en muestras poblacionales humanas la FDR
+#'      real de DESeq2 y edgeR llega a superar el 20 % cuando el objetivo es 5 %,
+#'      y recomendaron Wilcoxon para n grande.
+#'   2. Hejblum et al. (2024) identificaron un fallo en esa simulacion: los datos
+#'      se normalizaban DESPUES de permutar, de modo que ya no cumplian la nula.
+#'      Normalizando antes, los tres metodos controlaban bien la FDR.
+#'   3. Li et al. (2024) aceptaron el sesgo senalado pero mantienen su conclusion
+#'      apoyandose en datos totalmente permutados.
+#'
+#' Lectura practica: con n pequeno los parametricos son la eleccion correcta y
+#' Wilcoxon seria un error por falta de potencia. Con n grande (>= 8-10 por
+#' grupo) merece la pena comparar. Por eso este motor existe pero no se sugiere
+#' hasta que el tamano muestral lo justifica.
+#'
+#' Solo admite dos grupos: es un test de dos muestras, no un modelo, asi que no
+#' puede ajustar por batch ni por covariables.
+run_deg_wilcoxon <- function(counts, meta, ref_level = NULL, batch = NULL,
+                             fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
+                             contrast_num = NULL, use_ihw = FALSE,
+                             design_formula = NULL, test_coef = NULL) {
+  d <- build_design(meta, ref_level, batch)
+  info <- list(contrast = NA_character_, coef = NA_character_,
+               n_levels = length(d$levels), shrink = "ninguno",
+               padj_method = "BH", disp_data = NULL, cooks = NULL,
+               coef_available = character(0))
+  num <- if (!is.null(contrast_num) && nzchar(contrast_num %||% "")) contrast_num
+         else utils::tail(d$levels, 1)
+  den <- d$ref
+  if (identical(num, den)) {
+    return(c(list(table = NULL, error = "Numerador y denominador coinciden."), info))
+  }
+  out <- tryCatch({
+    g <- as.character(d$meta$condition)
+    i_num <- which(g == num); i_den <- which(g == den)
+    if (length(i_num) < 2 || length(i_den) < 2) {
+      stop("Wilcoxon necesita al menos 2 muestras en cada grupo del contraste.")
+    }
+    cm <- as.matrix(counts)
+    libs <- colSums(cm); libs[libs == 0] <- 1
+    cpm <- t(t(cm) / libs) * 1e6
+    a <- cpm[, i_num, drop = FALSE]; b <- cpm[, i_den, drop = FALSE]
+    pv <- vapply(seq_len(nrow(cpm)), function(i) {
+      tryCatch(stats::wilcox.test(a[i, ], b[i, ], exact = FALSE)$p.value,
+               error = function(e) NA_real_)
+    }, numeric(1))
+    lfc <- log2((rowMeans(a) + 1) / (rowMeans(b) + 1))
+    tab <- data.frame(
+      gene = rownames(cpm),
+      baseMean = rowMeans(cpm),
+      log2FC = lfc,
+      log2FC_shrunk = NA_real_,
+      lfcSE = NA_real_,
+      stat = NA_real_,
+      pvalue = pv,
+      padj = stats::p.adjust(pv, method = "BH"),
+      stringsAsFactors = FALSE
+    )
+    list(table = tab, coef = paste0("condition", num))
+  }, error = function(e) e)
+  if (inherits(out, "error")) {
+    return(c(list(table = NULL, error = conditionMessage(out)), info))
+  }
+  info$coef     <- out$coef
+  info$contrast <- paste(num, "vs", den)
+  c(list(table = out$table, error = NULL), info)
+}
+
+#' Motor dearseq: test de componentes de varianza con regresion no parametrica.
+#'
+#' Controla la FDR sin asumir la distribucion de los conteos (Gauthier et al.,
+#' NAR Genomics and Bioinformatics 2020) y admite disenos longitudinales, lo que
+#' lo hace el complemento natural de los disenos arbitrarios del item 16.
+run_deg_dearseq <- function(counts, meta, ref_level = NULL, batch = NULL,
+                            fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
+                            contrast_num = NULL, use_ihw = FALSE,
+                            design_formula = NULL, test_coef = NULL) {
+  d <- build_design(meta, ref_level, batch)
+  info <- list(contrast = NA_character_, coef = NA_character_,
+               n_levels = length(d$levels), shrink = "ninguno",
+               padj_method = "BH", disp_data = NULL, cooks = NULL,
+               coef_available = character(0))
+  if (!requireNamespace("dearseq", quietly = TRUE)) {
+    return(c(list(table = NULL, error = "dearseq no esta instalado."), info))
+  }
+  num <- if (!is.null(contrast_num) && nzchar(contrast_num %||% "")) contrast_num
+         else utils::tail(d$levels, 1)
+  den <- d$ref
+  out <- tryCatch({
+    keep_s <- as.character(d$meta$condition) %in% c(num, den)
+    if (sum(keep_s) < 4) stop("dearseq necesita al menos 4 muestras en el contraste.")
+    cm <- round(as.matrix(counts))[, keep_s, drop = FALSE]
+    m <- d$meta[keep_s, , drop = FALSE]
+    variables2test <- stats::model.matrix(~ condition, data = droplevels(m))[, -1, drop = FALSE]
+    covariates <- if (!is.null(batch) && nzchar(batch %||% "") && batch %in% names(m)) {
+      stats::model.matrix(stats::as.formula(paste0("~ ", batch)), data = m)[, -1, drop = FALSE]
+    } else NULL
+    res <- dearseq::dear_seq(
+      exprmat = cm, variables2test = variables2test,
+      covariates = covariates, which_test = "asymptotic",
+      preprocessed = FALSE, parallel_comp = FALSE, progressbar = FALSE
+    )
+    rt <- res$pvals
+    pv <- as.numeric(rt[["rawPval"]])
+    names(pv) <- rownames(rt)
+    libs <- colSums(cm); libs[libs == 0] <- 1
+    cpm <- t(t(cm) / libs) * 1e6
+    i_num <- which(as.character(m$condition) == num)
+    i_den <- which(as.character(m$condition) == den)
+    lfc <- log2((rowMeans(cpm[, i_num, drop = FALSE]) + 1) /
+                  (rowMeans(cpm[, i_den, drop = FALSE]) + 1))
+    genes <- rownames(rt)
+    tab <- data.frame(
+      gene = genes,
+      baseMean = rowMeans(cpm)[genes],
+      log2FC = lfc[genes],
+      log2FC_shrunk = NA_real_,
+      lfcSE = NA_real_,
+      stat = NA_real_,
+      pvalue = pv[genes],
+      padj = stats::p.adjust(pv[genes], method = "BH"),
+      stringsAsFactors = FALSE
+    )
+    list(table = tab, coef = paste0("condition", num))
+  }, error = function(e) e)
+  if (inherits(out, "error")) {
+    return(c(list(table = NULL, error = conditionMessage(out)), info))
+  }
+  info$coef     <- out$coef
+  info$contrast <- paste(num, "vs", den)
+  c(list(table = out$table, error = NULL), info)
+}
+
+#' Motores disponibles, y cuales se recomiendan para el tamano muestral dado.
+#'
+#' Con n >= 8 por grupo la controversia sobre el control de la FDR con muestras
+#' poblacionales deja de ser academica y conviene comparar con un metodo robusto.
+#' Por debajo, los parametricos son la eleccion correcta.
+DEG_METHODS_PARAMETRIC <- c("DESeq2", "edgeR", "limma-voom")
+DEG_METHODS_ROBUST     <- c("Wilcoxon", "dearseq")
+
+suggest_robust_comparison <- function(meta, min_per_group = 8L) {
+  if (is.null(meta) || !"condition" %in% names(meta)) return(NULL)
+  g <- as.character(meta$condition)
+  g <- g[!is.na(g) & nzchar(g)]
+  if (!length(g)) return(NULL)
+  sizes <- table(g)
+  if (min(sizes) < min_per_group) return(NULL)
+  list(min_group = as.integer(min(sizes)),
+       message = paste0(
+         "Hay ", min(sizes), " muestras en el grupo mas pequeno. Con n >= ",
+         min_per_group, " por grupo merece la pena comparar el resultado con un ",
+         "metodo robusto (Wilcoxon o dearseq): en muestras poblacionales grandes ",
+         "se ha reportado que la FDR real de los metodos parametricos puede ",
+         "superar el objetivo declarado."))
+}
+
+#' Solapamiento entre dos listas de significativos, para comparar metodos.
+deg_method_overlap <- function(tab_a, tab_b, fdr = 0.05,
+                               name_a = "A", name_b = "B") {
+  sig <- function(t) if (is.null(t)) character(0) else
+    t$gene[!is.na(t$padj) & t$padj <= fdr]
+  a <- sig(tab_a); b <- sig(tab_b)
+  inter <- intersect(a, b)
+  un <- union(a, b)
+  list(name_a = name_a, name_b = name_b,
+       n_a = length(a), n_b = length(b), n_common = length(inter),
+       only_a = length(setdiff(a, b)), only_b = length(setdiff(b, a)),
+       jaccard = if (length(un)) length(inter) / length(un) else NA_real_,
+       genes_common = inter)
+}
+
 #' Dispatcher: corre el motor solicitado.
 #'
 #' Devuelve list(table, error, method, contrast, coef, n_levels, shrink,
@@ -582,7 +757,8 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
 #' `lfcShrink(coef = ...)`: `apeglm` no admite `contrast`. La diferencia
 #' numerica frente a `results(contrast = ...)` es ruido del ajuste iterativo
 #' (del orden de 1e-6 en log2FC, sin cambios en las llamadas de significacion).
-run_deg <- function(counts, meta, method = c("DESeq2", "edgeR", "limma-voom"),
+run_deg <- function(counts, meta,
+                    method = c("DESeq2", "edgeR", "limma-voom", "Wilcoxon", "dearseq"),
                     ref_level = NULL, batch = NULL,
                     fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                     contrast_num = NULL, use_ihw = FALSE,
@@ -617,7 +793,11 @@ run_deg <- function(counts, meta, method = c("DESeq2", "edgeR", "limma-voom"),
     "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold,
                                  shrink, contrast_num, use_ihw, design_formula, test_coef),
     "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                 shrink, contrast_num, use_ihw, design_formula, test_coef)
+                                 shrink, contrast_num, use_ihw, design_formula, test_coef),
+    "Wilcoxon"   = run_deg_wilcoxon(counts, meta, ref_level, batch, fdr, lfc_threshold,
+                                    shrink, contrast_num, use_ihw, design_formula, test_coef),
+    "dearseq"    = run_deg_dearseq(counts, meta, ref_level, batch, fdr, lfc_threshold,
+                                   shrink, contrast_num, use_ihw, design_formula, test_coef)
   )
   res$method        <- method
   res$fdr           <- fdr

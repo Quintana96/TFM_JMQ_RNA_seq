@@ -347,5 +347,57 @@ server_tab_config <- function(input, output, session, state) {
     workflow_cmd              = workflow_cmd
   )
 
+  # ── Calculadora de potencia a priori (item 22) ─────────────────────────────
+  pw_params <- reactive({
+    list(n = max(2, input$pw_n %||% 3),
+         effect = max(1.01, input$pw_effect %||% 2),
+         cv = max(0.01, input$pw_cv %||% 0.4),
+         depth = max(1, input$pw_depth %||% 20))
+  })
+
+  output$pw_verdict <- renderUI({
+    p <- pw_params()
+    r <- power_for_n(p$n, cv = p$cv, effect = p$effect, depth = p$depth)
+    if (!is.null(r$error)) {
+      return(div(class = "alert alert-secondary py-2 px-2 small", r$error))
+    }
+    i <- interpret_power(p$n, r$power)
+    need <- n_for_power(0.8, cv = p$cv, effect = p$effect, depth = p$depth)
+    cls <- switch(i$level, "ok" = "alert-success", "aviso" = "alert-warning",
+                  "bajo" = "alert-warning", "alert-secondary")
+    div(class = paste("alert py-2 px-3 mb-2", cls),
+        tags$b(i$label),
+        tags$div(class = "small mt-1", i$detail),
+        if (!is.na(need$n)) tags$div(
+          class = "small mt-1",
+          tags$b("Para potencia 0,8 harian falta "), ceiling(need$n),
+          " replicas por grupo con estos parametros.") else NULL)
+  })
+
+  output$pw_curve <- plotly::renderPlotly({
+    p <- pw_params()
+    df <- power_curve(2:24, cv = p$cv, effect = p$effect, depth = p$depth)
+    if (is.null(df)) return(plotly_message("No se ha podido calcular la curva."))
+    plotly::plot_ly(df, x = ~n, y = ~power, type = "scatter", mode = "lines+markers",
+                    line = list(color = "#244B34"),
+                    marker = list(color = "#7BBF9A", size = 7),
+                    text = ~paste0("n = ", n, "<br>potencia: ", round(100 * power, 1), " %"),
+                    hoverinfo = "text") |>
+      plotly::layout(
+        xaxis = list(title = "replicas por grupo"),
+        yaxis = list(title = "potencia", range = c(0, 1), tickformat = ".0%"),
+        shapes = list(
+          list(type = "line", xref = "paper", x0 = 0, x1 = 1, y0 = 0.8, y1 = 0.8,
+               line = list(dash = "dash", color = "#7BBF9A")),
+          # Referencia empirica de Schurch et al.: 6 replicas como minimo
+          # razonable, con independencia de lo que diga el calculo.
+          list(type = "line", x0 = 6, x1 = 6, yref = "paper", y0 = 0, y1 = 1,
+               line = list(dash = "dot", color = "#F4A6A6"))),
+        annotations = list(
+          list(x = 6, y = 1, yref = "paper", text = "6 replicas (Schurch 2016)",
+               showarrow = FALSE, xanchor = "left", font = list(size = 10)))
+      )
+  })
+
   invisible(state$shared)
 }

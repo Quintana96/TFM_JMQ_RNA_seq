@@ -83,8 +83,12 @@ optional_bioc <- c(
   "org.EcK12.eg.db",  # anotacion GO/KEGG de E. coli K12
   "ashr",             # alternativa a apeglm para lfcShrink
   "IHW",              # ponderacion de hipotesis por baseMean (mas potencia que BH)
-  "sva",              # variables sustitutas para variacion no deseada desconocida
-  "qvalue"            # segunda estimacion de pi0 en los diagnosticos
+  "sva",              # variables sustitutas y ComBat-seq
+  "qvalue",           # segunda estimacion de pi0 en los diagnosticos
+  "rtracklayer",      # lectura del GFF/GTF para tx2gene y genes de rRNA
+  "dearseq",          # motor robusto no parametrico
+  "fishpond",         # Swish: incertidumbre de la cuantificacion
+  "RNASeqPower"       # calculo de potencia a priori
 )
 installed <- rownames(installed.packages())
 missing_cran <- setdiff(required_cran, installed)

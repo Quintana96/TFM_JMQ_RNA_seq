@@ -130,9 +130,22 @@ ui_tab_deg <- function() {
       # cambiarlo obliga a reajustar el modelo (boton "Lanzar DEG").
       card(
         card_header("4. Analisis DEG (define el test)"),
-        selectInput("deg_method", "Motor",
-                    choices = c("DESeq2", "edgeR", "limma-voom"),
-                    selected = "DESeq2"),
+        selectInput(
+          "deg_method", "Motor",
+          choices = list(
+            "Parametricos" = as.list(stats::setNames(DEG_METHODS_PARAMETRIC,
+                                                    DEG_METHODS_PARAMETRIC)),
+            # Los robustos solo tienen sentido con n grande; se ofrecen siempre
+            # pero la app los sugiere unicamente cuando el tamano lo justifica.
+            "Robustos (n grande)" = as.list(stats::setNames(
+              c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"),
+              c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"))),
+            "Con incertidumbre de cuantificacion" = as.list(stats::setNames(
+              if (isTRUE(HAS_FISHPOND)) "Swish" else character(0),
+              if (isTRUE(HAS_FISHPOND)) "Swish" else character(0)))
+          ),
+          selected = "DESeq2"),
+        uiOutput("deg_method_hint"),
         selectInput("deg_prefilter_mode", "Prefiltrado de genes",
                     choices = c("Automatico (filterByExpr)" = "auto",
                                 "Manual (umbral explicito)" = "manual"),
@@ -334,6 +347,71 @@ ui_tab_deg_results <- function() {
       nav_panel(
         "Diagnosticos",
         ui_tab_deg_diagnostics()
+      ),
+      nav_panel(
+        "Replicabilidad",
+        card(
+          card_header(tags$div(
+            class = "card-title-download",
+            tags$span("Replicabilidad por bootstrap"),
+            div(style = "display:flex;gap:6px;align-items:center;",
+                numericInput("deg_boot_n", NULL, value = 20, min = 5, max = 100,
+                             step = 5, width = "90px"),
+                actionButton("deg_run_boot_btn", tagList(icon("dice"), " Estimar"),
+                             class = "btn-sm"))
+          )),
+          tags$p(class = "small text-muted mb-1",
+                 paste("Remuestrea las muestras, repite el analisis y mide si la",
+                       "lista aguanta. Es el procedimiento que recomienda el estudio",
+                       "de replicabilidad en cohortes pequenas: Spearman > 0,9 indica",
+                       "precision alta y < 0,8 avisa de probables falsos positivos.",
+                       "Cuesta un reajuste del modelo por remuestreo.")),
+          uiOutput("deg_boot_verdict"),
+          DTOutput("deg_boot_table"),
+          plotly::plotlyOutput("deg_boot_plot", height = "300px")
+        )
+      ),
+      nav_panel(
+        "Comparar metodos",
+        card(
+          card_header(tags$div(
+            class = "card-title-download",
+            tags$span("Solapamiento entre metodos"),
+            div(style = "display:flex;gap:6px;align-items:center;",
+                selectInput("deg_compare_method", NULL, choices = NULL,
+                            width = "180px"),
+                actionButton("deg_run_compare_btn", tagList(icon("code-compare"),
+                                                           " Comparar"),
+                             class = "btn-sm"))
+          )),
+          tags$p(class = "small text-muted mb-1",
+                 paste("Corre un segundo motor sobre los mismos datos y compara las",
+                       "listas de significativos. Con n grande, la discrepancia entre",
+                       "parametricos y robustos es informativa: es el punto de la",
+                       "controversia sobre el control real de la FDR.")),
+          uiOutput("deg_compare_summary"),
+          plotly::plotlyOutput("deg_compare_plot", height = "300px")
+        )
+      ),
+      nav_panel(
+        "Reproducibilidad",
+        card(
+          card_header("Informe y script equivalente"),
+          tags$p(class = "small text-muted",
+                 paste("Una app grafica no deja rastro de que se hizo. El informe",
+                       "recoge todos los parametros, el contraste, la formula del",
+                       "diseno, los diagnosticos y las versiones de los paquetes;",
+                       "el script reproduce el mismo analisis con Bioconductor,",
+                       "fuera de la app.")),
+          div(style = "display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;",
+              downloadButton("download_deg_report", "Informe HTML",
+                             icon = icon("file-code"), class = "btn-sm"),
+              downloadButton("download_deg_script", "Script R equivalente",
+                             icon = icon("r-project"), class = "btn-sm")),
+          tags$hr(),
+          tags$b(class = "small", "Vista previa del script"),
+          verbatimTextOutput("deg_script_preview", placeholder = TRUE)
+        )
       ),
       nav_panel(
         "Volcano",

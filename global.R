@@ -40,6 +40,10 @@ HAS_QVALUE          <- pkg_ok("qvalue")
 # permite construir el mapa transcrito-gen que necesita tximport.
 HAS_SVA             <- pkg_ok("sva")
 HAS_RTRACKLAYER     <- pkg_ok("rtracklayer")
+# Fase 4: motores robustos, Swish y calculo de potencia.
+HAS_DEARSEQ         <- pkg_ok("dearseq")
+HAS_FISHPOND        <- pkg_ok("fishpond")
+HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
 
 #' Operador nulo-coalescente
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x

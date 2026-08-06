@@ -21,13 +21,17 @@ shopt -s nullglob
 # conda activate pipeline_ecoli
 # ============================================================================
 
-# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>]
+# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>]
 
 # Default values
 ALIGNMENT_TYPE="bowtie2"
 READ_TYPE="pe"
 FRAGMENT_LENGTH=200
 FRAGMENT_SD=20
+# Replicas inferenciales de la cuantificacion (salmon: --numGibbsSamples,
+# kallisto: -b). Las necesita Swish para propagar la incertidumbre de asignacion
+# de lecturas entre transcritos que comparten secuencia. 0 las desactiva.
+INFERENTIAL_REPS=20
 
 # Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -40,6 +44,7 @@ while [[ "$#" -gt 0 ]]; do
         --READ_TYPE) READ_TYPE="$2"; shift 2 ;;
         --FRAGMENT_LENGTH) FRAGMENT_LENGTH="$2"; shift 2 ;;
         --FRAGMENT_SD) FRAGMENT_SD="$2"; shift 2 ;;
+        --INFERENTIAL_REPS) INFERENTIAL_REPS="$2"; shift 2 ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
 done
@@ -47,7 +52,7 @@ done
 # Validate required arguments
 if [[ -z "${INPUT:-}" || -z "${OUTPUT:-}" || -z "${GENOME_FILE:-}" || -z "${ANNOTATION_FILE:-}" ]]; then
     echo "Error: Missing required arguments."
-    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>]"
+    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>]"
     exit 1
 fi
 
@@ -64,6 +69,11 @@ fi
 
 if [[ ! "$FRAGMENT_LENGTH" =~ ^[0-9]+([.][0-9]+)?$ || ! "$FRAGMENT_SD" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     echo "Error: FRAGMENT_LENGTH and FRAGMENT_SD must be positive numeric values"
+    exit 1
+fi
+
+if [[ ! "$INFERENTIAL_REPS" =~ ^[0-9]+$ ]]; then
+    echo "Error: INFERENTIAL_REPS must be a non-negative integer"
     exit 1
 fi
 
@@ -185,6 +195,7 @@ log "Tipo de lectura: $READ_TYPE"
     printf 'annotation_file\t%s\n' "$ANNOTATION_FILE"
     printf 'alignment_type\t%s\n'  "$ALIGNMENT_TYPE"
     printf 'read_type\t%s\n'       "$READ_TYPE"
+    printf 'inferential_reps\t%s\n' "$INFERENTIAL_REPS"
     printf 'started_at\t%s\n'      "$(date '+%Y-%m-%d %H:%M:%S')"
 } > "${OUTPUT}/run_params.tsv"
 if [[ "$READ_TYPE" == "se" && "$ALIGNMENT_TYPE" == "kallisto" ]]; then
@@ -325,6 +336,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
                 -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
                 -2 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
                 -p "$THREADS" \
+                --numGibbsSamples "$INFERENTIAL_REPS" \
                 -o "${ALIGNMENTS}/${SAMPLE}"
         else
             run_cmd salmon quant \
@@ -332,6 +344,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
                 -l A \
                 -r "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz" \
                 -p "$THREADS" \
+                --numGibbsSamples "$INFERENTIAL_REPS" \
                 -o "${ALIGNMENTS}/${SAMPLE}"
         fi
 
@@ -342,6 +355,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
                 -i "$KALLISTO_INDEX" \
                 -o "${ALIGNMENTS}/${SAMPLE}" \
                 -t "$THREADS" \
+                -b "$INFERENTIAL_REPS" \
                 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
                 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz"
         else
@@ -349,6 +363,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
                 -i "$KALLISTO_INDEX" \
                 -o "${ALIGNMENTS}/${SAMPLE}" \
                 -t "$THREADS" \
+                -b "$INFERENTIAL_REPS" \
                 --single \
                 -l "$FRAGMENT_LENGTH" \
                 -s "$FRAGMENT_SD" \
