@@ -84,17 +84,39 @@ ui_tab_deg <- function() {
         )
       ),
 
-      # Card 4: Analisis
+      # Card 4: Analisis. Todo lo que hay aqui forma parte del TEST, asi que
+      # cambiarlo obliga a reajustar el modelo (boton "Lanzar DEG").
       card(
-        card_header("4. Analisis DEG"),
+        card_header("4. Analisis DEG (define el test)"),
         selectInput("deg_method", "Motor",
                     choices = c("DESeq2", "edgeR", "limma-voom"),
                     selected = "DESeq2"),
-        layout_columns(
-          col_widths = c(6, 6),
-          numericInput("deg_min_count", "Min. cuenta por fila", value = 10, min = 0, step = 1),
-          numericInput("deg_min_samples", "Min. muestras", value = 2, min = 1, step = 1)
+        selectInput("deg_prefilter_mode", "Prefiltrado de genes",
+                    choices = c("Automatico (filterByExpr)" = "auto",
+                                "Manual (umbral explicito)" = "manual"),
+                    selected = "auto"),
+        conditionalPanel(
+          "input.deg_prefilter_mode === 'manual'",
+          layout_columns(
+            col_widths = c(6, 6),
+            numericInput("deg_min_count", "Min. cuenta por fila", value = 10, min = 0, step = 1),
+            numericInput("deg_min_samples", "Min. muestras", value = NA, min = 1, step = 1)
+          ),
+          tags$small(class = "text-muted d-block mb-2",
+                     "Min. muestras vacio = tamano del grupo mas pequeno.")
         ),
+        sliderInput("deg_fdr_target", "FDR objetivo (alpha)",
+                    min = 0.01, max = 0.5, value = 0.05, step = 0.01),
+        numericInput("deg_lfc_threshold", "Umbral |log2FC| del test",
+                     value = 0, min = 0, max = 5, step = 0.25),
+        tags$small(class = "text-muted d-block mb-2",
+                   paste("0 = test clasico (H0: log2FC = 0). Un valor > 0 testea",
+                         "H0: |log2FC| <= umbral dentro del modelo",
+                         "(lfcThreshold / glmTreat / treat), que es la forma de",
+                         "exigir un fold-change minimo sin perder el control de la FDR.")),
+        checkboxInput("deg_shrink", "Encoger log2FC para visualizacion (apeglm)", TRUE),
+        tags$small(class = "text-muted d-block mb-2",
+                   "Solo DESeq2. Anade la columna log2FC_shrunk; no altera los p-valores."),
         actionButton("run_deg_btn",
                      tagList(icon("flask"), " Lanzar DEG"),
                      class = "btn-success btn-lg"),
@@ -102,14 +124,19 @@ ui_tab_deg <- function() {
                  verbatimTextOutput("deg_status_text", placeholder = TRUE))
       ),
 
-      # Card 5: Filtros interactivos
+      # Card 5: filtros que solo recortan lo que se ve. Deliberadamente separados
+      # de la card 4 para que no se confundan con los umbrales del test.
       card(
-        card_header("5. Filtros (recalculan al vuelo)"),
-        sliderInput("deg_fdr_cutoff", "FDR maximo",
-                    min = 0, max = 1, value = 0.05, step = 0.01),
-        sliderInput("deg_log2fc_cutoff", "|log2FC| minimo",
-                    min = 0, max = 5, value = 1, step = 0.1),
-        sliderInput("deg_basemean_cutoff", "baseMean minimo",
+        card_header("5. Filtros de visualizacion"),
+        div(class = "alert alert-secondary py-2 px-2 small mb-2",
+            icon("eye"),
+            tags$b(" Solo afectan a lo que se muestra."),
+            " No cambian el modelo ni el control de la FDR. Para exigir un",
+            " fold-change minimo con garantia estadistica usa el umbral del test",
+            " en la tarjeta 4."),
+        sliderInput("deg_log2fc_cutoff", "|log2FC| minimo (visual)",
+                    min = 0, max = 5, value = 0, step = 0.1),
+        sliderInput("deg_basemean_cutoff", "baseMean minimo (visual)",
                     min = 0, max = 1000, value = 0, step = 5)
       )
     ),
@@ -122,6 +149,10 @@ ui_tab_deg <- function() {
 #' tagList con el navset de resultados (tabla, plots, enriquecimiento).
 ui_tab_deg_results <- function() {
   tagList(
+    # Banner con el contraste realmente testeado. Es informacion imprescindible
+    # para interpretar un volcano, y ademas es donde avisamos de que con >2
+    # niveles de condition solo se esta mostrando una de las comparaciones.
+    uiOutput("deg_contrast_banner"),
     navset_tab(
       id = "deg_result_tabs",
       nav_panel(
@@ -188,15 +219,31 @@ ui_tab_deg_results <- function() {
                                         "GO: Componente celular" = "CC",
                                         "KEGG" = "KEGG"),
                             selected = "BP", width = "200px"),
+                # keyType: los IDs de featureCounts sobre un GFF procariota son
+                # locus tags, no simbolos. Fijarlo a SYMBOL hacia fallar el mapeo
+                # en silencio, asi que ahora es explicito y seleccionable.
+                conditionalPanel(
+                  "input.deg_ontology !== 'KEGG'",
+                  selectInput("deg_go_keytype", NULL,
+                              choices = c("SYMBOL"), selected = "SYMBOL",
+                              width = "150px")
+                ),
                 conditionalPanel(
                   "input.deg_ontology === 'KEGG'",
                   textInput("deg_kegg_organism", NULL, value = "eco",
                             placeholder = "eco, hsa, mmu...", width = "110px")
                 ),
+                conditionalPanel(
+                  "input.deg_ontology === 'KEGG'",
+                  selectInput("deg_kegg_keytype", NULL,
+                              choices = c("kegg", "ncbi-geneid", "ncbi-proteinid", "uniprot"),
+                              selected = "kegg", width = "150px")
+                ),
                 actionButton("deg_run_enrich_btn",
                              tagList(icon("play"), " Calcular"),
                              class = "btn-sm"))
           )),
+          uiOutput("deg_enrich_mapping"),
           plotly::plotlyOutput("deg_enrich_dotplot", height = "440px"),
           tags$hr(),
           tags$div(

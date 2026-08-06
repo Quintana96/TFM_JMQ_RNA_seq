@@ -26,6 +26,11 @@ HAS_CLUSTERPROFILER <- pkg_ok("clusterProfiler")
 HAS_ENRICHPLOT      <- pkg_ok("enrichplot")
 HAS_PHEATMAP        <- pkg_ok("pheatmap")
 HAS_ORGECDB         <- pkg_ok("org.EcK12.eg.db")
+# Encogido de log2FC (lfcShrink). apeglm es la opcion recomendada por la
+# vinieta de DESeq2; ashr sirve de alternativa. Sin ninguno de los dos se cae a
+# type = "normal".
+HAS_APEGLM          <- pkg_ok("apeglm")
+HAS_ASHR            <- pkg_ok("ashr")
 
 #' Operador nulo-coalescente
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x

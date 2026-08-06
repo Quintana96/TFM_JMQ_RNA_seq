@@ -19,6 +19,14 @@ fmt_elapsed <- function(secs) {
   sprintf("%dh %dm", s %/% 3600, (s %% 3600) %/% 60)
 }
 
+#' Entero con separador de miles ("18.402").
+#' `decimal.mark` se pasa explicitamente porque con big.mark = "." y el
+#' decimal.mark por defecto tambien ".", R avisa de la ambiguedad.
+fmt_int <- function(x) {
+  if (length(x) == 0 || is.null(x) || any(is.na(x))) return("—")
+  formatC(as.integer(x), format = "d", big.mark = ".", decimal.mark = ",")
+}
+
 #' Etiqueta de porcentaje "12.3%" o "—"
 pct_label <- function(x, digits = 1) {
   if (is.na(x) || !is.finite(x)) return("—")

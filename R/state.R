@@ -79,13 +79,22 @@ create_app_state <- function(session) {
 
   # Resultado de la pestana DEG (Tab 4). Reactivos para que las renders
   # cuelguen automaticamente al lanzar un nuevo run_deg().
+  # `fdr` y `lfc_threshold` guardan los parametros con los que se AJUSTO el
+  # modelo, no los de la interfaz en este instante: son los unicos validos para
+  # declarar significacion, y cambiarlos exige relanzar el analisis.
   state$deg_rv <- reactiveValues(
-    counts  = NULL,
-    meta    = NULL,
-    method  = NULL,
-    results = NULL,
-    vst_mat = NULL,
-    run_at  = NULL
+    counts        = NULL,
+    meta          = NULL,
+    method        = NULL,
+    results       = NULL,
+    vst_mat       = NULL,
+    run_at        = NULL,
+    fdr           = 0.05,
+    lfc_threshold = 0,
+    contrast      = NULL,
+    n_levels      = NA_integer_,
+    shrink        = "ninguno",
+    prefilter     = NULL
   )
 
   # Slot para reactivos expuestos por server_tab_config (rellenado al final

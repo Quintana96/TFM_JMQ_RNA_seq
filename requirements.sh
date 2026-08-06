@@ -70,11 +70,18 @@ required_bioc <- c(
   "limma",
   "tximport",
   "clusterProfiler",
-  "enrichplot"
+  "enrichplot",
+  # apeglm implementa el encogido de log2FC que la app usa por defecto en
+  # DESeq2 (lfcShrink). Sin el, los log2FC de genes de baja expresion salen
+  # sesgados hacia valores exagerados.
+  "apeglm"
 )
 # Opcionales: si no estan, la app advierte pero no falla.
 optional_bioc <- c(
-  "org.EcK12.eg.db"
+  "org.EcK12.eg.db",  # anotacion GO/KEGG de E. coli K12
+  "ashr",             # alternativa a apeglm para lfcShrink
+  "IHW",              # ponderacion de hipotesis por baseMean (mas potencia que BH)
+  "sva"               # variables sustitutas para variacion no deseada desconocida
 )
 installed <- rownames(installed.packages())
 missing_cran <- setdiff(required_cran, installed)

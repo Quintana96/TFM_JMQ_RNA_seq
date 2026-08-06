@@ -1,29 +1,98 @@
 #' utils_enrich.R
 #' Funciones puras para enriquecimiento funcional (GO / KEGG) via clusterProfiler.
 #' No dependen de Shiny. Tanto si los paquetes no estan instalados como si la
-#' query falla, devuelven list(table = NULL, error = mensaje).
+#' query falla, devuelven list(table = NULL, error = mensaje, mapping = ...).
+#'
+#' Dos requisitos que Wijesooriya et al. (PLoS Comput Biol 2022) encontraron
+#' incumplidos en el 95 % de los analisis de sobre-representacion publicados, y
+#' que aqui se respetan explicitamente (ver docs/REVISION_ESTADISTICA.md, B3):
+#'
+#'   1. LISTA DE FONDO. Tanto GO como KEGG reciben `universe` = los genes
+#'      efectivamente testeados. Usar todo el genoma como fondo infla los
+#'      enriquecimientos.
+#'   2. TASA DE MAPEO VISIBLE. `mapping` viaja siempre en el resultado, incluso
+#'      cuando no hay terminos, para que la interfaz pueda distinguir "no hay
+#'      enriquecimiento" de "solo mapeo el 12 % de los IDs".
+
+#' Keytypes disponibles en un OrgDb (para poblar el selector de la interfaz).
+#' Devuelve character(0) si no se puede consultar.
+orgdb_keytypes <- function(OrgDb) {
+  if (is.character(OrgDb)) {
+    if (!nzchar(OrgDb) || !requireNamespace(OrgDb, quietly = TRUE)) return(character(0))
+    OrgDb <- getFromNamespace(OrgDb, OrgDb)
+  }
+  if (is.null(OrgDb) || !requireNamespace("AnnotationDbi", quietly = TRUE)) return(character(0))
+  tryCatch(AnnotationDbi::keytypes(OrgDb), error = function(e) character(0))
+}
+
+#' Tasa de mapeo de una lista de genes contra un OrgDb y un keyType.
+#'
+#' Un enriquecimiento con mapeo bajo no es interpretable. Los IDs que salen de
+#' featureCounts sobre un GFF de E. coli son locus tags (b0001) o IDs de Ensembl
+#' Bacteria, no simbolos, asi que con keyType = "SYMBOL" el mapeo puede ser
+#' casi nulo sin que nada falle visiblemente.
+gene_mapping_rate <- function(genes, OrgDb, keyType = "SYMBOL") {
+  genes <- unique(as.character(genes[!is.na(genes)]))
+  out <- list(n_input = length(genes), n_mapped = NA_integer_, rate = NA_real_,
+              keytype = keyType, source = "OrgDb")
+  if (!length(genes) || is.null(OrgDb)) return(out)
+  if (!requireNamespace("AnnotationDbi", quietly = TRUE)) return(out)
+  ks <- tryCatch(AnnotationDbi::keys(OrgDb, keytype = keyType), error = function(e) NULL)
+  if (is.null(ks)) return(out)
+  out$n_mapped <- length(intersect(genes, ks))
+  out$rate <- out$n_mapped / length(genes)
+  out
+}
+
+#' Tasa de mapeo derivada del denominador de GeneRatio ("k/n"): `n` es el numero
+#' de genes de entrada que clusterProfiler ha podido anotar. Es la via para
+#' KEGG, donde no hay una base local contra la que comparar.
+mapping_from_generatio <- function(enrich_df, n_input, keyType = NA_character_) {
+  out <- list(n_input = n_input, n_mapped = NA_integer_, rate = NA_real_,
+              keytype = keyType, source = "GeneRatio")
+  if (is.null(enrich_df) || !nrow(enrich_df) || !"GeneRatio" %in% names(enrich_df)) return(out)
+  den <- suppressWarnings(as.integer(sub(".*/", "", as.character(enrich_df$GeneRatio[1]))))
+  if (is.na(den)) return(out)
+  out$n_mapped <- den
+  out$rate <- if (n_input > 0) den / n_input else NA_real_
+  out
+}
+
+#' Texto corto con la tasa de mapeo, listo para mostrar bajo el grafico.
+mapping_rate_text <- function(mapping) {
+  if (is.null(mapping) || is.null(mapping$n_input)) return(NULL)
+  if (is.na(mapping$n_mapped %||% NA)) {
+    return(paste0(mapping$n_input, " genes de entrada; tasa de mapeo no determinable."))
+  }
+  paste0(
+    fmt_int(mapping$n_mapped), " de ", fmt_int(mapping$n_input), " genes mapeados (",
+    round(100 * mapping$rate, 1), " %)",
+    if (!is.na(mapping$keytype)) paste0(" con keyType = ", mapping$keytype) else ""
+  )
+}
 
 #' Enriquecimiento GO. Si OrgDb es NULL, devuelve mensaje pidiendo OrgDb.
 run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
                               ont = "BP", keyType = "SYMBOL",
                               pvalueCutoff = 0.05, qvalueCutoff = 0.2) {
+  fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
-    return(list(table = NULL, error = "clusterProfiler no esta instalado."))
+    return(fail("clusterProfiler no esta instalado."))
   }
   if (is.null(OrgDb) || (is.character(OrgDb) && !nzchar(OrgDb))) {
-    return(list(table = NULL,
-                error = "Especifica un OrgDb (p.ej. 'org.EcK12.eg.db') para correr GO."))
+    return(fail("Especifica un OrgDb (p.ej. 'org.EcK12.eg.db') para correr GO."))
   }
   if (is.character(OrgDb)) {
     if (!requireNamespace(OrgDb, quietly = TRUE)) {
-      return(list(table = NULL,
-                  error = paste0("El paquete '", OrgDb, "' no esta instalado.")))
+      return(fail(paste0("El paquete '", OrgDb, "' no esta instalado.")))
     }
     OrgDb <- getFromNamespace(OrgDb, OrgDb)
   }
-  if (!length(genes)) {
-    return(list(table = NULL, error = "Lista de genes vacia."))
-  }
+  if (!length(genes)) return(fail("Lista de genes vacia."))
+
+  # Se calcula antes del enriquecimiento para poder explicar un resultado vacio.
+  mapping <- gene_mapping_rate(genes, OrgDb, keyType)
+
   out <- tryCatch({
     ego <- clusterProfiler::enrichGO(
       gene          = unique(as.character(genes)),
@@ -35,39 +104,57 @@ run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
       qvalueCutoff  = qvalueCutoff,
       readable      = FALSE
     )
-    if (is.null(ego) || is.null(ego@result) || !nrow(ego@result)) return(NULL)
-    as.data.frame(ego)
+    # Sin `return()`: dentro de tryCatch({...}) un return() sale de la funcion
+    # entera y se lleva por delante el resultado (incluido `mapping`).
+    # Se cuenta sobre as.data.frame() y no sobre @result porque @result guarda
+    # todos los terminos testeados y la conversion aplica los cutoffs.
+    df <- if (is.null(ego)) NULL else as.data.frame(ego)
+    if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e)
-  if (inherits(out, "error")) return(list(table = NULL, error = conditionMessage(out)))
-  if (is.null(out)) return(list(table = NULL, error = "Sin terminos GO enriquecidos."))
+  if (inherits(out, "error")) return(fail(conditionMessage(out), mapping))
+  if (is.null(out)) return(fail("Sin terminos GO enriquecidos.", mapping))
   keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL)
+  list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping)
 }
 
 #' Enriquecimiento KEGG. Para E. coli K12 substr MG1655 usa organism = "eco".
-run_enrichment_kegg <- function(genes, organism = "eco", keyType = "kegg",
+#'
+#' `universe` es el cambio importante respecto a la version anterior: sin el,
+#' enrichKEGG usa todo el genoma como fondo en lugar de los genes testeados.
+run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
+                                keyType = "kegg",
                                 pvalueCutoff = 0.05, qvalueCutoff = 0.2) {
+  fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
-    return(list(table = NULL, error = "clusterProfiler no esta instalado."))
+    return(fail("clusterProfiler no esta instalado."))
   }
-  if (!length(genes)) return(list(table = NULL, error = "Lista de genes vacia."))
+  if (!length(genes)) return(fail("Lista de genes vacia."))
+  genes_u <- unique(as.character(genes))
   out <- tryCatch({
     ek <- clusterProfiler::enrichKEGG(
-      gene          = unique(as.character(genes)),
+      gene          = genes_u,
+      universe      = if (length(universe)) unique(as.character(universe)) else NULL,
       organism      = organism,
       keyType       = keyType,
       pvalueCutoff  = pvalueCutoff,
       qvalueCutoff  = qvalueCutoff
     )
-    if (is.null(ek) || is.null(ek@result) || !nrow(ek@result)) return(NULL)
-    as.data.frame(ek)
+    df <- if (is.null(ek)) NULL else as.data.frame(ek)
+    if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e)
-  if (inherits(out, "error")) return(list(table = NULL, error = conditionMessage(out)))
-  if (is.null(out)) return(list(table = NULL, error = "Sin terminos KEGG enriquecidos."))
+  if (inherits(out, "error")) {
+    return(fail(conditionMessage(out),
+                mapping_from_generatio(NULL, length(genes_u), keyType)))
+  }
+  if (is.null(out)) {
+    return(fail("Sin terminos KEGG enriquecidos.",
+                mapping_from_generatio(NULL, length(genes_u), keyType)))
+  }
   keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL)
+  list(table = out[, keep, drop = FALSE], error = NULL,
+       mapping = mapping_from_generatio(out, length(genes_u), keyType))
 }
 
 #' Ordena el enriquecimiento por p.adjust y devuelve top_n filas.

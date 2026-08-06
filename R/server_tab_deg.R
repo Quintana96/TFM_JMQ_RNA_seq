@@ -235,23 +235,40 @@ server_tab_deg <- function(input, output, session, state) {
       showNotification("Tras alinear muestras quedan menos de 2 columnas.", type = "error"); return()
     }
 
-    # Prefiltrado
+    ref <- input$deg_ref_level
+    batch <- if (isTRUE(input$deg_use_batch)) input$deg_batch_col else NULL
+
+    # Prefiltrado. En modo automatico pasamos el diseno para que filterByExpr
+    # use el tamano del grupo mas pequeno; en manual, el grupo permite derivar
+    # min_samples cuando el usuario lo deja vacio.
+    pf_mode <- input$deg_prefilter_mode %||% "auto"
     mc <- input$deg_min_count %||% 10
     ms <- input$deg_min_samples
     if (is.null(ms) || !is.finite(ms) || ms < 1) ms <- NULL
-    cm_f <- prefilter_counts(cm_aln, min_count = mc, min_samples = ms)
+    design_for_filter <- tryCatch({
+      d <- build_design(meta_aln, ref, batch)
+      stats::model.matrix(d$formula, data = d$meta)
+    }, error = function(e) NULL)
+
+    cm_f <- prefilter_counts(cm_aln, min_count = mc, min_samples = ms,
+                             mode = pf_mode, design = design_for_filter,
+                             group = meta_aln$condition)
     if (is.null(cm_f) || !nrow(cm_f)) {
       showNotification("Tras prefiltrar no quedan filas. Reduce los umbrales.", type = "error"); return()
     }
+    pf_info <- attr(cm_f, "prefilter")
 
-    ref <- input$deg_ref_level
-    batch <- if (isTRUE(input$deg_use_batch)) input$deg_batch_col else NULL
+    fdr_target <- input$deg_fdr_target %||% 0.05
+    lfc_thr    <- input$deg_lfc_threshold
+    if (is.null(lfc_thr) || !is.finite(lfc_thr) || lfc_thr < 0) lfc_thr <- 0
+    do_shrink  <- isTRUE(input$deg_shrink)
 
     showNotification(paste0("Corriendo DEG (", method, "). Esto puede tardar..."),
                      type = "message", duration = 4)
 
     res <- tryCatch(
-      run_deg(cm_f, meta_aln, method = method, ref_level = ref, batch = batch),
+      run_deg(cm_f, meta_aln, method = method, ref_level = ref, batch = batch,
+              fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink),
       error = function(e) list(table = NULL, error = conditionMessage(e), method = method)
     )
 
@@ -264,43 +281,111 @@ server_tab_deg <- function(input, output, session, state) {
     # Cache de transformacion para visualizacion
     vst_mat <- tryCatch(vst_or_rlog(cm_f, meta_aln), error = function(e) NULL)
 
-    state$deg_rv$counts  <- cm_f
-    state$deg_rv$meta    <- meta_aln
-    state$deg_rv$method  <- method
-    state$deg_rv$results <- res$table
-    state$deg_rv$vst_mat <- vst_mat
-    state$deg_rv$run_at  <- Sys.time()
+    state$deg_rv$counts        <- cm_f
+    state$deg_rv$meta          <- meta_aln
+    state$deg_rv$method        <- method
+    state$deg_rv$results       <- res$table
+    state$deg_rv$vst_mat       <- vst_mat
+    state$deg_rv$run_at        <- Sys.time()
+    state$deg_rv$fdr           <- fdr_target
+    state$deg_rv$lfc_threshold <- lfc_thr
+    state$deg_rv$contrast      <- res$contrast
+    state$deg_rv$n_levels      <- res$n_levels %||% NA_integer_
+    state$deg_rv$shrink        <- res$shrink %||% "ninguno"
+    state$deg_rv$prefilter     <- pf_info
+
+    # A4: con tres o mas niveles solo se reporta una de las comparaciones
+    # posibles. Avisar es obligatorio: el usuario no tiene forma de saberlo
+    # mirando la tabla.
+    if (isTRUE((res$n_levels %||% 0) > 2)) {
+      showNotification(
+        paste0("condition tiene ", res$n_levels, " niveles y solo se ha testeado ",
+               "la comparacion '", res$contrast %||% "?", "'. Las demas no se ",
+               "estan mostrando; cambia el nivel de referencia para ver otras."),
+        type = "warning", duration = 16
+      )
+    }
+    if (do_shrink && identical(method, "DESeq2") &&
+        identical(state$deg_rv$shrink, "ninguno")) {
+      showNotification(
+        "No se pudo encoger el log2FC (apeglm/ashr no disponibles).",
+        type = "warning", duration = 8
+      )
+    }
 
     showNotification(paste0("DEG completado (", method, "): ",
                             nrow(res$table), " filas."),
                      type = "default", duration = 6)
   })
 
+  # ── Banner del contraste testeado ──────────────────────────────────────────
+  output$deg_contrast_banner <- renderUI({
+    if (is.null(state$deg_rv$results)) return(NULL)
+    ct <- state$deg_rv$contrast
+    nl <- state$deg_rv$n_levels
+    lfc_thr <- state$deg_rv$lfc_threshold %||% 0
+    test_txt <- if (is.finite(lfc_thr) && lfc_thr > 0) {
+      paste0("H0: |log2FC| <= ", lfc_thr, " (umbral dentro del test)")
+    } else {
+      "H0: log2FC = 0"
+    }
+    bits <- tagList(
+      tags$b("Contraste: "), tags$span(ct %||% "no determinado"),
+      tags$span(class = "text-muted",
+                paste0("  ·  motor ", state$deg_rv$method,
+                       "  ·  FDR objetivo ", state$deg_rv$fdr,
+                       "  ·  ", test_txt))
+    )
+    if (isTRUE(nl > 2)) {
+      div(class = "alert alert-warning py-2 px-3 mb-2",
+          icon("triangle-exclamation"), " ", bits,
+          tags$div(class = "small mt-1",
+                   paste0("condition tiene ", nl, " niveles: esta es solo UNA de las ",
+                          "comparaciones posibles. Cambia el nivel de referencia ",
+                          "para testear otras.")))
+    } else {
+      div(class = "alert alert-light border py-2 px-3 mb-2",
+          icon("circle-info"), " ", bits)
+    }
+  })
+
   output$deg_status_text <- renderText({
     if (is.null(state$deg_rv$results)) return("Sin ejecucion DEG. Pulsa 'Lanzar DEG'.")
     tab <- state$deg_rv$results
-    fdr_thr <- input$deg_fdr_cutoff %||% 0.05
-    lfc_thr <- input$deg_log2fc_cutoff %||% 1
-    sig <- !is.na(tab$padj) & tab$padj <= fdr_thr & abs(tab$log2FC) >= lfc_thr
+    # La significacion se lee con el FDR del AJUSTE, no con un deslizador: es el
+    # unico nivel para el que el control de FDR calculado es valido.
+    fdr_thr <- state$deg_rv$fdr %||% 0.05
+    lfc_thr <- state$deg_rv$lfc_threshold %||% 0
+    sig <- !is.na(tab$padj) & tab$padj <= fdr_thr
     n_up   <- sum(sig & !is.na(tab$log2FC) & tab$log2FC > 0, na.rm = TRUE)
     n_down <- sum(sig & !is.na(tab$log2FC) & tab$log2FC < 0, na.rm = TRUE)
+    pf <- state$deg_rv$prefilter
+    pf_txt <- if (is.null(pf)) "" else paste0(
+      "Prefiltrado (", pf$mode, "): ", fmt_int(pf$n_before), " -> ",
+      fmt_int(pf$n_after), " genes\n"
+    )
     paste0(
       "Motor: ", state$deg_rv$method, "\n",
-      "Total: ", nrow(tab), " genes\n",
-      "FDR<", fdr_thr, ", |LFC|>", lfc_thr, ": ",
+      "Contraste: ", state$deg_rv$contrast %||% "no determinado", "\n",
+      pf_txt,
+      "Test: ", if (lfc_thr > 0) paste0("|log2FC| > ", lfc_thr, " dentro del modelo")
+                else "log2FC != 0", "\n",
+      "Encogido log2FC: ", state$deg_rv$shrink %||% "ninguno", "\n",
+      "Significativos a FDR <= ", fdr_thr, ": ",
       sum(sig, na.rm = TRUE), " (", n_up, " up / ", n_down, " down)\n",
       "Ultima ejecucion: ", format(state$deg_rv$run_at, "%Y-%m-%d %H:%M:%S")
     )
   })
 
   # ── Tabla filtrada (reactivo derivado, rapido) ─────────────────────────────
+  # El FDR viene del ajuste; |log2FC| y baseMean son filtros de visualizacion.
   deg_filtered <- reactive({
     tab <- state$deg_rv$results
     if (is.null(tab)) return(NULL)
     apply_deg_filters(
       tab,
-      fdr        = input$deg_fdr_cutoff %||% 0.05,
-      abs_log2fc = input$deg_log2fc_cutoff %||% 1,
+      fdr        = state$deg_rv$fdr %||% 0.05,
+      abs_log2fc = input$deg_log2fc_cutoff %||% 0,
       base_mean  = input$deg_basemean_cutoff %||% 0
     )
   })
@@ -320,43 +405,83 @@ server_tab_deg <- function(input, output, session, state) {
     df <- deg_filtered()
     if (is.null(df)) return(dt_table(message_df("Sin resultados DEG.")))
     df_r <- df
+    # Las columnas que un motor no rellena (log2FC_shrunk solo lo produce
+    # DESeq2, lfcSE no lo produce edgeR) se ocultan en vez de mostrar una
+    # columna entera de NA.
+    for (nm in intersect(c("log2FC_shrunk", "lfcSE", "stat"), names(df_r))) {
+      if (all(is.na(df_r[[nm]]))) df_r[[nm]] <- NULL
+    }
     if ("log2FC" %in% names(df_r)) {
       df_r$direction <- ifelse(df_r$log2FC >= 0, "Up", "Down")
       df_r <- df_r[, c("gene", "direction", setdiff(names(df_r), c("gene", "direction"))), drop = FALSE]
     }
-    num_cols <- intersect(c("baseMean", "log2FC", "lfcSE", "stat", "pvalue", "padj"), names(df_r))
+    num_cols <- intersect(c("baseMean", "log2FC", "log2FC_shrunk", "lfcSE",
+                            "stat", "pvalue", "padj"), names(df_r))
     for (nm in num_cols) df_r[[nm]] <- signif(df_r[[nm]], 4)
     dt_table(df_r, page_length = 15, filter = "top")
   })
 
   # ── Helpers de ploteo (reutilizados en render y en descarga) ──────────────
-  make_deg_volcano_plot <- function(df, fdr_thr = 0.05, lfc_thr = 1) {
+
+  #' Elige el eje de fold-change: el encogido si existe. Los estimadores de
+  #' maxima verosimilitud estan sesgados hacia valores exagerados en genes de
+  #' baja expresion, asi que un volcano construido sobre ellos destaca
+  #' visualmente los genes peor estimados. Se ordena y se dibuja con el
+  #' encogido; se testea con el MLE.
+  lfc_axis <- function(df) {
+    if ("log2FC_shrunk" %in% names(df) && !all(is.na(df$log2FC_shrunk))) {
+      list(values = df$log2FC_shrunk, label = "log2 Fold Change (encogido)")
+    } else {
+      list(values = df$log2FC, label = "log2 Fold Change (MLE)")
+    }
+  }
+
+  plot_title <- function(contrast, extra = NULL) {
+    if (is.null(contrast) || is.na(contrast)) return(extra)
+    paste0(c(paste0("Contraste: ", contrast), extra), collapse = "  ·  ")
+  }
+
+  make_deg_volcano_plot <- function(df, fdr_thr = 0.05, lfc_thr = 0,
+                                    contrast = NULL) {
+    ax <- lfc_axis(df)
+    df$x <- ax$values
     df$minus_log10_p <- -log10(pmax(df$pvalue, .Machine$double.xmin))
-    sig <- !is.na(df$padj) & df$padj <= fdr_thr & abs(df$log2FC) >= lfc_thr
+    # La significacion es padj <= FDR y nada mas: cuando hay umbral de
+    # fold-change ya esta dentro del test, asi que volver a cortar por |log2FC|
+    # aqui seria el filtro post-hoc que estamos eliminando.
+    sig <- !is.na(df$padj) & df$padj <= fdr_thr
     df$significant <- ifelse(is.na(sig), FALSE, sig)
     df$color <- ifelse(df$significant, "Significativo", "No significativo")
     fdr_y <- -log10(pmax(fdr_thr, .Machine$double.xmin))
+    shapes <- list(
+      list(type = "line", xref = "paper", x0 = 0, x1 = 1,
+           y0 = fdr_y, y1 = fdr_y,
+           line = list(dash = "dot", color = "#A8DADC"))
+    )
+    if (is.finite(lfc_thr) && lfc_thr > 0) {
+      shapes <- c(shapes, list(
+        list(type = "line", x0 = -lfc_thr, x1 = -lfc_thr, yref = "paper",
+             y0 = 0, y1 = 1, line = list(dash = "dot", color = "#F4A6A6")),
+        list(type = "line", x0 = lfc_thr, x1 = lfc_thr, yref = "paper",
+             y0 = 0, y1 = 1, line = list(dash = "dot", color = "#F4A6A6"))
+      ))
+    }
     p <- plotly::plot_ly(
-      df, x = ~log2FC, y = ~minus_log10_p, color = ~color,
+      df, x = ~x, y = ~minus_log10_p, color = ~color,
       colors = c("Significativo" = "#7BBF9A", "No significativo" = "#C0C0C0"),
       type = "scatter", mode = "markers",
-      text = ~paste0("Gen: ", gene, "<br>log2FC: ", round(log2FC, 3),
+      text = ~paste0("Gen: ", gene, "<br>", ax$label, ": ", round(x, 3),
                      "<br>padj: ", signif(padj, 3)),
       hoverinfo = "text",
       marker = list(size = 6, opacity = 0.7)
     ) |>
       plotly::layout(
-        xaxis = list(title = "log2 Fold Change"),
+        title = list(text = plot_title(contrast,
+                       if (lfc_thr > 0) paste0("umbral del test |log2FC| > ", lfc_thr)),
+                     font = list(size = 12)),
+        xaxis = list(title = ax$label),
         yaxis = list(title = "-log10(pvalue)"),
-        shapes = list(
-          list(type = "line", x0 = -lfc_thr, x1 = -lfc_thr, yref = "paper",
-               y0 = 0, y1 = 1, line = list(dash = "dot", color = "#F4A6A6")),
-          list(type = "line", x0 = lfc_thr, x1 = lfc_thr, yref = "paper",
-               y0 = 0, y1 = 1, line = list(dash = "dot", color = "#F4A6A6")),
-          list(type = "line", xref = "paper", x0 = 0, x1 = 1,
-               y0 = fdr_y, y1 = fdr_y,
-               line = list(dash = "dot", color = "#A8DADC"))
-        )
+        shapes = shapes
       )
     top_sig <- df[df$significant & !is.na(df$gene), ]
     if (nrow(top_sig) > 0) {
@@ -364,7 +489,7 @@ server_tab_deg <- function(input, output, session, state) {
       top_sig <- head(top_sig, 10)
       p <- p |> plotly::add_annotations(
         data = top_sig,
-        x = ~log2FC, y = ~minus_log10_p,
+        x = ~x, y = ~minus_log10_p,
         text = ~gene, showarrow = TRUE,
         arrowhead = 2, arrowsize = 0.5, arrowwidth = 1,
         arrowcolor = "#60756A",
@@ -375,23 +500,26 @@ server_tab_deg <- function(input, output, session, state) {
     p
   }
 
-  make_deg_ma_plot <- function(df, fdr_thr = 0.05) {
+  make_deg_ma_plot <- function(df, fdr_thr = 0.05, contrast = NULL) {
+    ax <- lfc_axis(df)
+    df$y <- ax$values
     df$significant <- !is.na(df$padj) & df$padj <= fdr_thr
     df$color <- ifelse(df$significant, "Significativo", "No significativo")
     df$log_base <- log10(pmax(df$baseMean, 1))
     plotly::plot_ly(
-      df, x = ~log_base, y = ~log2FC, color = ~color,
+      df, x = ~log_base, y = ~y, color = ~color,
       colors = c("Significativo" = "#7BBF9A", "No significativo" = "#C0C0C0"),
       type = "scatter", mode = "markers",
       text = ~paste0("Gen: ", gene, "<br>baseMean: ", signif(baseMean, 3),
-                     "<br>log2FC: ", round(log2FC, 3),
+                     "<br>", ax$label, ": ", round(y, 3),
                      "<br>padj: ", signif(padj, 3)),
       hoverinfo = "text",
       marker = list(size = 6, opacity = 0.7)
     ) |>
       plotly::layout(
+        title = list(text = plot_title(contrast), font = list(size = 12)),
         xaxis = list(title = "log10(baseMean)"),
-        yaxis = list(title = "log2 Fold Change"),
+        yaxis = list(title = ax$label),
         shapes = list(
           list(type = "line", xref = "paper", x0 = 0, x1 = 1,
                y0 = 0, y1 = 0,
@@ -405,15 +533,18 @@ server_tab_deg <- function(input, output, session, state) {
     req(state$deg_rv$results)
     make_deg_volcano_plot(
       state$deg_rv$results,
-      fdr_thr = input$deg_fdr_cutoff %||% 0.05,
-      lfc_thr = input$deg_log2fc_cutoff %||% 1
+      fdr_thr  = state$deg_rv$fdr %||% 0.05,
+      lfc_thr  = state$deg_rv$lfc_threshold %||% 0,
+      contrast = state$deg_rv$contrast
     )
   })
 
   # ── MA plot ────────────────────────────────────────────────────────────────
   output$deg_ma_plot <- plotly::renderPlotly({
     req(state$deg_rv$results)
-    make_deg_ma_plot(state$deg_rv$results, fdr_thr = input$deg_fdr_cutoff %||% 0.05)
+    make_deg_ma_plot(state$deg_rv$results,
+                     fdr_thr  = state$deg_rv$fdr %||% 0.05,
+                     contrast = state$deg_rv$contrast)
   })
 
   # ── PCA ────────────────────────────────────────────────────────────────────
@@ -484,6 +615,24 @@ server_tab_deg <- function(input, output, session, state) {
 
   # ── Enriquecimiento ────────────────────────────────────────────────────────
   enrich_rv <- reactiveVal(NULL)
+  enrich_mapping_rv <- reactiveVal(NULL)
+
+  # El OrgDb disponible hoy es solo el de E. coli K12; se centraliza aqui para
+  # que el selector de keyType y el enriquecimiento no se desincronicen.
+  deg_orgdb <- reactive({
+    if (isTRUE(HAS_ORGECDB)) "org.EcK12.eg.db" else NULL
+  })
+
+  # keyType seleccionable, poblado con los keytypes reales del OrgDb. Antes
+  # estaba fijado a "SYMBOL" en el codigo, lo que con locus tags de E. coli
+  # (b0001) daba un mapeo casi nulo sin ningun aviso.
+  observe({
+    kt <- orgdb_keytypes(deg_orgdb())
+    if (!length(kt)) kt <- c("SYMBOL", "ENTREZID", "ENSEMBL", "ALIAS", "REFSEQ")
+    preferred <- if ("SYMBOL" %in% kt) "SYMBOL" else kt[1]
+    updateSelectInput(session, "deg_go_keytype", choices = kt,
+                      selected = isolate(input$deg_go_keytype) %||% preferred)
+  })
 
   observeEvent(input$deg_run_enrich_btn, {
     req(state$deg_rv$results)
@@ -493,23 +642,52 @@ server_tab_deg <- function(input, output, session, state) {
                        type = "warning"); return()
     }
     ont <- input$deg_ontology %||% "BP"
+    # Fondo = los genes efectivamente testeados, no el genoma completo. Aplica
+    # tanto a GO como a KEGG.
     universe <- state$deg_rv$results$gene
     genes <- df$gene
     if (identical(ont, "KEGG")) {
       org_code <- trimws(input$deg_kegg_organism %||% "eco")
       if (!nzchar(org_code)) org_code <- "eco"
-      res <- run_enrichment_kegg(genes, organism = org_code)
+      res <- run_enrichment_kegg(genes, universe = universe, organism = org_code,
+                                 keyType = input$deg_kegg_keytype %||% "kegg")
     } else {
-      org <- if (isTRUE(HAS_ORGECDB)) "org.EcK12.eg.db" else NULL
       res <- run_enrichment_go(genes, universe = universe,
-                               OrgDb = org, ont = ont, keyType = "SYMBOL")
+                               OrgDb = deg_orgdb(), ont = ont,
+                               keyType = input$deg_go_keytype %||% "SYMBOL")
     }
+
+    enrich_mapping_rv(res$mapping)
+    # Un mapeo bajo hace el resultado no interpretable, asi que se avisa aunque
+    # el enriquecimiento haya devuelto terminos.
+    mp <- res$mapping
+    if (!is.null(mp) && !is.na(mp$rate %||% NA) && mp$rate < 0.5) {
+      showNotification(
+        paste0("Atencion: solo se ha mapeado el ", round(100 * mp$rate, 1),
+               " % de los genes (", mp$n_mapped, "/", mp$n_input,
+               "). Revisa el keyType: los IDs de featureCounts suelen ser locus ",
+               "tags, no simbolos."),
+        type = "warning", duration = 16
+      )
+    }
+
     if (is.null(res$table)) {
       showNotification(paste0("Enriquecimiento sin resultados: ", res$error %||% "—"),
                        type = "warning", duration = 8)
       enrich_rv(NULL); return()
     }
     enrich_rv(res$table)
+  })
+
+  output$deg_enrich_mapping <- renderUI({
+    mp <- enrich_mapping_rv()
+    txt <- mapping_rate_text(mp)
+    if (is.null(txt)) return(NULL)
+    low <- !is.null(mp) && !is.na(mp$rate %||% NA) && mp$rate < 0.5
+    div(class = paste("small py-1 px-2 mb-1 rounded",
+                      if (low) "alert alert-warning mb-2" else "text-muted"),
+        if (low) tagList(icon("triangle-exclamation"), " ") else NULL,
+        tags$b("Tasa de mapeo: "), txt)
   })
 
   output$deg_enrich_dotplot <- plotly::renderPlotly({
@@ -565,8 +743,9 @@ server_tab_deg <- function(input, output, session, state) {
       df <- state$deg_rv$results
       if (is.null(df)) return(plotly_message("Sin resultados DEG."))
       make_deg_volcano_plot(df,
-                            fdr_thr = input$deg_fdr_cutoff %||% 0.05,
-                            lfc_thr = input$deg_log2fc_cutoff %||% 1)
+                            fdr_thr  = state$deg_rv$fdr %||% 0.05,
+                            lfc_thr  = state$deg_rv$lfc_threshold %||% 0,
+                            contrast = state$deg_rv$contrast)
     }
   )
   output$download_deg_ma_plot <- plotly_download(
@@ -574,7 +753,8 @@ server_tab_deg <- function(input, output, session, state) {
     function() {
       df <- state$deg_rv$results
       if (is.null(df)) return(plotly_message("Sin resultados DEG."))
-      make_deg_ma_plot(df, fdr_thr = input$deg_fdr_cutoff %||% 0.05)
+      make_deg_ma_plot(df, fdr_thr  = state$deg_rv$fdr %||% 0.05,
+                       contrast = state$deg_rv$contrast)
     }
   )
   output$download_deg_pca_plot <- plotly_download(
