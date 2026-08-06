@@ -170,8 +170,23 @@ fi
 
 log "Entrada: $INPUT"
 log "Salida: $OUTPUT"
+log "Genoma/transcriptoma: $GENOME_FILE"
+log "Anotacion: $ANNOTATION_FILE"
 log "Tipo de alineamiento: $ALIGNMENT_TYPE"
 log "Tipo de lectura: $READ_TYPE"
+
+# Parametros en formato legible por la app. Sin esto, una ejecucion guardada no
+# deja rastro de con que anotacion se hizo, y la app no puede construir el mapa
+# transcrito-gen para tximport ni identificar los genes de rRNA.
+{
+    printf 'input_dir\t%s\n'       "$INPUT"
+    printf 'output_dir\t%s\n'      "$OUTPUT"
+    printf 'genome_file\t%s\n'     "$GENOME_FILE"
+    printf 'annotation_file\t%s\n' "$ANNOTATION_FILE"
+    printf 'alignment_type\t%s\n'  "$ALIGNMENT_TYPE"
+    printf 'read_type\t%s\n'       "$READ_TYPE"
+    printf 'started_at\t%s\n'      "$(date '+%Y-%m-%d %H:%M:%S')"
+} > "${OUTPUT}/run_params.tsv"
 if [[ "$READ_TYPE" == "se" && "$ALIGNMENT_TYPE" == "kallisto" ]]; then
     log "Fragment length for kallisto single-end: mean=$FRAGMENT_LENGTH sd=$FRAGMENT_SD"
 fi

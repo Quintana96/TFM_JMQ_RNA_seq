@@ -63,6 +63,62 @@ server_tab_results <- function(input, output, session, state) {
     )
   }
 
+  # ── rRNA por muestra ───────────────────────────────────────────────────────
+  selected_rrna <- reactive({
+    p <- selected_result_params()
+    out_dir <- selected_result_dir()
+    if (!length(p) || !nzchar(out_dir)) return(NULL)
+    counts <- tryCatch(
+      load_counts_from_workflow(out_dir, p$tool %||% "",
+                                annotation_file = annotation_file_for_run(out_dir)),
+      error = function(e) NULL)
+    if (is.null(counts)) return(NULL)
+    af <- annotation_file_for_run(out_dir)
+    ids <- if (!is.null(af)) rrna_ids_from_annotation(af) else character(0)
+    rrna_fraction_per_sample(counts, ids)
+  })
+
+  output$rrna_note <- renderUI({
+    r <- selected_rrna()
+    if (is.null(r)) return(NULL)
+    if (is.null(r$table)) {
+      return(div(class = "small text-muted",
+                 paste("No se han podido identificar genes de rRNA. Los",
+                       "identificadores de la matriz no llevan informacion de tipo",
+                       "(p. ej. locus tags), asi que hace falta el fichero de",
+                       "anotacion de la ejecucion.")))
+    }
+    tagList(
+      div(class = "small text-muted mb-1",
+          tags$b("Origen: "), r$source, "  ·  ", fmt_int(r$n_rrna_genes),
+          " genes de rRNA  ·  variacion entre muestras: ",
+          if (is.finite(r$spread)) paste0(round(100 * r$spread, 1), " puntos") else "—"),
+      if (!is.null(r$alert)) div(class = "alert alert-warning py-2 px-2 small mb-1",
+                                 icon("triangle-exclamation"), " ", r$alert) else NULL
+    )
+  })
+
+  make_rrna_plot <- function(r) {
+    if (is.null(r) || is.null(r$table)) {
+      return(plotly_message("Sin datos de rRNA para esta ejecucion."))
+    }
+    df <- r$table
+    df$pct <- 100 * df$frac
+    plotly::plot_ly(df, x = ~sample_id, y = ~pct, type = "bar",
+                    marker = list(color = "#7BBF9A"),
+                    text = ~paste0("Muestra: ", sample_id,
+                                   "<br>rRNA: ", round(pct, 2), " %",
+                                   "<br>lecturas en rRNA: ", fmt_int(rrna_reads),
+                                   "<br>total asignadas: ", fmt_int(total_reads)),
+                    hoverinfo = "text") |>
+      plotly::layout(xaxis = list(title = ""),
+                     yaxis = list(title = "% de lecturas asignadas a rRNA"))
+  }
+
+  output$rrna_plot <- plotly::renderPlotly(make_rrna_plot(selected_rrna()))
+  output$download_rrna_plot <- plotly_download(
+    "rrna_por_muestra", function() make_rrna_plot(selected_rrna()))
+
   selected_counts_tables <- reactive({
     p <- selected_result_params()
     out_dir <- selected_result_dir()

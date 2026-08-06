@@ -104,12 +104,23 @@ server_tab_processing <- function(input, output, session, state) {
   finalize_run <- function(exit_code, output_dir) {
     if (exit_code == 0) {
       p <- state$run_params_rv()
-      counts <- tryCatch(load_counts_from_workflow(output_dir, p$tool), error = function(e) NULL)
+      counts <- tryCatch(
+        load_counts_from_workflow(
+          output_dir, p$tool,
+          annotation_file = p$annotation_file %||% annotation_file_for_run(output_dir)),
+        error = function(e) NULL)
       if (!is.null(counts)) {
         state$data_rv$count_matrix <- counts
         state$data_rv$counts_ready <- TRUE
         log_line(sprintf("Matriz cargada: %d genes x %d muestras",
                          nrow(counts), ncol(counts)))
+        # Si se ha tenido que degradar a est_counts crudos, decirlo: antes
+        # fallaba en silencio y parecia que se habia usado tximport.
+        src <- attr(counts, "counts_source")
+        if (!is.null(src)) {
+          log_line(paste0("Origen de los conteos: ", src$method,
+                          if (!isTRUE(src$ok)) paste0(" — ", src$detail) else ""))
+        }
       }
       files <- list.files(output_dir, recursive = TRUE, full.names = FALSE)
       if (length(files) > 0) {

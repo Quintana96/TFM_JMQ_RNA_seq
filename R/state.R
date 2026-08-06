@@ -99,7 +99,14 @@ create_app_state <- function(session) {
     # Diagnosticos post-ajuste (solo los produce DESeq2): tabla de dispersiones
     # para el equivalente de plotDispEsts y reparto de los maximos de Cook.
     disp_data     = NULL,
-    cooks         = NULL
+    cooks         = NULL,
+    # Diseno efectivamente ajustado, coeficiente testeado y coeficientes
+    # disponibles (para el selector del modo avanzado).
+    design        = "~ condition",
+    coef          = NULL,
+    coef_available = character(0),
+    # Nota sobre la correccion aplicada SOLO a los graficos, si la hay.
+    viz_note      = NULL
   )
 
   # Slot para reactivos expuestos por server_tab_config (rellenado al final

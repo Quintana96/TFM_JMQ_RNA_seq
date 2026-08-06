@@ -102,9 +102,27 @@ ui_tab_deg <- function() {
                    "log2FC > 0 significa mayor expresion en el numerador."),
         checkboxInput("deg_use_batch", "Incluir variable batch", FALSE),
         conditionalPanel(
-          "input.deg_use_batch === true",
+          "input.deg_use_batch === true && input.deg_advanced_design !== true",
           selectInput("deg_batch_col", "Columna de batch",
                       choices = c("batch"), selected = "batch")
+        ),
+        tags$hr(class = "my-2"),
+        checkboxInput("deg_advanced_design", "Diseno avanzado (formula libre)", FALSE),
+        conditionalPanel(
+          "input.deg_advanced_design === true",
+          textInput("deg_design_formula", NULL, value = "~ condition",
+                    placeholder = "~ subject + condition"),
+          tags$small(class = "text-muted d-block mb-1",
+                     paste("Permite disenos pareados (~ subject + condition),",
+                           "covariables continuas (~ edad + condition) e",
+                           "interacciones (~ genotipo * condition). Se valida antes",
+                           "de ajustar.")),
+          uiOutput("deg_design_feedback"),
+          selectInput("deg_test_coef", "Coeficiente a testear", choices = NULL),
+          tags$small(class = "text-muted d-block",
+                     paste("Se rellena con los coeficientes del ultimo ajuste.",
+                           "Dejalo en automatico para testear el contraste de la",
+                           "condicion."))
         )
       ),
 
@@ -156,10 +174,48 @@ ui_tab_deg <- function() {
                  verbatimTextOutput("deg_status_text", placeholder = TRUE))
       ),
 
-      # Card 5: filtros que solo recortan lo que se ve. Deliberadamente separados
+      # Card 5: variacion no deseada. La separacion entre las dos mitades de esta
+      # tarjeta es el punto didactico: corregir-para-testear y
+      # corregir-para-visualizar no son la misma operacion.
+      card(
+        card_header("5. Variacion no deseada"),
+        div(class = "alert alert-secondary py-2 px-2 small mb-2",
+            icon("circle-info"),
+            tags$b(" Dos cosas distintas."), " Para TESTEAR, la variacion se",
+            " modela como covariable y los conteos se dejan intactos. Para",
+            " VISUALIZAR (PCA, heatmap) hay que corregir la matriz, porque un",
+            " grafico no puede incluir covariables. Corregir la matriz y luego",
+            " testear sobre ella infla los falsos positivos."),
+        tags$b(class = "small d-block", "En el modelo (afecta al test)"),
+        if (isTRUE(HAS_SVA)) tagList(
+          checkboxInput("deg_use_sva",
+                        "Estimar variables sustitutas (sva) y anadirlas al diseno",
+                        FALSE),
+          conditionalPanel(
+            "input.deg_use_sva === true",
+            numericInput("deg_n_sv", "Numero de variables sustitutas (0 = automatico)",
+                         value = 0, min = 0, max = 10, step = 1),
+            tags$small(class = "text-muted d-block mb-2",
+                       paste("Cada variable sustituta consume un grado de libertad.",
+                             "Se reservan 3 g.l. residuales como minimo."))
+          )
+        ) else tags$small(class = "text-muted d-block mb-2",
+                          "sva no esta instalado."),
+        tags$hr(class = "my-2"),
+        tags$b(class = "small d-block", "Solo en los graficos (no afecta al test)"),
+        selectInput("deg_viz_correction", NULL,
+                    choices = c("Sin correccion" = "none",
+                                "removeBatchEffect (limma)" = "rbe",
+                                "ComBat-seq (sva)" = "combat"),
+                    selected = "none"),
+        tags$small(class = "text-muted d-block",
+                   "Se aplica al PCA, al heatmap y a la matriz de distancias.")
+      ),
+
+      # Card 6: filtros que solo recortan lo que se ve. Deliberadamente separados
       # de la card 4 para que no se confundan con los umbrales del test.
       card(
-        card_header("5. Filtros de visualizacion"),
+        card_header("6. Filtros de visualizacion"),
         div(class = "alert alert-secondary py-2 px-2 small mb-2",
             icon("eye"),
             tags$b(" Solo afectan a lo que se muestra."),

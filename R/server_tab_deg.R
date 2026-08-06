@@ -63,7 +63,10 @@ server_tab_deg <- function(input, output, session, state) {
       # Fallback: intentamos cargar desde la run actual
       p <- state$run_params_rv()
       if (length(p) && nzchar(p$output_dir %||% "") && nzchar(p$tool %||% "")) {
-        return(tryCatch(load_counts_from_workflow(p$output_dir, p$tool),
+        return(tryCatch(load_counts_from_workflow(
+                          p$output_dir, p$tool,
+                          annotation_file = p$annotation_file %||%
+                            annotation_file_for_run(p$output_dir)),
                         error = function(e) NULL))
       }
       return(NULL)
@@ -72,7 +75,9 @@ server_tab_deg <- function(input, output, session, state) {
       sel <- input$selected_deg_run_dir %||% ""
       if (!nzchar(sel) || !dir.exists(sel)) return(NULL)
       p <- infer_result_params(sel, state$workflow_path)
-      return(tryCatch(load_counts_from_workflow(sel, p$tool %||% ""),
+      return(tryCatch(load_counts_from_workflow(
+                        sel, p$tool %||% "",
+                        annotation_file = annotation_file_for_run(sel)),
                       error = function(e) NULL))
     }
     if (identical(src, "upload")) {
@@ -201,6 +206,49 @@ server_tab_deg <- function(input, output, session, state) {
     }
   })
 
+  # ── Diseno avanzado: validacion en vivo ────────────────────────────────────
+  # Se valida mientras se escribe, para que el error no llegue como un mensaje
+  # criptico de DESeq2 despues de esperar el ajuste.
+  design_validation <- reactive({
+    if (!isTRUE(input$deg_advanced_design)) return(NULL)
+    df <- meta_rv()
+    if (is.null(df) || !nrow(df)) return(NULL)
+    validate_design_formula(input$deg_design_formula %||% "~ condition", df)
+  })
+
+  output$deg_design_feedback <- renderUI({
+    v <- design_validation()
+    if (is.null(v)) return(NULL)
+    if (!isTRUE(v$ok)) {
+      return(div(class = "alert alert-danger py-2 px-2 small mb-2",
+                 icon("circle-xmark"), " ", paste(v$errors, collapse = " ")))
+    }
+    tagList(
+      div(class = "alert alert-success py-2 px-2 small mb-1",
+          icon("circle-check"), " ", design_summary_text(v)),
+      if (length(v$warnings)) div(class = "alert alert-warning py-2 px-2 small mb-1",
+                                  icon("triangle-exclamation"), " ",
+                                  paste(v$warnings, collapse = " ")) else NULL
+    )
+  })
+
+  # El selector de coeficiente se rellena con los nombres REALES del ultimo
+  # ajuste: DESeq2 y model.matrix nombran las interacciones distinto
+  # ("a.b" vs "a:b"), asi que adivinarlos daria opciones invalidas.
+  observe({
+    avail <- state$deg_rv$coef_available
+    if (is.null(avail) || !length(avail)) {
+      updateSelectInput(session, "deg_test_coef",
+                        choices = c("Automatico (contraste de la condicion)" = ""))
+      return()
+    }
+    ch <- setdiff(avail, c("Intercept", "(Intercept)"))
+    updateSelectInput(
+      session, "deg_test_coef",
+      choices = c(c("Automatico (contraste de la condicion)" = ""), ch),
+      selected = isolate(input$deg_test_coef) %||% "")
+  })
+
   # ── Lanzar DEG ─────────────────────────────────────────────────────────────
   observeEvent(input$run_deg_btn, {
     cm <- deg_counts_source()
@@ -277,13 +325,51 @@ server_tab_deg <- function(input, output, session, state) {
     if (is.null(lfc_thr) || !is.finite(lfc_thr) || lfc_thr < 0) lfc_thr <- 0
     do_shrink  <- isTRUE(input$deg_shrink)
 
+    # Formula del diseno: la libre si esta activada, y si no la construye el motor
+    # a partir de ref_level/batch.
+    dsg_formula <- if (isTRUE(input$deg_advanced_design)) {
+      input$deg_design_formula %||% "~ condition"
+    } else NULL
+    test_coef <- if (isTRUE(input$deg_advanced_design)) {
+      tc <- input$deg_test_coef %||% ""
+      if (nzchar(tc)) tc else NULL
+    } else NULL
+
+    # Variables sustitutas: se anaden al DISENO (no se corrigen los conteos),
+    # que es la forma correcta de tratarlas para testear.
+    if (isTRUE(input$deg_use_sva)) {
+      base_f <- stats::as.formula(dsg_formula %||%
+        if (!is.null(batch) && nzchar(batch)) paste0("~ ", batch, " + condition")
+        else "~ condition")
+      n_req <- input$deg_n_sv %||% 0
+      svres <- estimate_surrogate_vars(
+        cm_f, meta_aln, base_f,
+        n_sv = if (is.finite(n_req) && n_req >= 1) n_req else NULL)
+      if (is.null(svres$sv)) {
+        showNotification(paste0("No se han podido estimar variables sustitutas: ",
+                                svres$error %||% "—"),
+                         type = "error", duration = 14)
+        return()
+      }
+      meta_aln <- cbind(meta_aln, as.data.frame(svres$sv))
+      dsg_formula <- paste(deparse1(base_f), "+",
+                           paste(colnames(svres$sv), collapse = " + "))
+      msg <- paste0(svres$n_sv, " variable(s) sustituta(s) anadidas al diseno")
+      if (!is.na(svres$n_sv_estimated %||% NA) && svres$n_sv_estimated > svres$n_sv) {
+        msg <- paste0(msg, " (sva propuso ", svres$n_sv_estimated,
+                      ", recortadas para conservar grados de libertad)")
+      }
+      showNotification(paste0(msg, "."), type = "message", duration = 10)
+    }
+
     showNotification(paste0("Corriendo DEG (", method, "). Esto puede tardar..."),
                      type = "message", duration = 4)
 
     res <- tryCatch(
       run_deg(cm_f, meta_aln, method = method, ref_level = ref, batch = batch,
               fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink,
-              contrast_num = num, use_ihw = isTRUE(input$deg_use_ihw)),
+              contrast_num = num, use_ihw = isTRUE(input$deg_use_ihw),
+              design_formula = dsg_formula, test_coef = test_coef),
       error = function(e) list(table = NULL, error = conditionMessage(e), method = method)
     )
 
@@ -293,8 +379,50 @@ server_tab_deg <- function(input, output, session, state) {
       return()
     }
 
-    # Cache de transformacion para visualizacion
-    vst_mat <- tryCatch(vst_or_rlog(cm_f, meta_aln), error = function(e) NULL)
+    # Cache de transformacion para visualizacion. Aqui SI se corrige la matriz si
+    # el usuario lo ha pedido, porque afecta solo a los graficos: el test ya se
+    # ha hecho sobre los conteos sin tocar.
+    viz_corr <- input$deg_viz_correction %||% "none"
+    counts_for_viz <- cm_f
+    viz_note <- NULL
+    if (identical(viz_corr, "combat") && !is.null(batch) && nzchar(batch %||% "") &&
+        batch %in% names(meta_aln)) {
+      cb <- combat_seq_counts(cm_f, meta_aln[[batch]], meta_aln$condition)
+      if (!is.null(cb$counts)) {
+        counts_for_viz <- cb$counts
+        viz_note <- paste0("Graficos sobre conteos ajustados con ComBat-seq por '", batch, "'.")
+      } else {
+        showNotification(paste0("ComBat-seq fallo: ", cb$error %||% "—",
+                                ". Los graficos usan los conteos sin corregir."),
+                         type = "warning", duration = 12)
+      }
+    } else if (identical(viz_corr, "combat")) {
+      showNotification(paste0("ComBat-seq necesita una columna de batch: activa ",
+                              "'Incluir variable batch' en la tarjeta 3."),
+                       type = "warning", duration = 12)
+    }
+
+    vst_mat <- tryCatch(vst_or_rlog(counts_for_viz, meta_aln), error = function(e) NULL)
+
+    if (identical(viz_corr, "rbe") && !is.null(vst_mat)) {
+      if (!is.null(batch) && nzchar(batch %||% "") && batch %in% names(meta_aln)) {
+        dm <- tryCatch(stats::model.matrix(~ condition, data = meta_aln),
+                       error = function(e) NULL)
+        rb <- remove_batch_for_plots(vst_mat, meta_aln[[batch]], design = dm)
+        if (is.null(rb$error)) {
+          vst_mat <- rb$mat
+          viz_note <- paste0("Graficos con el efecto de '", batch,
+                             "' eliminado (removeBatchEffect).")
+        } else {
+          showNotification(paste0("removeBatchEffect fallo: ", rb$error),
+                           type = "warning", duration = 12)
+        }
+      } else {
+        showNotification(paste0("removeBatchEffect necesita una columna de batch: ",
+                                "activa 'Incluir variable batch' en la tarjeta 3."),
+                         type = "warning", duration = 12)
+      }
+    }
 
     state$deg_rv$counts        <- cm_f
     state$deg_rv$meta          <- meta_aln
@@ -311,6 +439,10 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$padj_method   <- res$padj_method %||% "BH"
     state$deg_rv$disp_data     <- res$disp_data
     state$deg_rv$cooks         <- res$cooks
+    state$deg_rv$design        <- res$design %||% "~ condition"
+    state$deg_rv$coef          <- res$coef
+    state$deg_rv$coef_available <- res$coef_available %||% character(0)
+    state$deg_rv$viz_note      <- viz_note
 
     if (do_shrink && identical(method, "DESeq2") &&
         identical(state$deg_rv$shrink, "ninguno")) {
@@ -358,6 +490,8 @@ server_tab_deg <- function(input, output, session, state) {
       tags$b("Contraste: "), tags$span(ct %||% "no determinado"),
       tags$span(class = "text-muted",
                 paste0("  ·  motor ", state$deg_rv$method,
+                       "  ·  diseno ", state$deg_rv$design %||% "~ condition",
+                       "  ·  coef ", state$deg_rv$coef %||% "—",
                        "  ·  FDR objetivo ", state$deg_rv$fdr,
                        " (", state$deg_rv$padj_method %||% "BH", ")",
                        "  ·  ", test_txt))
@@ -371,8 +505,15 @@ server_tab_deg <- function(input, output, session, state) {
                       " contrastes por pares posibles. Cambia numerador o ",
                       "denominador en la tarjeta 3 para testear otro."))
     } else NULL
+    # Si los graficos llevan una correccion que el test no lleva, hay que decirlo
+    # justo al lado del contraste, no en una ayuda escondida.
+    vn <- state$deg_rv$viz_note
+    viz <- if (!is.null(vn)) tags$div(
+      class = "small mt-1", icon("eye"), " ", tags$b("Solo en los graficos: "), vn,
+      tags$span(class = "text-muted",
+                " El test se ha hecho sobre los conteos sin corregir.")) else NULL
     div(class = "alert alert-light border py-2 px-3 mb-2",
-        icon("circle-info"), " ", bits, extra)
+        icon("circle-info"), " ", bits, extra, viz)
   })
 
   output$deg_status_text <- renderText({

@@ -198,6 +198,68 @@ read_kallisto_quant_table <- function(out_dir) {
   do.call(rbind, pieces)
 }
 
+#' Fraccion de lecturas asignadas a rRNA por muestra.
+#'
+#' Por que es una metrica de primer nivel y no un detalle (ver
+#' docs/REVISION_ESTADISTICA.md, B10): el rRNA supera el 85 % del RNA celular
+#' procariota y la depleccion es imperfecta — hasta un 50 % de lecturas
+#' residuales de rRNA es un resultado habitual. Con normalizacion por
+#' composicion (TMM/RLE), un arrastre de rRNA que varie entre muestras sesga
+#' TODOS los factores de tamano, no solo los genes de rRNA. Por eso lo relevante
+#' no es el valor absoluto sino la VARIACION entre muestras.
+#'
+#' @param counts matriz de conteos (genes x muestras)
+#' @param rrna_ids identificadores de rRNA de la anotacion. Si es NULL o no casa
+#'   con la matriz, se cae a la heuristica de nombres `infer_rna_type()`.
+#' @return list(table = data.frame(sample_id, rrna_reads, total_reads, frac),
+#'   source, n_rrna_genes, spread, alert)
+rrna_fraction_per_sample <- function(counts, rrna_ids = NULL) {
+  if (is.null(counts) || !nrow(counts) || !ncol(counts)) return(NULL)
+  cm <- as.matrix(counts)
+  ids <- rownames(cm)
+  if (is.null(ids)) return(NULL)
+
+  is_rrna <- rep(FALSE, nrow(cm))
+  source <- "ninguna"
+  if (!is.null(rrna_ids) && length(rrna_ids)) {
+    is_rrna <- ids %in% rrna_ids
+    if (any(is_rrna)) source <- "anotacion"
+  }
+  if (!any(is_rrna)) {
+    is_rrna <- infer_rna_type(ids) == "rRNA"
+    if (any(is_rrna)) source <- "heuristica de nombres"
+  }
+  if (!any(is_rrna)) {
+    return(list(table = NULL, source = "ninguna", n_rrna_genes = 0L,
+                spread = NA_real_, alert = NULL))
+  }
+
+  total <- colSums(cm, na.rm = TRUE)
+  rr <- colSums(cm[is_rrna, , drop = FALSE], na.rm = TRUE)
+  frac <- ifelse(total > 0, rr / total, NA_real_)
+  df <- data.frame(sample_id = colnames(cm), rrna_reads = as.numeric(rr),
+                   total_reads = as.numeric(total), frac = as.numeric(frac),
+                   stringsAsFactors = FALSE)
+  spread <- suppressWarnings(diff(range(df$frac, na.rm = TRUE)))
+  alert <- NULL
+  if (is.finite(spread) && spread > 0.10) {
+    alert <- paste0(
+      "El porcentaje de rRNA varia ", round(100 * spread, 1),
+      " puntos entre muestras (de ", round(100 * min(df$frac, na.rm = TRUE), 1),
+      " % a ", round(100 * max(df$frac, na.rm = TRUE), 1),
+      " %). Un arrastre desigual de rRNA sesga los factores de tamano de la ",
+      "normalizacion por composicion, asi que afecta a todos los genes. ",
+      "Considera excluir el rRNA antes del analisis diferencial.")
+  } else if (is.finite(max(df$frac, na.rm = TRUE)) && max(df$frac, na.rm = TRUE) > 0.3) {
+    alert <- paste0(
+      "Hay muestras con mas del ", round(100 * max(df$frac, na.rm = TRUE), 0),
+      " % de lecturas en rRNA. La depleccion no ha sido eficaz, lo que reduce ",
+      "la profundidad efectiva sobre el mRNA.")
+  }
+  list(table = df, source = source, n_rrna_genes = sum(is_rrna),
+       spread = spread, alert = alert)
+}
+
 #' Heuristica para inferir el tipo de RNA (mRNA, rRNA, tRNA, sRNA, ...)
 infer_rna_type <- function(x) {
   id <- tolower(as.character(x))
@@ -284,8 +346,8 @@ pseudo_qc_summary <- function(out_dir) {
                   list(out, detected, near_zero, tpm_median, tpm_median_det))
   }
 
-  counts <- tryCatch(load_counts_from_workflow(out_dir, "salmon"), error = function(e) NULL)
-  if (is.null(counts)) counts <- tryCatch(load_counts_from_workflow(out_dir, "kallisto"), error = function(e) NULL)
+  counts <- tryCatch(load_counts_from_workflow(out_dir, "salmon", annotation_file = annotation_file_for_run(out_dir)), error = function(e) NULL)
+  if (is.null(counts)) counts <- tryCatch(load_counts_from_workflow(out_dir, "kallisto", annotation_file = annotation_file_for_run(out_dir)), error = function(e) NULL)
   if (!is.null(counts) && length(counts)) {
     detected_features <- data.frame(
       sample_id = colnames(counts),

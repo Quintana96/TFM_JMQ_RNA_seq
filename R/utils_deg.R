@@ -158,22 +158,57 @@ prefilter_counts <- function(counts, min_count = 10, min_samples = NULL,
   out
 }
 
-#' Construye matriz de diseno con opcional batch.
-#' Devuelve tambien los niveles del factor y el de referencia, que hacen falta
-#' para etiquetar el contraste realmente testeado.
-build_design <- function(meta, ref_level = NULL, batch = NULL) {
-  meta$condition <- as.factor(meta$condition)
-  if (!is.null(ref_level) && ref_level %in% levels(meta$condition)) {
-    meta$condition <- stats::relevel(meta$condition, ref = ref_level)
-  }
-  if (!is.null(batch) && nzchar(batch) && batch %in% names(meta)) {
+#' Construye matriz de diseno.
+#'
+#' Tres modos, de menos a mas expresivo:
+#'   - `~ condition` (por defecto);
+#'   - `~ batch + condition` si se indica `batch`;
+#'   - `design_formula` arbitraria, que permite disenos pareados
+#'     (`~ subject + condition`), covariables continuas e interacciones. En ese
+#'     caso las variables se tipan con `prepare_design_meta()`, que respeta las
+#'     numericas en lugar de convertirlas a factor.
+#'
+#' `condition` siempre acaba como factor releveleado al denominador del
+#' contraste, tambien en modo formula libre, porque de ahi sale la etiqueta del
+#' contraste y el coeficiente a testear.
+#'
+#' Devuelve tambien los niveles del factor y el de referencia.
+build_design <- function(meta, ref_level = NULL, batch = NULL,
+                         design_formula = NULL) {
+  if (!is.null(design_formula)) {
+    if (is.character(design_formula)) {
+      design_formula <- stats::as.formula(design_formula)
+    }
+    meta <- prepare_design_meta(meta, all.vars(design_formula))
+    formula_obj <- design_formula
+  } else if (!is.null(batch) && nzchar(batch) && batch %in% names(meta)) {
     meta[[batch]] <- as.factor(meta[[batch]])
     formula_obj <- stats::as.formula(paste0("~ ", batch, " + condition"))
   } else {
     formula_obj <- stats::as.formula("~ condition")
   }
+  meta$condition <- as.factor(as.character(meta$condition))
+  if (!is.null(ref_level) && ref_level %in% levels(meta$condition)) {
+    meta$condition <- stats::relevel(meta$condition, ref = ref_level)
+  }
   lvls <- levels(meta$condition)
   list(meta = meta, formula = formula_obj, levels = lvls, ref = lvls[1])
+}
+
+#' Resuelve el coeficiente a testear: el explicito si se da y existe, y si no el
+#' que corresponde al numerador del contraste.
+#'
+#' El emparejamiento es tolerante porque los dos estilos de nombre no coinciden
+#' en las interacciones: `model.matrix` produce "genotipowt:conditiontrt" y
+#' DESeq2 lo renombra a "genotipowt.conditiontrt". `make.names()` traduce entre
+#' ambos, asi que un coeficiente pedido en un estilo se encuentra en el otro.
+resolve_test_coef <- function(coef_names, test_coef = NULL, num = NULL, ref = NULL) {
+  if (!is.null(test_coef) && length(test_coef) && nzchar(test_coef)) {
+    if (test_coef %in% coef_names) return(test_coef)
+    hit <- coef_names[make.names(coef_names) == make.names(test_coef)]
+    if (length(hit)) return(hit[1])
+  }
+  condition_coef_for(coef_names, num, ref)
 }
 
 #' Coeficiente de `condition` que se va a testear.
@@ -297,14 +332,16 @@ deseq_dispersion_data <- function(dds) {
 #' @param use_ihw Si TRUE, sustituye el filtrado independiente por IHW.
 run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
                            fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
-                           contrast_num = NULL, use_ihw = FALSE) {
+                           contrast_num = NULL, use_ihw = FALSE,
+                           design_formula = NULL, test_coef = NULL) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
     return(list(table = NULL, error = "DESeq2 no esta instalado."))
   }
-  d <- build_design(meta, ref_level, batch)
+  d <- build_design(meta, ref_level, batch, design_formula)
   info <- list(contrast = NA_character_, coef = NA_character_,
                n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL)
+               padj_method = "BH", disp_data = NULL, cooks = NULL,
+               coef_available = character(0))
   out <- tryCatch({
     dds <- DESeq2::DESeqDataSetFromMatrix(
       countData = round(as.matrix(counts)),
@@ -312,7 +349,8 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
       design = d$formula
     )
     dds <- DESeq2::DESeq(dds, quiet = TRUE)
-    coef_name <- condition_coef_for(DESeq2::resultsNames(dds), contrast_num, d$ref)
+    coef_name <- resolve_test_coef(DESeq2::resultsNames(dds), test_coef,
+                                   contrast_num, d$ref)
 
     filter_fun <- if (isTRUE(use_ihw)) ihw_filter_fun() else NULL
     padj_method <- if (!is.null(filter_fun)) "IHW" else "BH"
@@ -357,18 +395,19 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
     }, error = function(e) NULL)
     list(table = tab, coef = coef_name, shrink = shrink_used,
          padj_method = padj_method, disp_data = deseq_dispersion_data(dds),
-         cooks = cooks)
+         cooks = cooks, coef_available = DESeq2::resultsNames(dds))
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
     return(c(list(table = NULL, error = conditionMessage(out)), info))
   }
-  info$coef        <- out$coef
-  info$contrast    <- contrast_label(out$coef, d$ref)
-  info$shrink      <- out$shrink
-  info$padj_method <- out$padj_method
-  info$disp_data   <- out$disp_data
-  info$cooks       <- out$cooks
+  info$coef           <- out$coef
+  info$contrast       <- contrast_label(out$coef, d$ref)
+  info$shrink         <- out$shrink
+  info$padj_method    <- out$padj_method
+  info$disp_data      <- out$disp_data
+  info$cooks          <- out$cooks
+  info$coef_available <- out$coef_available %||% character(0)
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -390,14 +429,16 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
 #' ya lleva el encogido por conteos previos.
 run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
-                          contrast_num = NULL, use_ihw = FALSE) {
+                          contrast_num = NULL, use_ihw = FALSE,
+                          design_formula = NULL, test_coef = NULL) {
   if (!requireNamespace("edgeR", quietly = TRUE)) {
     return(list(table = NULL, error = "edgeR no esta instalado."))
   }
-  d <- build_design(meta, ref_level, batch)
+  d <- build_design(meta, ref_level, batch, design_formula)
   info <- list(contrast = NA_character_, coef = NA_character_,
                n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL)
+               padj_method = "BH", disp_data = NULL, cooks = NULL,
+               coef_available = character(0))
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
     y <- edgeR::DGEList(counts = round(as.matrix(counts)), group = d$meta$condition)
@@ -407,7 +448,7 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
     } else {
       edgeR::glmQLFit(edgeR::estimateDisp(y, design), design)
     }
-    coef_test <- condition_coef_for(colnames(design), contrast_num, d$ref)
+    coef_test <- resolve_test_coef(colnames(design), test_coef, contrast_num, d$ref)
 
     test <- if (is.finite(lfc_threshold) && lfc_threshold > 0) {
       edgeR::glmTreat(fit, coef = coef_test, lfc = lfc_threshold)
@@ -437,14 +478,15 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
       padj = tt[["FDR"]],
       stringsAsFactors = FALSE
     )
-    list(table = tab, coef = coef_test)
+    list(table = tab, coef = coef_test, coef_available = colnames(design))
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
     return(c(list(table = NULL, error = conditionMessage(out)), info))
   }
-  info$coef     <- out$coef
-  info$contrast <- contrast_label(out$coef, d$ref)
+  info$coef           <- out$coef
+  info$contrast       <- contrast_label(out$coef, d$ref)
+  info$coef_available <- out$coef_available %||% character(0)
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -462,15 +504,17 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
 #' limma-trend sobre logCPM. Activar ambas contaria la tendencia dos veces.
 run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
-                          contrast_num = NULL, use_ihw = FALSE) {
+                          contrast_num = NULL, use_ihw = FALSE,
+                          design_formula = NULL, test_coef = NULL) {
   if (!requireNamespace("limma", quietly = TRUE) ||
       !requireNamespace("edgeR", quietly = TRUE)) {
     return(list(table = NULL, error = "Se requieren limma y edgeR para limma-voom."))
   }
-  d <- build_design(meta, ref_level, batch)
+  d <- build_design(meta, ref_level, batch, design_formula)
   info <- list(contrast = NA_character_, coef = NA_character_,
                n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL)
+               padj_method = "BH", disp_data = NULL, cooks = NULL,
+               coef_available = character(0))
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
     y <- edgeR::DGEList(counts = round(as.matrix(counts)), group = d$meta$condition)
@@ -478,7 +522,7 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
     v <- tryCatch(limma::voomWithQualityWeights(y, design),
                   error = function(e) limma::voom(y, design))
     fit <- limma::lmFit(v, design)
-    coef_test <- condition_coef_for(colnames(design), contrast_num, d$ref)
+    coef_test <- resolve_test_coef(colnames(design), test_coef, contrast_num, d$ref)
 
     if (is.finite(lfc_threshold) && lfc_threshold > 0) {
       # treat() testea H0: |log2FC| <= lfc en lugar de H0: log2FC = 0.
@@ -514,14 +558,15 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
       padj = tt[["adj.P.Val"]],
       stringsAsFactors = FALSE
     )
-    list(table = tab, coef = coef_test)
+    list(table = tab, coef = coef_test, coef_available = colnames(design))
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
     return(c(list(table = NULL, error = conditionMessage(out)), info))
   }
-  info$coef     <- out$coef
-  info$contrast <- contrast_label(out$coef, d$ref)
+  info$coef           <- out$coef
+  info$contrast       <- contrast_label(out$coef, d$ref)
+  info$coef_available <- out$coef_available %||% character(0)
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -540,7 +585,8 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
 run_deg <- function(counts, meta, method = c("DESeq2", "edgeR", "limma-voom"),
                     ref_level = NULL, batch = NULL,
                     fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
-                    contrast_num = NULL, use_ihw = FALSE) {
+                    contrast_num = NULL, use_ihw = FALSE,
+                    design_formula = NULL, test_coef = NULL) {
   method <- match.arg(method)
   lvls <- unique(as.character(meta$condition[!is.na(meta$condition) &
                                                nzchar(as.character(meta$condition))]))
@@ -555,17 +601,30 @@ run_deg <- function(counts, meta, method = c("DESeq2", "edgeR", "limma-voom"),
                   error = "El numerador y el denominador del contraste son el mismo nivel."))
     }
   }
+  # Con formula libre se valida ANTES de ajustar, para cambiar un error criptico
+  # de DESeq2 en ingles por un diagnostico que dice cual es el problema.
+  if (!is.null(design_formula)) {
+    v <- validate_design_formula(design_formula, meta)
+    if (!isTRUE(v$ok)) {
+      return(list(table = NULL, method = method,
+                  error = paste(v$errors, collapse = " ")))
+    }
+    design_formula <- v$formula
+  }
   res <- switch(method,
     "DESeq2"     = run_deg_deseq2(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                  shrink, contrast_num, use_ihw),
+                                  shrink, contrast_num, use_ihw, design_formula, test_coef),
     "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                 shrink, contrast_num, use_ihw),
+                                 shrink, contrast_num, use_ihw, design_formula, test_coef),
     "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                 shrink, contrast_num, use_ihw)
+                                 shrink, contrast_num, use_ihw, design_formula, test_coef)
   )
   res$method        <- method
   res$fdr           <- fdr
   res$lfc_threshold <- lfc_threshold
+  res$design        <- if (!is.null(design_formula)) deparse1(design_formula)
+                       else if (!is.null(batch) && nzchar(batch %||% "")) paste0("~ ", batch, " + condition")
+                       else "~ condition"
   res
 }
 

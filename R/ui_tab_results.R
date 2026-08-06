@@ -66,6 +66,14 @@ ui_tab_results_content <- function(s) {
             download_header("Trimming y cuantificacion/alineamiento", "download_alignment"),
             DTOutput("alignment_table")
           )
+        ),
+        # rRNA como metrica de primer nivel: en procariotas supera el 85 % del RNA
+        # celular y la depleccion es imperfecta, asi que un arrastre desigual
+        # entre muestras sesga los factores de tamano de TODA la normalizacion.
+        card(
+          download_header("Lecturas asignadas a rRNA por muestra", "download_rrna_plot"),
+          uiOutput("rrna_note"),
+          plotly::plotlyOutput("rrna_plot", height = "320px")
         )
       ),
       nav_panel(

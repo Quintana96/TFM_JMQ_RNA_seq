@@ -27,7 +27,7 @@ summarise_result <- function(out_dir, params) {
   fq <- fastqc_stats(out_dir)
   tool <- params$tool %||% "desconocida"
   status <- status_from_log(out_dir)
-  counts <- tryCatch(load_counts_from_workflow(out_dir, tool), error = function(e) NULL)
+  counts <- tryCatch(load_counts_from_workflow(out_dir, tool, annotation_file = annotation_file_for_run(out_dir)), error = function(e) NULL)
 
   mapped_col <- intersect(c("salmon-percent_mapped", "kallisto-percent_pseudoaligned", "bowtie2-overall_alignment_rate"), names(gs))[1] %||% ""
   mapped_vals <- if (nzchar(mapped_col)) num_or_na(gs[[mapped_col]]) else numeric(0)

@@ -51,6 +51,29 @@ infer_read_type_from_dir <- function(out_dir) {
   "Paired-end"
 }
 
+#' Lee el run_params.tsv que deja workflow.sh en el directorio de salida.
+#' Devuelve una lista con lo que haya, o list() si el fichero no existe (las
+#' ejecuciones anteriores a su introduccion no lo tienen).
+read_run_params_file <- function(out_dir) {
+  f <- file.path(out_dir, "run_params.tsv")
+  if (!file.exists(f)) return(list())
+  df <- tryCatch(
+    utils::read.delim(f, header = FALSE, col.names = c("key", "value"),
+                      stringsAsFactors = FALSE, quote = ""),
+    error = function(e) NULL
+  )
+  if (is.null(df) || !nrow(df)) return(list())
+  stats::setNames(as.list(trimws(df$value)), trimws(df$key))
+}
+
+#' Ruta del fichero de anotacion de una ejecucion guardada, si se conoce.
+#' La necesitan tximport (para el mapa transcrito-gen) y la metrica de rRNA.
+annotation_file_for_run <- function(out_dir) {
+  p <- read_run_params_file(out_dir)
+  af <- p$annotation_file %||% ""
+  if (nzchar(af) && file.exists(af)) af else NULL
+}
+
 #' Infiere parametros de una run pasada solo a partir del directorio de salida.
 #' Util cuando el usuario abre una carpeta de outputs/ sin contexto de sesion.
 infer_result_params <- function(out_dir, workflow_path) {
@@ -64,15 +87,20 @@ infer_result_params <- function(out_dir, workflow_path) {
     "desconocida"
   }
   analysis <- if (identical(tool, "bowtie2")) "alignment" else "pseudo"
-  counts <- tryCatch(load_counts_from_workflow(out_dir, tool), error = function(e) NULL)
+  saved <- read_run_params_file(out_dir)
+  counts <- tryCatch(
+    load_counts_from_workflow(out_dir, tool, annotation_file = annotation_file_for_run(out_dir)),
+    error = function(e) NULL
+  )
   stat <- file.info(out_dir)
+  dash <- function(x) if (is.null(x) || !nzchar(x %||% "")) "—" else x
   list(
     analysis_type = analysis,
     tool = tool,
-    input_dir = "—",
+    input_dir = dash(saved$input_dir),
     output_dir = out_dir,
-    genome_file = "—",
-    annotation_file = "—",
+    genome_file = dash(saved$genome_file),
+    annotation_file = dash(saved$annotation_file),
     n_samples = if (!is.null(counts)) ncol(counts) else "—",
     read_type = infer_read_type_from_dir(out_dir),
     started_at = stat$mtime %||% Sys.time(),

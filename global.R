@@ -36,6 +36,10 @@ HAS_ASHR            <- pkg_ok("ashr")
 HAS_FGSEA           <- pkg_ok("fgsea")
 HAS_IHW             <- pkg_ok("IHW")
 HAS_QVALUE          <- pkg_ok("qvalue")
+# Fase 3: variacion no deseada y lectura de la anotacion. rtracklayer es lo que
+# permite construir el mapa transcrito-gen que necesita tximport.
+HAS_SVA             <- pkg_ok("sva")
+HAS_RTRACKLAYER     <- pkg_ok("rtracklayer")
 
 #' Operador nulo-coalescente
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x

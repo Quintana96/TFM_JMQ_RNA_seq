@@ -56,7 +56,7 @@ alignment_table <- function(out_dir, tool) {
 
 #' Tablas resumen de conteos: librerias por muestra y top 30 genes
 counts_tables <- function(out_dir, tool) {
-  counts <- tryCatch(load_counts_from_workflow(out_dir, tool), error = function(e) NULL)
+  counts <- tryCatch(load_counts_from_workflow(out_dir, tool, annotation_file = annotation_file_for_run(out_dir)), error = function(e) NULL)
   if (is.null(counts) || !length(counts)) {
     return(list(
       libs = data.frame(Mensaje = "No se pudo cargar una matriz de conteos util."),
