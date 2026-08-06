@@ -31,6 +31,11 @@ HAS_ORGECDB         <- pkg_ok("org.EcK12.eg.db")
 # type = "normal".
 HAS_APEGLM          <- pkg_ok("apeglm")
 HAS_ASHR            <- pkg_ok("ashr")
+# Fase 2: GSEA, ponderacion de hipotesis y segunda estimacion de pi0. La interfaz
+# oculta las opciones cuyo paquete falta, en lugar de ofrecerlas y fallar.
+HAS_FGSEA           <- pkg_ok("fgsea")
+HAS_IHW             <- pkg_ok("IHW")
+HAS_QVALUE          <- pkg_ok("qvalue")
 
 #' Operador nulo-coalescente
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x

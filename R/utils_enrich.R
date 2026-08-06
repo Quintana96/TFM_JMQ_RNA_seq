@@ -72,9 +72,18 @@ mapping_rate_text <- function(mapping) {
 }
 
 #' Enriquecimiento GO. Si OrgDb es NULL, devuelve mensaje pidiendo OrgDb.
+#'
+#' @param simplify_terms Si TRUE, colapsa terminos GO redundantes con
+#'   `clusterProfiler::simplify()`. GO es jerarquico y un termino padre solapa
+#'   con sus hijos, asi que las listas salen dominadas por variaciones del mismo
+#'   concepto; simplify usa similitud semantica (GOSemSim, medida de Wang) para
+#'   quedarse con un representante por grupo.
+#' @param simplify_cutoff Umbral de similitud por encima del cual dos terminos se
+#'   consideran redundantes.
 run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
                               ont = "BP", keyType = "SYMBOL",
-                              pvalueCutoff = 0.05, qvalueCutoff = 0.2) {
+                              pvalueCutoff = 0.05, qvalueCutoff = 0.2,
+                              simplify_terms = FALSE, simplify_cutoff = 0.7) {
   fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
     return(fail("clusterProfiler no esta instalado."))
@@ -104,6 +113,17 @@ run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
       qvalueCutoff  = qvalueCutoff,
       readable      = FALSE
     )
+    # simplify() necesita el objeto S4, asi que se aplica antes de convertir.
+    # Solo tiene sentido en las tres ontologias concretas (no en "ALL"), porque
+    # la similitud semantica se calcula dentro de un mismo grafo.
+    if (isTRUE(simplify_terms) && !is.null(ego) && ont %in% c("BP", "MF", "CC") &&
+        requireNamespace("GOSemSim", quietly = TRUE)) {
+      ego <- tryCatch(
+        clusterProfiler::simplify(ego, cutoff = simplify_cutoff,
+                                  by = "p.adjust", measure = "Wang"),
+        error = function(e) ego
+      )
+    }
     # Sin `return()`: dentro de tryCatch({...}) un return() sale de la funcion
     # entera y se lleva por delante el resultado (incluido `mapping`).
     # Se cuenta sobre as.data.frame() y no sobre @result porque @result guarda
@@ -155,6 +175,108 @@ run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
   list(table = out[, keep, drop = FALSE], error = NULL,
        mapping = mapping_from_generatio(out, length(genes_u), keyType))
+}
+
+# ── GSEA ────────────────────────────────────────────────────────────────────
+
+#' Construye el vector ordenado de genes para GSEA.
+#'
+#' La eleccion de metrica es la decision de diseno real:
+#'   - `stat` (por defecto): el estadistico moderado del motor. Incorpora la
+#'     variabilidad y es la opcion habitual.
+#'   - `log2FC`: interpretable, pero ignora la varianza.
+#'   - `signed_p`: `sign(log2FC) * -log10(pvalue)`. Es popular pero genera
+#'     EMPATES cuando los p-valores saturan, y GSEA no los resuelve: el orden
+#'     dentro de un grupo empatado queda arbitrario. Por eso se devuelve
+#'     `ties_frac` y la interfaz avisa.
+deg_ranking_metric <- function(deg_df, metric = c("stat", "log2FC", "signed_p")) {
+  metric <- match.arg(metric)
+  if (is.null(deg_df) || !nrow(deg_df)) {
+    return(list(ranked = NULL, error = "Sin tabla DEG.", metric = metric))
+  }
+  v <- switch(metric,
+    "stat"     = deg_df$stat,
+    "log2FC"   = deg_df$log2FC,
+    "signed_p" = sign(deg_df$log2FC) *
+                   -log10(pmax(deg_df$pvalue, .Machine$double.xmin))
+  )
+  if (is.null(v) || all(is.na(v))) {
+    return(list(ranked = NULL, metric = metric,
+                error = paste0("La metrica '", metric,
+                               "' no esta disponible para este motor.")))
+  }
+  ok <- !is.na(v) & is.finite(v) & !is.na(deg_df$gene)
+  v <- v[ok]
+  names(v) <- deg_df$gene[ok]
+  v <- v[!duplicated(names(v))]
+  v <- sort(v, decreasing = TRUE)
+  # Fraccion de genes que comparten su valor con al menos otro gen.
+  ties_frac <- if (length(v)) sum(duplicated(v) | duplicated(v, fromLast = TRUE)) / length(v) else NA_real_
+  list(ranked = v, metric = metric, n = length(v), ties_frac = ties_frac, error = NULL)
+}
+
+#' GSEA sobre el ranking completo, via clusterProfiler (backend fgsea).
+#'
+#' `exponent = 0` es la permutacion clasica NO ponderada. El benchmark con datos
+#' curados de 12 tipos de cancer encontro que es la que mejor equilibra
+#' sensibilidad y especificidad, y que los estadisticos ponderados (p = 1; 1,5; 2)
+#' DEGRADAN el rendimiento: su justificacion original venia de microarrays y no
+#' se traslada a RNA-seq. En fgsea el parametro equivalente es `gseaParam`.
+#'
+#' A diferencia del ORA, GSEA parte del ranking completo sin umbralizar, asi que
+#' ve senales debiles pero coordinadas: si veinte genes de una ruta suben un 30 %
+#' cada uno, ninguno pasa el corte de la lista y la ruta no aparece en el ORA.
+run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
+                     keyType = "SYMBOL", exponent = 0,
+                     pvalueCutoff = 0.05, minGSSize = 10, maxGSSize = 500) {
+  fail <- function(msg) list(table = NULL, error = msg, mapping = NULL)
+  if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
+    return(fail("clusterProfiler no esta instalado."))
+  }
+  if (!requireNamespace("fgsea", quietly = TRUE)) {
+    return(fail("fgsea no esta instalado."))
+  }
+  if (is.null(ranked) || !length(ranked)) return(fail("Ranking de genes vacio."))
+
+  is_kegg <- identical(ont, "KEGG")
+  if (!is_kegg) {
+    if (is.null(OrgDb) || (is.character(OrgDb) && !nzchar(OrgDb))) {
+      return(fail("Especifica un OrgDb para correr GSEA sobre GO."))
+    }
+    if (is.character(OrgDb)) {
+      if (!requireNamespace(OrgDb, quietly = TRUE)) {
+        return(fail(paste0("El paquete '", OrgDb, "' no esta instalado.")))
+      }
+      OrgDb <- getFromNamespace(OrgDb, OrgDb)
+    }
+  }
+  mapping <- if (!is_kegg) gene_mapping_rate(names(ranked), OrgDb, keyType) else NULL
+
+  out <- tryCatch({
+    gs <- if (is_kegg) {
+      clusterProfiler::gseKEGG(
+        geneList = ranked, organism = organism, keyType = keyType,
+        exponent = exponent, minGSSize = minGSSize, maxGSSize = maxGSSize,
+        pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE
+      )
+    } else {
+      clusterProfiler::gseGO(
+        geneList = ranked, ont = ont, OrgDb = OrgDb, keyType = keyType,
+        exponent = exponent, minGSSize = minGSSize, maxGSSize = maxGSSize,
+        pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE
+      )
+    }
+    df <- if (is.null(gs)) NULL else as.data.frame(gs)
+    if (is.null(df) || !nrow(df)) NULL else df
+  }, error = function(e) e)
+
+  if (inherits(out, "error")) return(list(table = NULL, error = conditionMessage(out),
+                                          mapping = mapping))
+  if (is.null(out)) return(list(table = NULL, error = "Sin conjuntos de genes enriquecidos.",
+                                mapping = mapping))
+  keep <- intersect(c("ID", "Description", "setSize", "enrichmentScore", "NES",
+                      "pvalue", "p.adjust", "qvalue", "core_enrichment"), names(out))
+  list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping)
 }
 
 #' Ordena el enriquecimiento por p.adjust y devuelve top_n filas.

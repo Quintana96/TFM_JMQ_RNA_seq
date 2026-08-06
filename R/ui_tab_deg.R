@@ -4,18 +4,34 @@
 #' interactivos. Se renderiza via uiOutput("tab_deg_content") desde server_tab_deg.
 
 #' Aviso cuando faltan paquetes Bioconductor necesarios.
+#' Se distingue entre los que desactivan un motor (bloqueante) y los que solo
+#' desactivan una opcion concreta, cuyo control se oculta en vez de ofrecerse.
 ui_tab_deg_missing_pkgs <- function() {
   pkgs <- c()
   if (!isTRUE(HAS_DESEQ2))  pkgs <- c(pkgs, "DESeq2")
   if (!isTRUE(HAS_EDGER))   pkgs <- c(pkgs, "edgeR")
   if (!isTRUE(HAS_LIMMA))   pkgs <- c(pkgs, "limma")
-  if (!length(pkgs)) return(NULL)
-  div(class = "alert alert-warning mt-3",
-      icon("triangle-exclamation"),
-      tags$b(" Paquetes ausentes: "),
-      paste(pkgs, collapse = ", "),
-      tags$p(class = "mb-0 small",
-             "Instala los paquetes indicados para activar el motor correspondiente."))
+
+  optional <- c()
+  if (!isTRUE(HAS_APEGLM) && !isTRUE(HAS_ASHR))
+    optional <- c(optional, "apeglm (encogido de log2FC)")
+  if (!isTRUE(HAS_FGSEA))  optional <- c(optional, "fgsea (GSEA)")
+  if (!isTRUE(HAS_IHW))    optional <- c(optional, "IHW (ponderacion de hipotesis)")
+  if (!isTRUE(HAS_ORGECDB)) optional <- c(optional, "org.EcK12.eg.db (GO de E. coli)")
+
+  if (!length(pkgs) && !length(optional)) return(NULL)
+  tagList(
+    if (length(pkgs)) div(class = "alert alert-warning mt-3",
+        icon("triangle-exclamation"),
+        tags$b(" Paquetes ausentes: "), paste(pkgs, collapse = ", "),
+        tags$p(class = "mb-0 small",
+               "Instala los paquetes indicados para activar el motor correspondiente.")),
+    if (length(optional)) div(class = "alert alert-secondary mt-3 py-2 small",
+        icon("circle-info"),
+        tags$b(" Funciones desactivadas por falta de paquete: "),
+        paste(optional, collapse = "; "),
+        tags$span(" Ejecuta requirements.sh para instalarlos."))
+  )
 }
 
 #' UI del Tab 4 (cards de configuracion + zona de resultados).
@@ -69,13 +85,21 @@ ui_tab_deg <- function() {
         DTOutput("deg_meta_table")
       ),
 
-      # Card 3: Diseno
+      # Card 3: Diseno. El contraste se elige explicitamente (numerador y
+      # denominador) en lugar de deducirse del nivel de referencia: con tres o
+      # mas niveles, "nivel de referencia" dejaba sin decir cual de las
+      # comparaciones posibles se estaba mostrando.
       card(
-        card_header("3. Diseno experimental"),
+        card_header("3. Diseno y contraste"),
         selectInput("deg_condition_col", "Columna de condicion",
                     choices = c("condition"), selected = "condition"),
-        selectInput("deg_ref_level", "Nivel de referencia",
-                    choices = NULL),
+        layout_columns(
+          col_widths = c(6, 6),
+          selectInput("deg_contrast_num", "Numerador", choices = NULL),
+          selectInput("deg_contrast_den", "Denominador (referencia)", choices = NULL)
+        ),
+        tags$small(class = "text-muted d-block mb-2",
+                   "log2FC > 0 significa mayor expresion en el numerador."),
         checkboxInput("deg_use_batch", "Incluir variable batch", FALSE),
         conditionalPanel(
           "input.deg_use_batch === true",
@@ -117,6 +141,14 @@ ui_tab_deg <- function() {
         checkboxInput("deg_shrink", "Encoger log2FC para visualizacion (apeglm)", TRUE),
         tags$small(class = "text-muted d-block mb-2",
                    "Solo DESeq2. Anade la columna log2FC_shrunk; no altera los p-valores."),
+        if (isTRUE(HAS_IHW)) tagList(
+          checkboxInput("deg_use_ihw", "Ponderar hipotesis con IHW en lugar de BH", FALSE),
+          tags$small(class = "text-muted d-block mb-2",
+                     paste("Solo DESeq2. IHW pondera cada gen segun su baseMean y gana",
+                           "potencia sin perder el control de la FDR, pero necesita",
+                           "muchos tests para poder formar bins: con pocos genes se",
+                           "reduce a BH."))
+        ) else NULL,
         actionButton("run_deg_btn",
                      tagList(icon("flask"), " Lanzar DEG"),
                      class = "btn-success btn-lg"),
@@ -146,6 +178,83 @@ ui_tab_deg <- function() {
   )
 }
 
+#' Panel de diagnosticos post-ajuste.
+#'
+#' Pall et al. (PLoS Biology 2023) revisaron 4.616 datasets de GEO: solo el 25 %
+#' tenia histogramas de p-valores con la forma esperada y el 37 % declaraba
+#' implicitamente que mas de la mitad de los genes cambian. Son fallos invisibles
+#' en la tabla de resultados. Se organizan en sub-pestanas para que cada
+#' diagnostico se lea de uno en uno.
+ui_tab_deg_diagnostics <- function() {
+  navset_pill(
+    id = "deg_diag_tabs",
+    nav_panel(
+      "p-valores",
+      card(
+        card_header(tags$div(
+          class = "card-title-download",
+          tags$span("Distribucion de p-valores"),
+          div(style = "display:flex;gap:6px;align-items:center;",
+              selectInput("deg_diag_pv_subset", NULL,
+                          choices = c("Genes que pasan el filtrado independiente" = "tested",
+                                      "Todos los genes con p-valor" = "all"),
+                          selected = "tested", width = "320px"),
+              downloadButton("download_deg_pvalue_hist", label = NULL,
+                             icon = icon("download"),
+                             class = "btn-sm btn-outline-secondary header-download",
+                             title = "Descargar histograma"))
+        )),
+        uiOutput("deg_diag_verdict"),
+        plotly::plotlyOutput("deg_pvalue_hist", height = "340px")
+      ),
+      card(
+        card_header("Formas de referencia"),
+        tags$p(class = "small text-muted mb-1",
+               paste("Comparalas con el histograma de arriba. La forma esperada es un",
+                     "pico a la izquierda sobre un suelo aproximadamente plano; las",
+                     "otras dos indican que algo no encaja en el modelo.")),
+        plotOutput("deg_pvalue_reference", height = "220px")
+      )
+    ),
+    nav_panel(
+      "Dispersiones",
+      card(
+        download_header("Estimacion de la dispersion (equivalente a plotDispEsts)",
+                        "download_deg_disp_plot"),
+        tags$p(class = "small text-muted mb-1",
+               paste("Las estimaciones por gen deben repartirse alrededor de la curva",
+                     "ajustada y los valores finales acercarse a ella. Una nube que no",
+                     "sigue la curva indica un ajuste de dispersion defectuoso.")),
+        plotly::plotlyOutput("deg_disp_plot", height = "420px")
+      )
+    ),
+    nav_panel(
+      "Normalizacion (RLE)",
+      card(
+        download_header("Relative Log Expression por muestra", "download_deg_rle_plot"),
+        tags$p(class = "small text-muted mb-1",
+               paste("Cada muestra deberia tener la mediana cerca de 0 y un rango",
+                     "estrecho. Una mediana desplazada senala fallo de normalizacion o",
+                     "una muestra problematica.")),
+        plotly::plotlyOutput("deg_rle_plot", height = "420px")
+      )
+    ),
+    nav_panel(
+      "Outliers (Cook)",
+      card(
+        download_header("Reparto de los maximos de distancia de Cook",
+                        "download_deg_cooks_plot"),
+        tags$p(class = "small text-muted mb-1",
+               paste("Si una sola muestra concentra los outliers, el problema es de esa",
+                     "muestra y no de los genes. La linea marca el reparto esperado por",
+                     "azar (1/n).")),
+        uiOutput("deg_cooks_warning"),
+        plotly::plotlyOutput("deg_cooks_plot", height = "380px")
+      )
+    )
+  )
+}
+
 #' tagList con el navset de resultados (tabla, plots, enriquecimiento).
 ui_tab_deg_results <- function() {
   tagList(
@@ -159,8 +268,16 @@ ui_tab_deg_results <- function() {
         "Tabla",
         card(
           download_header("Tabla DEG (filtrada)", "download_deg_table"),
-          DTOutput("deg_table")
+          DTOutput("deg_table"),
+          # Desglose de por que hay genes sin padj. Colapsarlos a "no
+          # significativo" oculta informacion util (un outlier de Cook puede ser
+          # el hallazgo mas interesante, o la senal de que una muestra esta mal).
+          uiOutput("deg_na_breakdown")
         )
+      ),
+      nav_panel(
+        "Diagnosticos",
+        ui_tab_deg_diagnostics()
       ),
       nav_panel(
         "Volcano",
@@ -213,12 +330,27 @@ ui_tab_deg_results <- function() {
             class = "card-title-download",
             tags$span("Enriquecimiento funcional"),
             div(style = "display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;",
+                # ORA parte de la lista umbralizada y por tanto es ciego a
+                # senales debiles pero coordinadas; GSEA usa el ranking completo.
+                selectInput("deg_enrich_approach", NULL,
+                            choices = c(c("ORA (lista significativa)" = "ora"),
+                                        if (isTRUE(HAS_FGSEA))
+                                          c("GSEA (ranking completo)" = "gsea")),
+                            selected = "ora", width = "215px"),
                 selectInput("deg_ontology", NULL,
                             choices = c("GO: Procesos biologicos" = "BP",
                                         "GO: Funcion molecular" = "MF",
                                         "GO: Componente celular" = "CC",
                                         "KEGG" = "KEGG"),
                             selected = "BP", width = "200px"),
+                conditionalPanel(
+                  "input.deg_enrich_approach === 'gsea'",
+                  selectInput("deg_gsea_metric", NULL,
+                              choices = c("Metrica: stat" = "stat",
+                                          "Metrica: log2FC" = "log2FC",
+                                          "Metrica: signo x -log10(p)" = "signed_p"),
+                              selected = "stat", width = "220px")
+                ),
                 # keyType: los IDs de featureCounts sobre un GFF procariota son
                 # locus tags, no simbolos. Fijarlo a SYMBOL hacia fallar el mapeo
                 # en silencio, asi que ahora es explicito y seleccionable.
@@ -243,6 +375,14 @@ ui_tab_deg_results <- function() {
                              tagList(icon("play"), " Calcular"),
                              class = "btn-sm"))
           )),
+          # simplify() solo aplica al ORA sobre GO: colapsa terminos redundantes
+          # por similitud semantica, y necesita el grafo de una sola ontologia.
+          conditionalPanel(
+            "input.deg_enrich_approach === 'ora' && input.deg_ontology !== 'KEGG'",
+            checkboxInput("deg_go_simplify",
+                          "Colapsar terminos GO redundantes (simplify, similitud de Wang > 0,7)",
+                          FALSE)
+          ),
           uiOutput("deg_enrich_mapping"),
           plotly::plotlyOutput("deg_enrich_dotplot", height = "440px"),
           tags$hr(),

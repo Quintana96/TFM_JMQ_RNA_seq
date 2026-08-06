@@ -187,9 +187,16 @@ server_tab_deg <- function(input, output, session, state) {
     if (cc %in% names(df)) {
       lvls <- unique(df[[cc]][!is.na(df[[cc]]) & nzchar(as.character(df[[cc]]))])
       if (length(lvls)) {
-        updateSelectInput(session, "deg_ref_level",
-                          choices = lvls,
-                          selected = isolate(input$deg_ref_level) %||% lvls[1])
+        # Por defecto, el ultimo nivel contra el primero: reproduce lo que hacia
+        # la app antes, pero ahora dicho explicitamente.
+        prev_num <- isolate(input$deg_contrast_num)
+        prev_den <- isolate(input$deg_contrast_den)
+        updateSelectInput(session, "deg_contrast_num", choices = lvls,
+                          selected = if (!is.null(prev_num) && prev_num %in% lvls) prev_num
+                                     else lvls[length(lvls)])
+        updateSelectInput(session, "deg_contrast_den", choices = lvls,
+                          selected = if (!is.null(prev_den) && prev_den %in% lvls) prev_den
+                                     else lvls[1])
       }
     }
   })
@@ -235,8 +242,15 @@ server_tab_deg <- function(input, output, session, state) {
       showNotification("Tras alinear muestras quedan menos de 2 columnas.", type = "error"); return()
     }
 
-    ref <- input$deg_ref_level
+    # El denominador del contraste es el nivel de referencia del factor.
+    num   <- input$deg_contrast_num
+    ref   <- input$deg_contrast_den
     batch <- if (isTRUE(input$deg_use_batch)) input$deg_batch_col else NULL
+
+    if (!is.null(num) && !is.null(ref) && identical(num, ref)) {
+      showNotification("El numerador y el denominador del contraste son el mismo nivel.",
+                       type = "error"); return()
+    }
 
     # Prefiltrado. En modo automatico pasamos el diseno para que filterByExpr
     # use el tamano del grupo mas pequeno; en manual, el grupo permite derivar
@@ -268,7 +282,8 @@ server_tab_deg <- function(input, output, session, state) {
 
     res <- tryCatch(
       run_deg(cm_f, meta_aln, method = method, ref_level = ref, batch = batch,
-              fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink),
+              fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink,
+              contrast_num = num, use_ihw = isTRUE(input$deg_use_ihw)),
       error = function(e) list(table = NULL, error = conditionMessage(e), method = method)
     )
 
@@ -293,23 +308,33 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$n_levels      <- res$n_levels %||% NA_integer_
     state$deg_rv$shrink        <- res$shrink %||% "ninguno"
     state$deg_rv$prefilter     <- pf_info
+    state$deg_rv$padj_method   <- res$padj_method %||% "BH"
+    state$deg_rv$disp_data     <- res$disp_data
+    state$deg_rv$cooks         <- res$cooks
 
-    # A4: con tres o mas niveles solo se reporta una de las comparaciones
-    # posibles. Avisar es obligatorio: el usuario no tiene forma de saberlo
-    # mirando la tabla.
-    if (isTRUE((res$n_levels %||% 0) > 2)) {
-      showNotification(
-        paste0("condition tiene ", res$n_levels, " niveles y solo se ha testeado ",
-               "la comparacion '", res$contrast %||% "?", "'. Las demas no se ",
-               "estan mostrando; cambia el nivel de referencia para ver otras."),
-        type = "warning", duration = 16
-      )
-    }
     if (do_shrink && identical(method, "DESeq2") &&
         identical(state$deg_rv$shrink, "ninguno")) {
       showNotification(
         "No se pudo encoger el log2FC (apeglm/ashr no disponibles).",
         type = "warning", duration = 8
+      )
+    }
+    if (isTRUE(input$deg_use_ihw) && identical(method, "DESeq2") &&
+        !identical(state$deg_rv$padj_method, "IHW")) {
+      showNotification(
+        "No se pudo usar IHW; se ha corregido con Benjamini-Hochberg.",
+        type = "warning", duration = 8
+      )
+    }
+    # Si una muestra concentra los outliers de Cook, el problema es de la
+    # muestra y no de los genes.
+    dom <- res$cooks$dominant %||% NA_character_
+    if (!is.na(dom)) {
+      showNotification(
+        paste0("La muestra '", dom, "' concentra la mayoria de los outliers de ",
+               "Cook. Revisala en la pestana de diagnosticos antes de interpretar ",
+               "los resultados."),
+        type = "warning", duration = 16
       )
     }
 
@@ -334,19 +359,20 @@ server_tab_deg <- function(input, output, session, state) {
       tags$span(class = "text-muted",
                 paste0("  ·  motor ", state$deg_rv$method,
                        "  ·  FDR objetivo ", state$deg_rv$fdr,
+                       " (", state$deg_rv$padj_method %||% "BH", ")",
                        "  ·  ", test_txt))
     )
-    if (isTRUE(nl > 2)) {
-      div(class = "alert alert-warning py-2 px-3 mb-2",
-          icon("triangle-exclamation"), " ", bits,
-          tags$div(class = "small mt-1",
-                   paste0("condition tiene ", nl, " niveles: esta es solo UNA de las ",
-                          "comparaciones posibles. Cambia el nivel de referencia ",
-                          "para testear otras.")))
-    } else {
-      div(class = "alert alert-light border py-2 px-3 mb-2",
-          icon("circle-info"), " ", bits)
-    }
+    # Con el contraste elegido explicitamente ya no hay comparacion oculta, asi
+    # que con >2 niveles solo se recuerda que quedan otras por explorar.
+    extra <- if (isTRUE(nl > 2)) {
+      n_pairs <- nl * (nl - 1) / 2
+      tags$div(class = "small mt-1 text-muted",
+               paste0("condition tiene ", nl, " niveles: hay ", n_pairs,
+                      " contrastes por pares posibles. Cambia numerador o ",
+                      "denominador en la tarjeta 3 para testear otro."))
+    } else NULL
+    div(class = "alert alert-light border py-2 px-3 mb-2",
+        icon("circle-info"), " ", bits, extra)
   })
 
   output$deg_status_text <- renderText({
@@ -613,6 +639,225 @@ server_tab_deg <- function(input, output, session, state) {
     }
   })
 
+  # ── Diagnosticos post-ajuste ───────────────────────────────────────────────
+
+  deg_na_breakdown <- reactive({
+    padj_na_breakdown(state$deg_rv$results)
+  })
+
+  output$deg_na_breakdown <- renderUI({
+    b <- deg_na_breakdown()
+    txt <- padj_na_breakdown_text(b)
+    if (is.null(txt)) return(NULL)
+    div(class = "small text-muted mt-2 pt-2 border-top",
+        tags$b("Genes sin p-valor ajustado: "), txt,
+        if (isTRUE(b$n_outlier > 0)) tags$span(
+          " Los marcados como outlier tienen un valor extremo en alguna muestra:",
+          " mirar la pestana de diagnosticos antes de descartarlos.") else NULL)
+  })
+
+  # p-valores usados en los diagnosticos. Por defecto solo los genes que pasan el
+  # filtrado independiente, que es el conjunto sobre el que se controla la FDR;
+  # incluir los de conteo muy bajo distorsiona la forma del histograma.
+  diag_pvalues <- reactive({
+    tab <- state$deg_rv$results
+    if (is.null(tab)) return(NULL)
+    if (identical(input$deg_diag_pv_subset %||% "tested", "tested")) {
+      tab$pvalue[!is.na(tab$padj)]
+    } else {
+      tab$pvalue[!is.na(tab$pvalue)]
+    }
+  })
+
+  diag_pi0 <- reactive({
+    p <- diag_pvalues()
+    if (is.null(p)) return(NULL)
+    estimate_pi0(p)
+  })
+
+  output$deg_diag_verdict <- renderUI({
+    p <- diag_pvalues(); pi <- diag_pi0()
+    if (is.null(p) || !length(p)) return(NULL)
+    d <- diagnose_pvalue_shape(p, pi$pi0 %||% NA_real_)
+    cls <- switch(d$verdict,
+      "esperado" = "alert-success",
+      "sospechoso" = "alert-danger",
+      "bimodal" = "alert-warning",
+      "conservador" = "alert-warning",
+      "alert-secondary")
+    pi_txt <- if (is.null(pi) || is.na(pi$pi0)) "no estimable" else paste0(
+      round(pi$pi0, 3),
+      if (!is.na(pi$pi0_qvalue)) paste0(" (qvalue: ", round(pi$pi0_qvalue, 3), ")") else "")
+    div(class = paste("alert py-2 px-3 mb-2", cls),
+        tags$b(d$label), tags$div(class = "small mt-1", d$detail),
+        tags$div(class = "small mt-1",
+                 tags$b("pi0 (proporcion de nulas ciertas): "), pi_txt,
+                 tags$span(class = "text-muted",
+                           paste0("  ·  ", fmt_int(length(p)), " p-valores"))))
+  })
+
+  make_pvalue_hist <- function(p, pi0 = NA_real_) {
+    h <- pvalue_hist_data(p, bins = 40)
+    if (is.null(h)) return(plotly_message("Sin p-valores para el histograma."))
+    # Suelo esperado: si una fraccion pi0 de los genes es nula, sus p-valores se
+    # reparten uniformemente y cada bin recibe n*pi0/bins.
+    floor_h <- if (!is.na(pi0)) length(p) * pi0 / nrow(h) else NA_real_
+    pl <- plotly::plot_ly(h, x = ~mid, y = ~count, type = "bar",
+                          marker = list(color = "#7BBF9A"),
+                          text = ~paste0("p en [", round(mid - 0.0125, 3), ", ",
+                                         round(mid + 0.0125, 3), "]<br>genes: ", count),
+                          hoverinfo = "text", name = "observado") |>
+      plotly::layout(
+        xaxis = list(title = "p-valor", range = c(0, 1)),
+        yaxis = list(title = "numero de genes"),
+        showlegend = !is.na(floor_h),
+        bargap = 0.02
+      )
+    if (!is.na(floor_h)) {
+      pl <- pl |> plotly::add_lines(
+        x = c(0, 1), y = c(floor_h, floor_h), inherit = FALSE,
+        line = list(dash = "dash", color = "#F4A6A6"),
+        name = "suelo esperado bajo la nula"
+      )
+    }
+    pl
+  }
+
+  output$deg_pvalue_hist <- plotly::renderPlotly({
+    p <- diag_pvalues()
+    if (is.null(p) || !length(p)) return(plotly_message("Lanza primero un analisis DEG."))
+    make_pvalue_hist(p, diag_pi0()$pi0 %||% NA_real_)
+  })
+
+  output$deg_pvalue_reference <- renderPlot({
+    shapes <- reference_pvalue_shapes()
+    op <- graphics::par(mfrow = c(1, 3), mar = c(3.2, 3.2, 2.4, 0.8), mgp = c(2, 0.6, 0))
+    on.exit(graphics::par(op), add = TRUE)
+    for (nm in names(shapes)) {
+      graphics::hist(shapes[[nm]], breaks = seq(0, 1, length.out = 41),
+                     col = "#A8DADC", border = "white", main = nm,
+                     xlab = "p-valor", ylab = "genes", cex.main = 0.95)
+    }
+  })
+
+  make_disp_plot <- function(dd) {
+    if (is.null(dd) || !nrow(dd)) {
+      return(plotly_message(paste("Las dispersiones solo las produce DESeq2.",
+                                  "Relanza el analisis con ese motor.")))
+    }
+    d <- dd[!is.na(dd$baseMean) & dd$baseMean > 0, , drop = FALSE]
+    plotly::plot_ly() |>
+      plotly::add_markers(data = d, x = ~baseMean, y = ~dispGeneEst,
+                          name = "estimacion por gen",
+                          marker = list(size = 4, opacity = 0.35, color = "#C0C0C0"),
+                          hoverinfo = "skip") |>
+      plotly::add_markers(data = d, x = ~baseMean, y = ~dispersion,
+                          name = "dispersion final",
+                          marker = list(size = 4, opacity = 0.5, color = "#7BBF9A"),
+                          hoverinfo = "skip") |>
+      plotly::add_markers(data = d[order(d$baseMean), ], x = ~baseMean, y = ~dispFit,
+                          name = "curva ajustada",
+                          marker = list(size = 3, color = "#F4A6A6"),
+                          hoverinfo = "skip") |>
+      plotly::layout(
+        xaxis = list(title = "media de conteos normalizados", type = "log"),
+        yaxis = list(title = "dispersion", type = "log")
+      )
+  }
+
+  output$deg_disp_plot <- plotly::renderPlotly({
+    make_disp_plot(state$deg_rv$disp_data)
+  })
+
+  make_rle_plot <- function(counts, meta = NULL) {
+    rl <- rle_summary(counts)
+    if (is.null(rl)) return(plotly_message("Sin datos para el RLE."))
+    rl$color <- ifelse(rl$flag, "Desviada", "Normal")
+    plotly::plot_ly(rl, x = ~sample_id) |>
+      plotly::add_segments(y = ~p05, yend = ~p95, x = ~sample_id, xend = ~sample_id,
+                           line = list(color = "#C0C0C0", width = 1),
+                           showlegend = FALSE, hoverinfo = "skip") |>
+      plotly::add_segments(y = ~q1, yend = ~q3, x = ~sample_id, xend = ~sample_id,
+                           line = list(color = "#A8DADC", width = 9),
+                           showlegend = FALSE, hoverinfo = "skip") |>
+      plotly::add_markers(y = ~med, color = ~color,
+                          colors = c("Normal" = "#244B34", "Desviada" = "#D9534F"),
+                          marker = list(size = 9),
+                          text = ~paste0("Muestra: ", sample_id,
+                                         "<br>mediana RLE: ", round(med, 3),
+                                         "<br>IQR: ", round(iqr, 3)),
+                          hoverinfo = "text") |>
+      plotly::layout(
+        xaxis = list(title = ""),
+        yaxis = list(title = "RLE (log2 respecto a la mediana del gen)"),
+        shapes = list(list(type = "line", xref = "paper", x0 = 0, x1 = 1,
+                           y0 = 0, y1 = 0,
+                           line = list(dash = "dash", color = "#7BBF9A", width = 1)))
+      )
+  }
+
+  output$deg_rle_plot <- plotly::renderPlotly({
+    req(state$deg_rv$counts)
+    make_rle_plot(state$deg_rv$counts, state$deg_rv$meta)
+  })
+
+  output$deg_cooks_warning <- renderUI({
+    ck <- state$deg_rv$cooks
+    if (is.null(ck) || is.na(ck$dominant)) return(NULL)
+    div(class = "alert alert-warning py-2 px-3 mb-2",
+        icon("triangle-exclamation"),
+        tags$b(paste0(" La muestra '", ck$dominant, "' concentra los outliers. ")),
+        paste0("Con ", nrow(ck$table), " muestras, lo esperado por azar seria ",
+               round(100 * ck$expected_frac, 1), " % cada una."))
+  })
+
+  make_cooks_plot <- function(ck) {
+    if (is.null(ck) || is.null(ck$table)) {
+      return(plotly_message(paste("Las distancias de Cook solo las produce DESeq2.",
+                                  "Relanza el analisis con ese motor.")))
+    }
+    df <- ck$table
+    df$pct <- 100 * df$frac
+    plotly::plot_ly(df, x = ~sample_id, y = ~pct, type = "bar",
+                    marker = list(color = ifelse(
+                      !is.na(ck$dominant) & df$sample_id == ck$dominant,
+                      "#D9534F", "#7BBF9A")),
+                    text = ~paste0("Muestra: ", sample_id,
+                                   "<br>genes donde es el maximo: ", n_max,
+                                   " (", round(pct, 1), " %)",
+                                   "<br>Cook maximo: ", signif(max_cooks, 3)),
+                    hoverinfo = "text") |>
+      plotly::layout(
+        xaxis = list(title = ""),
+        yaxis = list(title = "% de genes donde la muestra es el maximo de Cook"),
+        shapes = list(list(type = "line", xref = "paper", x0 = 0, x1 = 1,
+                           y0 = 100 * ck$expected_frac, y1 = 100 * ck$expected_frac,
+                           line = list(dash = "dot", color = "#60756A")))
+      )
+  }
+
+  output$deg_cooks_plot <- plotly::renderPlotly({
+    make_cooks_plot(state$deg_rv$cooks)
+  })
+
+  output$download_deg_pvalue_hist <- plotly_download(
+    "deg_pvalue_hist",
+    function() {
+      p <- diag_pvalues()
+      if (is.null(p)) return(plotly_message("Sin p-valores."))
+      make_pvalue_hist(p, diag_pi0()$pi0 %||% NA_real_)
+    }
+  )
+  output$download_deg_disp_plot <- plotly_download(
+    "deg_dispersiones", function() make_disp_plot(state$deg_rv$disp_data))
+  output$download_deg_rle_plot <- plotly_download(
+    "deg_rle", function() {
+      if (is.null(state$deg_rv$counts)) return(plotly_message("Sin conteos."))
+      make_rle_plot(state$deg_rv$counts, state$deg_rv$meta)
+    })
+  output$download_deg_cooks_plot <- plotly_download(
+    "deg_cooks", function() make_cooks_plot(state$deg_rv$cooks))
+
   # ── Enriquecimiento ────────────────────────────────────────────────────────
   enrich_rv <- reactiveVal(NULL)
   enrich_mapping_rv <- reactiveVal(NULL)
@@ -636,25 +881,54 @@ server_tab_deg <- function(input, output, session, state) {
 
   observeEvent(input$deg_run_enrich_btn, {
     req(state$deg_rv$results)
-    df <- deg_filtered()
-    if (is.null(df) || !nrow(df)) {
-      showNotification("No hay genes significativos con los filtros actuales.",
-                       type = "warning"); return()
-    }
     ont <- input$deg_ontology %||% "BP"
+    approach <- input$deg_enrich_approach %||% "ora"
+    org_code <- trimws(input$deg_kegg_organism %||% "eco")
+    if (!nzchar(org_code)) org_code <- "eco"
     # Fondo = los genes efectivamente testeados, no el genoma completo. Aplica
     # tanto a GO como a KEGG.
     universe <- state$deg_rv$results$gene
-    genes <- df$gene
-    if (identical(ont, "KEGG")) {
-      org_code <- trimws(input$deg_kegg_organism %||% "eco")
-      if (!nzchar(org_code)) org_code <- "eco"
-      res <- run_enrichment_kegg(genes, universe = universe, organism = org_code,
-                                 keyType = input$deg_kegg_keytype %||% "kegg")
+
+    if (identical(approach, "gsea")) {
+      # GSEA parte del ranking completo, sin umbralizar: por eso usa la tabla
+      # entera y no la lista filtrada.
+      metric <- input$deg_gsea_metric %||% "stat"
+      rk <- deg_ranking_metric(state$deg_rv$results, metric)
+      if (is.null(rk$ranked)) {
+        showNotification(paste0("No se pudo construir el ranking: ",
+                                rk$error %||% "—"), type = "error", duration = 10)
+        enrich_rv(NULL); return()
+      }
+      if (!is.na(rk$ties_frac) && rk$ties_frac > 0.01) {
+        showNotification(
+          paste0("El ", round(100 * rk$ties_frac, 1), " % de los genes comparte ",
+                 "valor en el ranking. GSEA no resuelve los empates, asi que su ",
+                 "orden interno es arbitrario; considera usar la metrica 'stat'."),
+          type = "warning", duration = 16
+        )
+      }
+      res <- run_gsea(rk$ranked, ont = ont, OrgDb = deg_orgdb(),
+                      organism = org_code,
+                      keyType = if (identical(ont, "KEGG"))
+                        input$deg_kegg_keytype %||% "kegg"
+                      else input$deg_go_keytype %||% "SYMBOL",
+                      exponent = 0)
     } else {
-      res <- run_enrichment_go(genes, universe = universe,
-                               OrgDb = deg_orgdb(), ont = ont,
-                               keyType = input$deg_go_keytype %||% "SYMBOL")
+      df <- deg_filtered()
+      if (is.null(df) || !nrow(df)) {
+        showNotification("No hay genes significativos con los filtros actuales.",
+                         type = "warning"); return()
+      }
+      genes <- df$gene
+      if (identical(ont, "KEGG")) {
+        res <- run_enrichment_kegg(genes, universe = universe, organism = org_code,
+                                   keyType = input$deg_kegg_keytype %||% "kegg")
+      } else {
+        res <- run_enrichment_go(genes, universe = universe,
+                                 OrgDb = deg_orgdb(), ont = ont,
+                                 keyType = input$deg_go_keytype %||% "SYMBOL",
+                                 simplify_terms = isTRUE(input$deg_go_simplify))
+      }
     }
 
     enrich_mapping_rv(res$mapping)
@@ -690,13 +964,42 @@ server_tab_deg <- function(input, output, session, state) {
         tags$b("Tasa de mapeo: "), txt)
   })
 
-  output$deg_enrich_dotplot <- plotly::renderPlotly({
-    df <- enrich_rv()
+  #' El dotplot sirve a dos tipos de tabla: el ORA trae GeneRatio/Count y se
+  #' ordena por significacion; GSEA trae NES/setSize, y ahi lo informativo es el
+  #' signo del NES (si el conjunto sube o baja), no solo el p-valor.
+  make_enrich_dotplot <- function(df) {
     if (is.null(df) || !nrow(df))
       return(plotly_message("Pulsa 'Calcular' para correr el enriquecimiento."))
     top <- enrichment_dotplot_data(df, top_n = 15)
     if (is.null(top) || !nrow(top))
       return(plotly_message("Sin terminos enriquecidos."))
+
+    if ("NES" %in% names(top)) {
+      top$size_val <- top$setSize %||% rep(10, nrow(top))
+      return(plotly::plot_ly(
+        top,
+        x = ~NES,
+        y = ~stats::reorder(Description, NES),
+        type = "scatter", mode = "markers",
+        size = ~size_val,
+        marker = list(color = ~ifelse(NES > 0, "#7BBF9A", "#F4A6A6"),
+                      sizemode = "area"),
+        text = ~paste0("Conjunto: ", Description,
+                       "<br>NES: ", round(NES, 3),
+                       "<br>genes en el conjunto: ", size_val,
+                       "<br>p.adjust: ", signif(p.adjust, 3)),
+        hoverinfo = "text"
+      ) |>
+        plotly::layout(
+          xaxis = list(title = "NES (score de enriquecimiento normalizado)"),
+          yaxis = list(title = "", automargin = TRUE),
+          margin = list(l = 220),
+          shapes = list(list(type = "line", x0 = 0, x1 = 0, yref = "paper",
+                             y0 = 0, y1 = 1,
+                             line = list(dash = "dot", color = "#60756A")))
+        ))
+    }
+
     plotly::plot_ly(
       top,
       x = ~ -log10(p.adjust),
@@ -716,6 +1019,10 @@ server_tab_deg <- function(input, output, session, state) {
         yaxis = list(title = "", automargin = TRUE),
         margin = list(l = 220)
       )
+  }
+
+  output$deg_enrich_dotplot <- plotly::renderPlotly({
+    make_enrich_dotplot(enrich_rv())
   })
 
   output$deg_enrich_table <- renderDT({

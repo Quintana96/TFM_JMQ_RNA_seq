@@ -176,14 +176,32 @@ build_design <- function(meta, ref_level = NULL, batch = NULL) {
   list(meta = meta, formula = formula_obj, levels = lvls, ref = lvls[1])
 }
 
-#' Coeficiente de `condition` que se va a testear: el ultimo del diseno.
+#' Coeficiente de `condition` que se va a testear.
 #'
-#' Con dos niveles es el unico posible. Con tres o mas es UNA de las
-#' comparaciones posibles (ultimo nivel vs referencia), asi que quien llama
-#' tiene que etiquetarla explicitamente y avisar al usuario.
-pick_condition_coef <- function(coef_names) {
+#' Si se pide un numerador concreto (`num`) se devuelve su coeficiente, que es
+#' como se implementa el selector de contraste: el denominador se ha puesto como
+#' nivel de referencia del factor, asi que "num vs den" ES un coeficiente del
+#' diseno. Eso importa porque `lfcShrink(type = "apeglm")` solo acepta `coef` y
+#' no `contrast`, de modo que la via del relevel es la unica que permite
+#' contrastes arbitrarios CON encogido.
+#'
+#' Sin `num`, se devuelve el ultimo coeficiente de `condition`: con dos niveles
+#' es el unico posible, con tres o mas es una comparacion arbitraria que quien
+#' llama debe etiquetar.
+condition_coef_for <- function(coef_names, num = NULL, ref = NULL) {
   cond <- grep("^condition", coef_names, value = TRUE)
-  if (length(cond)) cond[length(cond)] else coef_names[length(coef_names)]
+  if (!length(cond)) return(coef_names[length(coef_names)])
+  if (!is.null(num) && length(num) && nzchar(num)) {
+    # DESeq2 nombra "condition_<num>_vs_<ref>"; model.matrix, "condition<num>".
+    if (!is.null(ref) && nzchar(ref)) {
+      exact <- paste0("condition_", num, "_vs_", ref)
+      if (exact %in% cond) return(exact)
+    }
+    if (paste0("condition", num) %in% cond) return(paste0("condition", num))
+    pref <- cond[startsWith(cond, paste0("condition_", num, "_vs_"))]
+    if (length(pref)) return(pref[1])
+  }
+  cond[length(cond)]
 }
 
 #' Etiqueta legible del contraste realmente testeado.
@@ -223,6 +241,45 @@ pick_shrink_type <- function() {
   "normal"
 }
 
+#' Prepara el uso de IHW como funcion de filtrado de DESeq2.
+#'
+#' IHW pondera cada hipotesis segun una covariable independiente del p-valor bajo
+#' la nula (aqui `baseMean`) y gana potencia sobre BH sin perder el control de la
+#' FDR. Es una generalizacion del filtrado independiente que DESeq2 ya hace.
+#'
+#' Necesita S4Vectors ATACHADO, no solo cargado: la ruta interna de IHW llama a
+#' `mcols()` sin cualificar, y la app trabaja con prefijos `DESeq2::` sin atachar
+#' nada, asi que sin esto falla con "no se pudo encontrar la funcion mcols".
+#' Devuelve la funcion o NULL si no se puede usar.
+ihw_filter_fun <- function() {
+  if (!requireNamespace("IHW", quietly = TRUE)) return(NULL)
+  ok <- requireNamespace("S4Vectors", quietly = TRUE) &&
+    (("package:S4Vectors" %in% search()) ||
+       isTRUE(suppressPackageStartupMessages(
+         require("S4Vectors", quietly = TRUE, character.only = TRUE))))
+  if (!ok) return(NULL)
+  IHW::ihw
+}
+
+#' Tabla de dispersiones de un DESeqDataSet ajustado, para dibujar el
+#' equivalente de plotDispEsts() con plotly en lugar de graficos base.
+deseq_dispersion_data <- function(dds) {
+  tryCatch({
+    mc <- S4Vectors::mcols(dds)
+    needed <- c("baseMean", "dispGeneEst", "dispFit", "dispersion")
+    if (!all(needed %in% names(mc))) return(NULL)
+    data.frame(
+      baseMean    = as.numeric(mc$baseMean),
+      dispGeneEst = as.numeric(mc$dispGeneEst),
+      dispFit     = as.numeric(mc$dispFit),
+      dispersion  = as.numeric(mc$dispersion),
+      outlier     = if ("dispOutlier" %in% names(mc)) as.logical(mc$dispOutlier)
+                    else rep(FALSE, nrow(mc)),
+      stringsAsFactors = FALSE
+    )
+  }, error = function(e) NULL)
+}
+
 #' Motor DESeq2.
 #'
 #' @param fdr Nivel de FDR objetivo. Se pasa a `results(alpha = fdr)` porque el
@@ -235,14 +292,19 @@ pick_shrink_type <- function() {
 #' @param shrink Si TRUE, anade `log2FC_shrunk` via `lfcShrink()`. El encogido
 #'   cambia el log2FC pero NO los p-valores, asi que se testea con el estimador
 #'   de maxima verosimilitud y se visualiza/ordena con el encogido.
+#' @param contrast_num Nivel que actua de numerador. `ref_level` es el
+#'   denominador, de modo que el contraste pedido es un coeficiente del diseno.
+#' @param use_ihw Si TRUE, sustituye el filtrado independiente por IHW.
 run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
-                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE) {
+                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
+                           contrast_num = NULL, use_ihw = FALSE) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
     return(list(table = NULL, error = "DESeq2 no esta instalado."))
   }
   d <- build_design(meta, ref_level, batch)
   info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno")
+               n_levels = length(d$levels), shrink = "ninguno",
+               padj_method = "BH", disp_data = NULL, cooks = NULL)
   out <- tryCatch({
     dds <- DESeq2::DESeqDataSetFromMatrix(
       countData = round(as.matrix(counts)),
@@ -250,13 +312,17 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
       design = d$formula
     )
     dds <- DESeq2::DESeq(dds, quiet = TRUE)
-    coef_name <- pick_condition_coef(DESeq2::resultsNames(dds))
+    coef_name <- condition_coef_for(DESeq2::resultsNames(dds), contrast_num, d$ref)
 
-    res <- DESeq2::results(
+    filter_fun <- if (isTRUE(use_ihw)) ihw_filter_fun() else NULL
+    padj_method <- if (!is.null(filter_fun)) "IHW" else "BH"
+    res_args <- list(
       dds, name = coef_name, alpha = fdr,
       lfcThreshold = if (is.finite(lfc_threshold)) lfc_threshold else 0,
       altHypothesis = "greaterAbs"
     )
+    if (!is.null(filter_fun)) res_args$filterFun <- filter_fun
+    res <- do.call(DESeq2::results, res_args)
     df <- as.data.frame(res)
 
     lfc_shrunk <- rep(NA_real_, nrow(df))
@@ -285,15 +351,24 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
       padj = df$padj,
       stringsAsFactors = FALSE
     )
-    list(table = tab, coef = coef_name, shrink = shrink_used)
+    cooks <- tryCatch({
+      ck <- SummarizedExperiment::assays(dds)[["cooks"]]
+      if (is.null(ck)) NULL else cooks_sample_summary(ck)
+    }, error = function(e) NULL)
+    list(table = tab, coef = coef_name, shrink = shrink_used,
+         padj_method = padj_method, disp_data = deseq_dispersion_data(dds),
+         cooks = cooks)
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
     return(c(list(table = NULL, error = conditionMessage(out)), info))
   }
-  info$coef     <- out$coef
-  info$contrast <- contrast_label(out$coef, d$ref)
-  info$shrink   <- out$shrink
+  info$coef        <- out$coef
+  info$contrast    <- contrast_label(out$coef, d$ref)
+  info$shrink      <- out$shrink
+  info$padj_method <- out$padj_method
+  info$disp_data   <- out$disp_data
+  info$cooks       <- out$cooks
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -314,13 +389,15 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
 #' edgeR no tiene filtrado independiente que calibrar, y el `logFC` que reporta
 #' ya lleva el encogido por conteos previos.
 run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
-                          fdr = 0.05, lfc_threshold = 0, shrink = TRUE) {
+                          fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
+                          contrast_num = NULL, use_ihw = FALSE) {
   if (!requireNamespace("edgeR", quietly = TRUE)) {
     return(list(table = NULL, error = "edgeR no esta instalado."))
   }
   d <- build_design(meta, ref_level, batch)
   info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno")
+               n_levels = length(d$levels), shrink = "ninguno",
+               padj_method = "BH", disp_data = NULL, cooks = NULL)
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
     y <- edgeR::DGEList(counts = round(as.matrix(counts)), group = d$meta$condition)
@@ -330,7 +407,7 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
     } else {
       edgeR::glmQLFit(edgeR::estimateDisp(y, design), design)
     }
-    coef_test <- pick_condition_coef(colnames(design))
+    coef_test <- condition_coef_for(colnames(design), contrast_num, d$ref)
 
     test <- if (is.finite(lfc_threshold) && lfc_threshold > 0) {
       edgeR::glmTreat(fit, coef = coef_test, lfc = lfc_threshold)
@@ -384,14 +461,16 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
 #' modelan los pesos de precision de voom, y `trend = TRUE` es la via de
 #' limma-trend sobre logCPM. Activar ambas contaria la tendencia dos veces.
 run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
-                          fdr = 0.05, lfc_threshold = 0, shrink = TRUE) {
+                          fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
+                          contrast_num = NULL, use_ihw = FALSE) {
   if (!requireNamespace("limma", quietly = TRUE) ||
       !requireNamespace("edgeR", quietly = TRUE)) {
     return(list(table = NULL, error = "Se requieren limma y edgeR para limma-voom."))
   }
   d <- build_design(meta, ref_level, batch)
   info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno")
+               n_levels = length(d$levels), shrink = "ninguno",
+               padj_method = "BH", disp_data = NULL, cooks = NULL)
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
     y <- edgeR::DGEList(counts = round(as.matrix(counts)), group = d$meta$condition)
@@ -399,7 +478,7 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
     v <- tryCatch(limma::voomWithQualityWeights(y, design),
                   error = function(e) limma::voom(y, design))
     fit <- limma::lmFit(v, design)
-    coef_test <- pick_condition_coef(colnames(design))
+    coef_test <- condition_coef_for(colnames(design), contrast_num, d$ref)
 
     if (is.finite(lfc_threshold) && lfc_threshold > 0) {
       # treat() testea H0: |log2FC| <= lfc en lugar de H0: log2FC = 0.
@@ -448,18 +527,41 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
 
 #' Dispatcher: corre el motor solicitado.
 #'
-#' Devuelve list(table, error, method, contrast, coef, n_levels, shrink, fdr,
-#' lfc_threshold). `contrast` es la etiqueta legible de la comparacion que se ha
-#' testeado y `n_levels` el numero de niveles de `condition`: con n_levels > 2
-#' solo se reporta una de las comparaciones posibles y hay que avisarlo.
+#' Devuelve list(table, error, method, contrast, coef, n_levels, shrink,
+#' padj_method, disp_data, cooks, fdr, lfc_threshold). `contrast` es la etiqueta
+#' legible de la comparacion testeada.
+#'
+#' El contraste se especifica como `contrast_num` (numerador) y `ref_level`
+#' (denominador). Poner el denominador como nivel de referencia del factor hace
+#' que la comparacion pedida sea un coeficiente del diseno, lo que permite usar
+#' `lfcShrink(coef = ...)`: `apeglm` no admite `contrast`. La diferencia
+#' numerica frente a `results(contrast = ...)` es ruido del ajuste iterativo
+#' (del orden de 1e-6 en log2FC, sin cambios en las llamadas de significacion).
 run_deg <- function(counts, meta, method = c("DESeq2", "edgeR", "limma-voom"),
                     ref_level = NULL, batch = NULL,
-                    fdr = 0.05, lfc_threshold = 0, shrink = TRUE) {
+                    fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
+                    contrast_num = NULL, use_ihw = FALSE) {
   method <- match.arg(method)
+  lvls <- unique(as.character(meta$condition[!is.na(meta$condition) &
+                                               nzchar(as.character(meta$condition))]))
+  if (!is.null(contrast_num) && length(contrast_num) && nzchar(contrast_num)) {
+    if (!contrast_num %in% lvls) {
+      return(list(table = NULL, method = method,
+                  error = paste0("El numerador '", contrast_num,
+                                 "' no es un nivel de condition.")))
+    }
+    if (!is.null(ref_level) && identical(contrast_num, ref_level)) {
+      return(list(table = NULL, method = method,
+                  error = "El numerador y el denominador del contraste son el mismo nivel."))
+    }
+  }
   res <- switch(method,
-    "DESeq2"     = run_deg_deseq2(counts, meta, ref_level, batch, fdr, lfc_threshold, shrink),
-    "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold, shrink),
-    "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold, shrink)
+    "DESeq2"     = run_deg_deseq2(counts, meta, ref_level, batch, fdr, lfc_threshold,
+                                  shrink, contrast_num, use_ihw),
+    "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold,
+                                 shrink, contrast_num, use_ihw),
+    "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold,
+                                 shrink, contrast_num, use_ihw)
   )
   res$method        <- method
   res$fdr           <- fdr

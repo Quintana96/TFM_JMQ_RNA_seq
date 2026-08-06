@@ -94,7 +94,12 @@ create_app_state <- function(session) {
     contrast      = NULL,
     n_levels      = NA_integer_,
     shrink        = "ninguno",
-    prefilter     = NULL
+    prefilter     = NULL,
+    padj_method   = "BH",
+    # Diagnosticos post-ajuste (solo los produce DESeq2): tabla de dispersiones
+    # para el equivalente de plotDispEsts y reparto de los maximos de Cook.
+    disp_data     = NULL,
+    cooks         = NULL
   )
 
   # Slot para reactivos expuestos por server_tab_config (rellenado al final
