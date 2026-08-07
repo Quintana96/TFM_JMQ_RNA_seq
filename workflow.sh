@@ -21,7 +21,7 @@ shopt -s nullglob
 # conda activate pipeline_ecoli
 # ============================================================================
 
-# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>]
+# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>] [--FEATURE_TYPE gene|CDS] [--FEATURE_ATTR <attr>]
 
 # Default values
 ALIGNMENT_TYPE="bowtie2"
@@ -32,6 +32,13 @@ FRAGMENT_SD=20
 # kallisto: -b). Las necesita Swish para propagar la incertidumbre de asignacion
 # de lecturas entre transcritos que comparten secuencia. 0 las desactiva.
 INFERENTIAL_REPS=20
+# Tipo de feature que cuenta featureCounts (-t) y atributo que agrupa (-g).
+# El default se mantiene en gene/locus_tag para no cambiar el comportamiento
+# existente. Las buenas practicas para procariotas (Genome Biology 2021) hacen el
+# analisis diferencial a nivel de CDS; con FEATURE_TYPE=CDS se obtiene eso, a
+# cambio de excluir los genes no codificantes (rRNA, tRNA) del recuento.
+FEATURE_TYPE="gene"
+FEATURE_ATTR="locus_tag"
 
 # Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -45,6 +52,8 @@ while [[ "$#" -gt 0 ]]; do
         --FRAGMENT_LENGTH) FRAGMENT_LENGTH="$2"; shift 2 ;;
         --FRAGMENT_SD) FRAGMENT_SD="$2"; shift 2 ;;
         --INFERENTIAL_REPS) INFERENTIAL_REPS="$2"; shift 2 ;;
+        --FEATURE_TYPE) FEATURE_TYPE="$2"; shift 2 ;;
+        --FEATURE_ATTR) FEATURE_ATTR="$2"; shift 2 ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
 done
@@ -52,7 +61,7 @@ done
 # Validate required arguments
 if [[ -z "${INPUT:-}" || -z "${OUTPUT:-}" || -z "${GENOME_FILE:-}" || -z "${ANNOTATION_FILE:-}" ]]; then
     echo "Error: Missing required arguments."
-    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>]"
+    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>] [--FEATURE_TYPE gene|CDS] [--FEATURE_ATTR <attr>]"
     exit 1
 fi
 
@@ -74,6 +83,11 @@ fi
 
 if [[ ! "$INFERENTIAL_REPS" =~ ^[0-9]+$ ]]; then
     echo "Error: INFERENTIAL_REPS must be a non-negative integer"
+    exit 1
+fi
+
+if [[ -z "$FEATURE_TYPE" || -z "$FEATURE_ATTR" ]]; then
+    echo "Error: FEATURE_TYPE and FEATURE_ATTR must not be empty"
     exit 1
 fi
 
@@ -196,6 +210,8 @@ log "Tipo de lectura: $READ_TYPE"
     printf 'alignment_type\t%s\n'  "$ALIGNMENT_TYPE"
     printf 'read_type\t%s\n'       "$READ_TYPE"
     printf 'inferential_reps\t%s\n' "$INFERENTIAL_REPS"
+    printf 'feature_type\t%s\n'     "$FEATURE_TYPE"
+    printf 'feature_attr\t%s\n'     "$FEATURE_ATTR"
     printf 'started_at\t%s\n'      "$(date '+%Y-%m-%d %H:%M:%S')"
 } > "${OUTPUT}/run_params.tsv"
 if [[ "$READ_TYPE" == "se" && "$ALIGNMENT_TYPE" == "kallisto" ]]; then
@@ -398,8 +414,8 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
             -p \
             --countReadPairs \
             -s 0 \
-            -t gene \
-            -g locus_tag \
+            -t "$FEATURE_TYPE" \
+            -g "$FEATURE_ATTR" \
             -a "$ANNOTATION_FILE" \
             -o "${COUNTS}/gene_counts.txt" \
             "${BAM_FILES[@]}"
@@ -407,8 +423,8 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
         run_cmd featureCounts \
             -T "$THREADS" \
             -s 0 \
-            -t gene \
-            -g locus_tag \
+            -t "$FEATURE_TYPE" \
+            -g "$FEATURE_ATTR" \
             -a "$ANNOTATION_FILE" \
             -o "${COUNTS}/gene_counts.txt" \
             "${BAM_FILES[@]}"

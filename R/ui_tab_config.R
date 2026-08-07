@@ -104,7 +104,10 @@ ui_tab_config <- function() {
             conditionalPanel(
               "input.analysis_type === 'alignment'",
               fileInput("annotation_file_upload", "Archivo de anotacion GFF/GTF (requerido)",
-                        accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE)
+                        accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE),
+              # Aviso si la anotacion tiene genes con varios exones: bowtie2 no es
+              # splice-aware y perderia las uniones exon-exon.
+              uiOutput("splice_warning_ui")
             ),
             conditionalPanel(
               "input.analysis_type === 'pseudo'",

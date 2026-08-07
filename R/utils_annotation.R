@@ -128,6 +128,82 @@ pick_tx2gene_for_quant <- function(tx2gene, quant_tx_ids) {
        n_tx = length(ids), alias_type = best$at)
 }
 
+#' Longitud de cada gen segun la anotacion, indexada por el identificador que usa
+#' la matriz de conteos (locus_tag).
+#'
+#' Para genes con varios exones se suma la longitud de los exones, que es la
+#' longitud efectiva que ve el contaje; para el resto se usa la del propio
+#' feature. La necesita el diagnostico de sesgo de longitud (B3c).
+gene_lengths_from_annotation <- function(path) {
+  df <- read_annotation_features(path)
+  if (is.null(df) || !nrow(df) || !".width" %in% names(df)) return(NULL)
+  types <- if ("type" %in% names(df)) as.character(df$type) else rep(NA_character_, nrow(df))
+  gid <- first_present(df, c("locus_tag", "gene_id", "gene", "Name"))
+  ok <- !is.na(gid) & nzchar(gid)
+  if (!any(ok)) return(NULL)
+
+  # Si hay exones, la longitud del gen es la suma de sus exones.
+  ex <- ok & types %in% c("exon", "CDS")
+  if (any(ex)) {
+    len <- tapply(df$.width[ex], gid[ex], sum, na.rm = TRUE)
+  } else {
+    len <- tapply(df$.width[ok], gid[ok], max, na.rm = TRUE)
+  }
+  # Completa con la longitud del feature `gene` los que no tuvieran exones.
+  g <- ok & types %in% c("gene", "pseudogene")
+  if (any(g)) {
+    gl <- tapply(df$.width[g], gid[g], max, na.rm = TRUE)
+    missing <- setdiff(names(gl), names(len))
+    if (length(missing)) len <- c(len, gl[missing])
+  }
+  out <- as.numeric(len)
+  names(out) <- names(len)
+  out[is.finite(out) & out > 0]
+}
+
+#' Detecta si la anotacion describe genes con splicing (varios exones por gen).
+#'
+#' Por que importa (docs/REVISION_ESTADISTICA.md, B10): `bowtie2` NO es
+#' splice-aware. Sobre un procariota es correcto porque no hay intrones, pero
+#' aplicar la misma ruta a un eucariota subestima sistematicamente los conteos en
+#' las uniones exon-exon, y nada en la app lo advertia. Se detecta de la propia
+#' anotacion en lugar de preguntar al usuario por el organismo: si los genes
+#' tienen varios exones, la ruta de alineamiento con bowtie2 no es adecuada.
+#'
+#' @return list(spliced, n_genes_multiexon, n_genes_with_exons, frac, error)
+detect_spliced_annotation <- function(path, min_frac = 0.1) {
+  out <- list(spliced = NA, n_genes_multiexon = 0L, n_genes_with_exons = 0L,
+              frac = NA_real_, error = NULL)
+  df <- read_annotation_features(path)
+  if (is.null(df) || !nrow(df) || !"type" %in% names(df)) {
+    out$error <- "No se ha podido leer la anotacion."
+    return(out)
+  }
+  types <- as.character(df$type)
+  ex <- types == "exon"
+  if (!any(ex)) {
+    # Sin features `exon` no se puede afirmar nada; en muchos GFF procariotas no
+    # existen, lo que ya es un indicio de ausencia de splicing.
+    out$spliced <- FALSE
+    return(out)
+  }
+  parent <- df$Parent
+  if (is.list(parent)) {
+    parent <- vapply(parent, function(x) if (length(x)) as.character(x)[1] else NA_character_,
+                     character(1))
+  }
+  parent <- as.character(parent)[ex]
+  key <- if (all(is.na(parent))) first_present(df, c("locus_tag", "gene_id"))[ex] else parent
+  key <- key[!is.na(key) & nzchar(key)]
+  if (!length(key)) { out$spliced <- FALSE; return(out) }
+  per_gene <- table(key)
+  out$n_genes_with_exons <- length(per_gene)
+  out$n_genes_multiexon  <- sum(per_gene > 1)
+  out$frac <- out$n_genes_multiexon / out$n_genes_with_exons
+  out$spliced <- isTRUE(out$frac >= min_frac)
+  out
+}
+
 #' Identificadores de genes de rRNA segun la anotacion.
 #'
 #' Se recogen por dos vias (`type == "rRNA"` y `gene_biotype == "rRNA"`) y se

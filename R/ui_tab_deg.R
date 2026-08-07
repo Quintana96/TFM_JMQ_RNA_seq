@@ -320,6 +320,22 @@ ui_tab_deg_diagnostics <- function() {
         uiOutput("deg_cooks_warning"),
         plotly::plotlyOutput("deg_cooks_plot", height = "380px")
       )
+    ),
+    nav_panel(
+      "Sesgo de longitud",
+      card(
+        download_header("Probabilidad de ser diferencial segun la longitud del gen",
+                        "download_deg_lenbias_plot"),
+        tags$p(class = "small text-muted mb-1",
+               paste("El analisis de sobre-representacion (GO/KEGG) asume que todos",
+                     "los genes tienen la misma probabilidad de ser detectados. En",
+                     "RNA-seq no es cierto: los transcritos largos acumulan mas",
+                     "lecturas y salen diferenciales con mas facilidad, lo que arrastra",
+                     "a las categorias que los contienen. Esta curva mide si ocurre en",
+                     "TUS datos: si es plana, corregir por longitud no aporta nada.")),
+        uiOutput("deg_lenbias_verdict"),
+        plotly::plotlyOutput("deg_lenbias_plot", height = "380px")
+      )
     )
   )
 }
@@ -430,8 +446,26 @@ ui_tab_deg_results <- function() {
       nav_panel(
         "PCA",
         card(
-          download_header("PCA (vst/rlog)", "download_deg_pca_plot"),
-          plotly::plotlyOutput("deg_pca_plot", height = "480px")
+          card_header(tags$div(
+            class = "card-title-download",
+            tags$span("PCA (vst/rlog)"),
+            div(style = "display:flex;gap:6px;align-items:center;",
+                selectInput("deg_pca_color", NULL, choices = c("condition"),
+                            selected = "condition", width = "190px"),
+                downloadButton("download_deg_pca_plot", label = NULL,
+                               icon = icon("download"),
+                               class = "btn-sm btn-outline-secondary header-download",
+                               title = "Descargar PCA"))
+          )),
+          # Colorear por covariable es lo que convierte el PCA en un diagnostico:
+          # con el color fijado en `condition` es imposible ver que el batch esta
+          # confundido con la condicion, que es justo lo que hay que detectar.
+          tags$small(class = "text-muted d-block mb-1",
+                     paste("Cambia el color a una covariable (batch, lote, sujeto)",
+                           "para comprobar si explica la separacion entre muestras",
+                           "mejor que la condicion. Si lo hace, tienes un efecto",
+                           "confundido con el contraste.")),
+          plotly::plotlyOutput("deg_pca_plot", height = "460px")
         )
       ),
       nav_panel(

@@ -347,6 +347,41 @@ server_tab_config <- function(input, output, session, state) {
     workflow_cmd              = workflow_cmd
   )
 
+  # ── Aviso de anotacion con splicing frente a bowtie2 (B10) ─────────────────
+  # `bowtie2` no es splice-aware: sobre un procariota es correcto porque no hay
+  # intrones, pero sobre un eucariota pierde las lecturas que cruzan uniones
+  # exon-exon y subestima los conteos de forma sistematica. En lugar de preguntar
+  # al usuario por el organismo, se deduce de la anotacion que acaba de cargar.
+  splice_check <- reactive({
+    if (!isTRUE(input$analysis_type == "alignment")) return(NULL)
+    af <- effective_annotation()
+    if (is.null(af) || !nzchar(af %||% "") || !file.exists(af)) return(NULL)
+    detect_spliced_annotation(af)
+  })
+
+  output$splice_warning_ui <- renderUI({
+    s <- splice_check()
+    if (is.null(s) || !isTRUE(s$spliced)) return(NULL)
+    div(class = "alert alert-warning py-2 px-3 small mb-2",
+        icon("triangle-exclamation"),
+        tags$b(" La anotacion describe genes con splicing y bowtie2 no es splice-aware."),
+        tags$div(
+          class = "mt-1",
+          paste0("El ", round(100 * s$frac, 1), " % de los genes con exones anotados ",
+                 "tiene mas de uno (", fmt_int(s$n_genes_multiexon), " de ",
+                 fmt_int(s$n_genes_with_exons), "). bowtie2 no alinea lecturas que ",
+                 "cruzan uniones exon-exon, asi que los conteos quedaran ",
+                 "subestimados de forma sistematica, y mas en los genes con mas ",
+                 "intrones.")),
+        tags$div(class = "mt-1",
+                 tags$b("Que hacer: "),
+                 paste("usa la ruta de pseudoalineamiento (salmon o kallisto) con un",
+                       "transcriptoma, que si maneja isoformas. Si necesitas",
+                       "alineamiento sobre el genoma, hace falta un alineador",
+                       "splice-aware como STAR o HISAT2, que este pipeline no",
+                       "incluye.")))
+  })
+
   # ── Calculadora de potencia a priori (item 22) ─────────────────────────────
   pw_params <- reactive({
     list(n = max(2, input$pw_n %||% 3),

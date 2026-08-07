@@ -802,10 +802,39 @@ run_deg <- function(counts, meta,
   res$method        <- method
   res$fdr           <- fdr
   res$lfc_threshold <- lfc_threshold
+  # IC del log2FC donde el motor haya dado error estandar (DESeq2 y limma).
+  if (!is.null(res$table)) res$table <- add_lfc_confidence_interval(res$table)
   res$design        <- if (!is.null(design_formula)) deparse1(design_formula)
                        else if (!is.null(batch) && nzchar(batch %||% "")) paste0("~ ", batch, " + condition")
                        else "~ condition"
   res
+}
+
+#' Anade intervalo de confianza de Wald al log2FC, donde haya error estandar.
+#'
+#' Cierra A9 (docs/REVISION_ESTADISTICA.md): la interfaz declaraba una columna
+#' `lfcSE` que solo DESeq2 rellenaba, y sin error estandar "no se pueden dibujar
+#' intervalos de confianza". Ahora la rellenan DESeq2 y limma, asi que el
+#' intervalo se puede calcular y exportar.
+#'
+#' Nota de diseno: el IC se anade a la TABLA, no como barras de error en el
+#' volcano. Con miles de genes, las barras de error se solapan hasta hacer el
+#' grafico ilegible y esconden justo lo que el volcano sirve para ver. El valor
+#' del IC esta en la tabla y en los datos exportados, donde se puede leer gen a
+#' gen.
+#'
+#' En edgeR-QL no hay un equivalente directo del SE, asi que sus filas quedan sin
+#' intervalo; es coherente con usar `glmTreat`, que responde a "es el efecto
+#' mayor que este umbral" sin necesitar el SE.
+add_lfc_confidence_interval <- function(deg_df, level = 0.95) {
+  if (is.null(deg_df) || !nrow(deg_df)) return(deg_df)
+  if (!all(c("log2FC", "lfcSE") %in% names(deg_df))) return(deg_df)
+  if (all(is.na(deg_df$lfcSE))) return(deg_df)
+  z <- stats::qnorm(1 - (1 - level) / 2)
+  deg_df$log2FC_lower <- deg_df$log2FC - z * deg_df$lfcSE
+  deg_df$log2FC_upper <- deg_df$log2FC + z * deg_df$lfcSE
+  attr(deg_df, "ci_level") <- level
+  deg_df
 }
 
 #' Selecciona los genes significativos y aplica los filtros de visualizacion.

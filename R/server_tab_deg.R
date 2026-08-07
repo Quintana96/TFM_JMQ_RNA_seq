@@ -606,14 +606,16 @@ server_tab_deg <- function(input, output, session, state) {
     # Las columnas que un motor no rellena (log2FC_shrunk solo lo produce
     # DESeq2, lfcSE no lo produce edgeR) se ocultan en vez de mostrar una
     # columna entera de NA.
-    for (nm in intersect(c("log2FC_shrunk", "lfcSE", "stat"), names(df_r))) {
+    for (nm in intersect(c("log2FC_shrunk", "lfcSE", "stat",
+                           "log2FC_lower", "log2FC_upper"), names(df_r))) {
       if (all(is.na(df_r[[nm]]))) df_r[[nm]] <- NULL
     }
     if ("log2FC" %in% names(df_r)) {
       df_r$direction <- ifelse(df_r$log2FC >= 0, "Up", "Down")
       df_r <- df_r[, c("gene", "direction", setdiff(names(df_r), c("gene", "direction"))), drop = FALSE]
     }
-    num_cols <- intersect(c("baseMean", "log2FC", "log2FC_shrunk", "lfcSE",
+    num_cols <- intersect(c("baseMean", "log2FC", "log2FC_shrunk",
+                            "log2FC_lower", "log2FC_upper", "lfcSE",
                             "stat", "pvalue", "padj"), names(df_r))
     for (nm in num_cols) df_r[[nm]] <- signif(df_r[[nm]], 4)
     dt_table(df_r, page_length = 15, filter = "top")
@@ -746,25 +748,58 @@ server_tab_deg <- function(input, output, session, state) {
   })
 
   # ── PCA ────────────────────────────────────────────────────────────────────
-  output$deg_pca_plot <- plotly::renderPlotly({
-    req(state$deg_rv$vst_mat, state$deg_rv$meta)
+  # El selector se rellena con las columnas del samplesheet del ajuste, para que
+  # se pueda colorear por cualquier covariable y no solo por la condicion.
+  observe({
+    m <- state$deg_rv$meta
+    if (is.null(m) || !nrow(m)) return()
+    # Se descartan los identificadores unicos por muestra (sample_id y similares):
+    # colorear por ellos da un color por punto, no informa de ningun agrupamiento
+    # y ademas agota la paleta.
+    is_id <- vapply(names(m), function(v) {
+      length(unique(as.character(m[[v]]))) >= nrow(m) && !is.numeric(m[[v]])
+    }, logical(1))
+    ch <- names(m)[!is_id]
+    if (!length(ch)) ch <- names(m)
+    sel <- isolate(input$deg_pca_color)
+    updateSelectInput(session, "deg_pca_color", choices = ch,
+                      selected = if (!is.null(sel) && sel %in% ch) sel
+                                 else if ("condition" %in% ch) "condition" else ch[1])
+  })
+
+  make_deg_pca_plot <- function(color_col = NULL) {
+    if (is.null(state$deg_rv$vst_mat) || is.null(state$deg_rv$meta)) {
+      return(plotly_message("Sin datos para el PCA."))
+    }
     pcd <- pca_data(state$deg_rv$vst_mat, state$deg_rv$meta, ntop = 500)
     if (is.null(pcd) || !nrow(pcd)) return(plotly_message("No se pudo calcular el PCA."))
     ve <- attr(pcd, "var_explained")
-    color_col <- if ("condition" %in% names(pcd)) "condition" else "sample_id"
-    pcd$color <- pcd[[color_col]]
-    plotly::plot_ly(
+    cc <- if (!is.null(color_col) && nzchar(color_col %||% "") &&
+              color_col %in% names(pcd)) color_col
+          else if ("condition" %in% names(pcd)) "condition" else "sample_id"
+    # Una covariable continua (edad, dosis, tiempo, una variable sustituta) se deja
+    # numerica para que plotly use una escala de color continua; forzarla a
+    # discreta daria un color por valor y no se leeria nada.
+    raw <- pcd[[cc]]
+    pcd$color <- if (is.numeric(raw) && length(unique(raw)) > 5) raw else as.character(raw)
+    p <- plotly::plot_ly(
       pcd, x = ~PC1, y = ~PC2, color = ~color,
       type = "scatter", mode = "markers",
-      text = ~paste0("Muestra: ", sample_id,
-                     "<br>", color_col, ": ", color),
+      text = ~paste0("Muestra: ", sample_id, "<br>", cc, ": ", color),
       hoverinfo = "text",
       marker = list(size = 11, opacity = 0.85)
     ) |>
       plotly::layout(
+        title = list(text = paste0("Color: ", cc), font = list(size = 12)),
         xaxis = list(title = paste0("PC1 (", round(100 * (ve[1] %||% NA), 1), "%)")),
         yaxis = list(title = paste0("PC2 (", round(100 * (ve[2] %||% NA), 1), "%)"))
       )
+    p
+  }
+
+  output$deg_pca_plot <- plotly::renderPlotly({
+    req(state$deg_rv$vst_mat, state$deg_rv$meta)
+    make_deg_pca_plot(input$deg_pca_color)
   })
 
   # ── Heatmap top-N ──────────────────────────────────────────────────────────
@@ -1029,6 +1064,90 @@ server_tab_deg <- function(input, output, session, state) {
     })
   output$download_deg_cooks_plot <- plotly_download(
     "deg_cooks", function() make_cooks_plot(state$deg_rv$cooks))
+
+  # ── Diagnostico de sesgo de longitud (B3c) ─────────────────────────────────
+  # Las longitudes salen de la anotacion de la ejecucion. Con una matriz subida no
+  # hay anotacion asociada, asi que el diagnostico no es calculable y se dice.
+  deg_gene_lengths <- reactive({
+    af <- if (identical(input$deg_source %||% "current", "saved")) {
+      annotation_file_for_run(input$selected_deg_run_dir %||% "")
+    } else {
+      p <- state$run_params_rv()
+      p$annotation_file %||% annotation_file_for_run(p$output_dir %||% "")
+    }
+    if (is.null(af) || !nzchar(af %||% "")) return(NULL)
+    gene_lengths_from_annotation(af)
+  })
+
+  deg_length_bias <- reactive({
+    req(state$deg_rv$results)
+    len <- deg_gene_lengths()
+    if (is.null(len)) return(NULL)
+    length_bias_diagnostic(state$deg_rv$results, len,
+                           fdr = state$deg_rv$fdr %||% 0.05)
+  })
+
+  output$deg_lenbias_verdict <- renderUI({
+    if (is.null(state$deg_rv$results)) {
+      return(div(class = "small text-muted", "Lanza primero un analisis DEG."))
+    }
+    if (is.null(deg_gene_lengths())) {
+      return(div(class = "alert alert-secondary py-2 px-2 small",
+                 icon("circle-info"),
+                 paste(" No se puede evaluar: hacen falta las longitudes de gen, que",
+                       "vienen del fichero de anotacion de la ejecucion. Con una matriz",
+                       "de conteos subida no hay anotacion asociada.")))
+    }
+    lb <- deg_length_bias()
+    if (is.null(lb) || is.null(lb$verdict)) {
+      return(div(class = "alert alert-secondary py-2 px-2 small",
+                 "No hay suficientes genes con longitud conocida para evaluarlo."))
+    }
+    cls <- switch(lb$verdict$level, "aviso" = "alert-warning", "leve" = "alert-info",
+                  "ok" = "alert-success", "alert-secondary")
+    div(class = paste("alert py-2 px-3 mb-2", cls),
+        tags$b(lb$verdict$label),
+        tags$div(class = "small mt-1", lb$verdict$detail),
+        tags$div(class = "small mt-1 text-muted",
+                 paste0(fmt_int(lb$n_used), " genes con longitud conocida")))
+  })
+
+  make_deg_lenbias_plot <- function() {
+    lb <- tryCatch(deg_length_bias(), error = function(e) NULL)
+    if (is.null(lb) || is.null(lb$table)) {
+      return(plotly_message("Sin diagnostico de sesgo de longitud."))
+    }
+    df <- lb$table
+    df$pct <- 100 * df$prop_de
+    overall <- 100 * sum(df$n_de) / sum(df$n_genes)
+    plotly::plot_ly(
+      df, x = ~len_median, y = ~pct, type = "scatter", mode = "lines+markers",
+      line = list(color = "#244B34", shape = "spline"),
+      marker = list(color = "#7BBF9A", size = 9),
+      text = ~paste0("longitud mediana: ", fmt_int(len_median), " pb",
+                     "<br>genes: ", fmt_int(n_genes),
+                     "<br>diferenciales: ", fmt_int(n_de), " (", round(pct, 1), " %)"),
+      hoverinfo = "text"
+    ) |>
+      plotly::layout(
+        xaxis = list(title = "longitud del gen (pb, mediana del bin)", type = "log"),
+        yaxis = list(title = "% de genes diferenciales"),
+        shapes = list(
+          # Referencia: la proporcion global. Una curva plana sobre esta linea
+          # significa que la longitud no influye.
+          list(type = "line", xref = "paper", x0 = 0, x1 = 1,
+               y0 = overall, y1 = overall,
+               line = list(dash = "dash", color = "#F4A6A6"))),
+        annotations = list(
+          list(x = 1, y = overall, xref = "paper", yanchor = "bottom",
+               text = paste0("proporcion global: ", round(overall, 1), " %"),
+               showarrow = FALSE, xanchor = "right", font = list(size = 10)))
+      )
+  }
+
+  output$deg_lenbias_plot <- plotly::renderPlotly(make_deg_lenbias_plot())
+  output$download_deg_lenbias_plot <- plotly_download(
+    "deg_sesgo_longitud", function() make_deg_lenbias_plot())
 
   # ── Sugerencia de metodo segun el tamano muestral (item 21) ────────────────
   output$deg_method_hint <- renderUI({
@@ -1425,14 +1544,10 @@ server_tab_deg <- function(input, output, session, state) {
                        contrast = state$deg_rv$contrast)
     }
   )
+  # Se reutiliza el mismo helper que el render: antes la descarga producia un PCA
+  # sin colores ni ejes etiquetados, distinto del que se veia en pantalla.
   output$download_deg_pca_plot <- plotly_download(
-    "deg_pca",
-    function() {
-      pcd <- pca_data(state$deg_rv$vst_mat, state$deg_rv$meta, ntop = 500)
-      if (is.null(pcd)) return(plotly_message("Sin PCA."))
-      plotly::plot_ly(pcd, x = ~PC1, y = ~PC2, type = "scatter", mode = "markers")
-    }
-  )
+    "deg_pca", function() make_deg_pca_plot(input$deg_pca_color))
 
   output$download_deg_heatmap <- downloadHandler(
     filename = function() paste0("deg_heatmap_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png"),

@@ -188,6 +188,110 @@ reference_pvalue_shapes <- function(n = 4000) {
 
 # ── RLE (Relative Log Expression) ───────────────────────────────────────────
 
+#' Diagnostico de sesgo de longitud en el analisis de sobre-representacion.
+#'
+#' Por que existe (docs/REVISION_ESTADISTICA.md, B3c): Young, Wakefield, Smyth y
+#' Oshlack (2010) mostraron que el ORA estandar da resultados sesgados en RNA-seq
+#' porque los transcritos largos tienen mas probabilidad de ser detectados como
+#' diferenciales, lo que arrastra a las categorias GO que los contienen.
+#'
+#' Decision de diseno: en lugar de ofrecer `goseq` a ciegas, se MIDE el sesgo en
+#' los datos del usuario. Es la informacion que decide: si en este dataset la
+#' probabilidad de ser DE no depende de la longitud, corregir no aporta nada; si
+#' depende, el enriquecimiento GO hay que leerlo con cautela. Se calcula tambien
+#' la funcion de ponderacion por probabilidad (la curva que dibuja `goseq`), sin
+#' anadir dependencia.
+#'
+#' @param deg_df tabla DEG estandar
+#' @param lengths vector de longitudes con nombres = identificadores de gen
+#' @param fdr umbral de significacion
+#' @param n_bins numero de bins de longitud para la curva
+#' @return list(table, spearman, p_value, n_used, odds_ratio, verdict)
+length_bias_diagnostic <- function(deg_df, lengths, fdr = 0.05, n_bins = 12L) {
+  out <- list(table = NULL, spearman = NA_real_, p_value = NA_real_,
+              n_used = 0L, odds_ratio = NA_real_, verdict = NULL)
+  if (is.null(deg_df) || !nrow(deg_df) || is.null(lengths) || !length(lengths)) return(out)
+  idx <- match(deg_df$gene, names(lengths))
+  ok <- !is.na(idx) & !is.na(deg_df$padj)
+  if (sum(ok) < 50) return(out)
+
+  len <- as.numeric(lengths[idx[ok]])
+  de  <- as.integer(deg_df$padj[ok] <= fdr)
+  out$n_used <- sum(ok)
+
+  # Correlacion de rangos entre longitud y evidencia de expresion diferencial.
+  # Se usa el rango del p-valor invertido para que "mas alto = mas DE".
+  ev <- -log10(pmax(deg_df$pvalue[ok], .Machine$double.xmin))
+  ct <- suppressWarnings(tryCatch(
+    stats::cor.test(len, ev, method = "spearman", exact = FALSE),
+    error = function(e) NULL))
+  if (!is.null(ct)) {
+    out$spearman <- as.numeric(ct$estimate)
+    out$p_value  <- as.numeric(ct$p.value)
+  }
+
+  # Curva de proporcion de DE por bin de longitud (la PWF de goseq).
+  brks <- unique(stats::quantile(len, probs = seq(0, 1, length.out = n_bins + 1L),
+                                 na.rm = TRUE))
+  if (length(brks) < 3) return(out)
+  bin <- cut(len, breaks = brks, include.lowest = TRUE, labels = FALSE)
+  df <- data.frame(
+    bin = sort(unique(bin[!is.na(bin)])),
+    stringsAsFactors = FALSE
+  )
+  df$n_genes  <- as.integer(tapply(de, bin, length)[as.character(df$bin)])
+  df$n_de     <- as.integer(tapply(de, bin, sum)[as.character(df$bin)])
+  df$prop_de  <- df$n_de / df$n_genes
+  df$len_median <- as.numeric(tapply(len, bin, stats::median)[as.character(df$bin)])
+  out$table <- df
+
+  # Odds ratio entre el tercio mas largo y el mas corto: cuantifica el sesgo en
+  # una cifra interpretable.
+  q <- stats::quantile(len, c(1/3, 2/3), na.rm = TRUE)
+  short <- len <= q[1]; long <- len >= q[2]
+  a <- sum(de[long]); b <- sum(!de[long]); c <- sum(de[short]); d <- sum(!de[short])
+  if (a > 0 && b > 0 && c > 0 && d > 0) out$odds_ratio <- (a / b) / (c / d)
+
+  out$verdict <- interpret_length_bias(out$spearman, out$p_value, out$odds_ratio)
+  out
+}
+
+#' Traduce el diagnostico de sesgo de longitud a una recomendacion concreta.
+interpret_length_bias <- function(rho, p_value, odds_ratio) {
+  if (is.na(rho)) {
+    return(list(level = "desconocido", label = "No evaluable",
+                detail = "No hay suficientes genes con longitud conocida."))
+  }
+  strong <- abs(rho) >= 0.15 || (!is.na(odds_ratio) && (odds_ratio >= 1.5 || odds_ratio <= 1/1.5))
+  signif <- !is.na(p_value) && p_value < 0.05
+  or_txt <- if (is.na(odds_ratio)) "" else paste0(
+    " Los genes del tercio mas largo tienen ", round(odds_ratio, 2),
+    " veces las probabilidades de salir diferenciales que los del tercio mas corto.")
+  if (strong && signif) {
+    return(list(level = "aviso", label = "Sesgo de longitud detectado",
+      detail = paste0(
+        "La correlacion entre longitud del gen y evidencia de expresion ",
+        "diferencial es rho = ", round(rho, 3), " (p = ", signif(p_value, 3), ").",
+        or_txt, " El analisis de sobre-representacion (GO/KEGG) esta sesgado hacia ",
+        "las categorias que contienen genes largos: interpretalo con cautela y ",
+        "prioriza GSEA, que usa el ranking completo, o una correccion por longitud ",
+        "tipo goseq.")))
+  }
+  if (signif) {
+    return(list(level = "leve", label = "Sesgo de longitud leve",
+      detail = paste0(
+        "La correlacion es estadisticamente detectable (rho = ", round(rho, 3),
+        ", p = ", signif(p_value, 3), ") pero pequena.", or_txt,
+        " Con decenas de miles de genes casi cualquier correlacion sale ",
+        "significativa; la magnitud importa mas que el p-valor.")))
+  }
+  list(level = "ok", label = "Sin sesgo de longitud apreciable",
+    detail = paste0(
+      "No hay relacion apreciable entre longitud del gen y evidencia de expresion ",
+      "diferencial (rho = ", round(rho, 3), ", p = ", signif(p_value %||% NA, 3), ").",
+      or_txt, " Corregir por longitud no aportaria nada en este dataset."))
+}
+
 #' Resumen RLE por muestra: log2CPM menos la mediana del gen.
 #'
 #' Se devuelven cuantiles y no los valores crudos porque con decenas de miles de
