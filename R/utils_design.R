@@ -110,15 +110,6 @@ confounded_pairs_text <- function(pairs) {
   paste(vapply(pairs, function(p) p$detail, character(1)), collapse = "; ")
 }
 
-#' Variables mencionadas en una formula (lado derecho).
-formula_vars <- function(formula_text) {
-  txt <- trimws(as.character(formula_text %||% ""))
-  if (!nzchar(txt)) return(character(0))
-  f <- tryCatch(stats::as.formula(txt), error = function(e) NULL)
-  if (is.null(f)) return(character(0))
-  all.vars(f)
-}
-
 #' Valida una formula de diseno contra el samplesheet SIN ajustar el modelo.
 #'
 #' Comprueba, en este orden:
@@ -244,12 +235,3 @@ design_summary_text <- function(v) {
          v$residual_df, " g.l. residuales", types)
 }
 
-#' Coeficientes de la formula que corresponden a una variable dada.
-#' Sirve para ofrecer al usuario los contrastes testeables de su diseno.
-design_coefs_for_var <- function(coef_names, var) {
-  if (!length(coef_names) || is.null(var) || !nzchar(var)) return(character(0))
-  # Se excluye el intercepto y se buscan los coeficientes cuyo nombre empieza
-  # por la variable (factores) o coincide con ella (covariable continua).
-  cand <- setdiff(coef_names, "(Intercept)")
-  cand[startsWith(cand, var)]
-}

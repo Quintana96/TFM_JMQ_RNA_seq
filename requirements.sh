@@ -70,7 +70,6 @@ required_bioc <- c(
   "limma",
   "tximport",
   "clusterProfiler",
-  "enrichplot",
   # apeglm implementa el encogido de log2FC que la app usa por defecto en
   # DESeq2 (lfcShrink). Sin el, los log2FC de genes de baja expresion salen
   # sesgados hacia valores exagerados.

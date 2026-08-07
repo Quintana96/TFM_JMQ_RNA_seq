@@ -362,10 +362,13 @@ server_tab_deg <- function(input, output, session, state) {
       showNotification(paste0(msg, "."), type = "message", duration = 10)
     }
 
-    showNotification(paste0("Corriendo DEG (", method, "). Esto puede tardar..."),
-                     type = "message", duration = 4)
-
-    res <- if (identical(method, "Swish")) {
+    # Barra de progreso en lugar de un aviso que desaparece a los 4 segundos: el
+    # ajuste tarda decenas de segundos (mas si hay encogido o IHW) y sin feedback
+    # persistente la aplicacion parece colgada.
+    res <- withProgress(message = paste0("Ajustando el modelo (", method, ")"),
+                        value = 0.15, {
+      setProgress(value = 0.25, detail = "estimando dispersiones y ajustando")
+      out <- if (identical(method, "Swish")) {
       # Swish es el unico motor que no parte de la matriz de conteos: la
       # incertidumbre de la cuantificacion vive en las replicas inferenciales de
       # los ficheros de salmon/kallisto, no en la matriz ya resumida. Por eso
@@ -401,7 +404,10 @@ server_tab_deg <- function(input, output, session, state) {
                 design_formula = dsg_formula, test_coef = test_coef),
         error = function(e) list(table = NULL, error = conditionMessage(e), method = method)
       )
-    }
+      }
+      setProgress(value = 0.85, detail = "preparando visualizaciones")
+      out
+    })
     if (identical(method, "Swish")) res$method <- method
 
     if (is.null(res$table)) {
@@ -802,48 +808,73 @@ server_tab_deg <- function(input, output, session, state) {
     make_deg_pca_plot(input$deg_pca_color)
   })
 
-  # ── Heatmap top-N ──────────────────────────────────────────────────────────
-  output$deg_heatmap <- renderPlot({
-    req(state$deg_rv$vst_mat)
-    n <- input$deg_heatmap_topn %||% 30
+  # ── Heatmaps (graficos base) ───────────────────────────────────────────────
+  # Estos dos se dibujan con graficos base, no con plotly, asi que no pueden usar
+  # `plotly_download()`. Se factorizan en helpers para que el render y la descarga
+  # produzcan exactamente el mismo grafico: antes el bloque de pheatmap estaba
+  # duplicado literalmente en los cuatro sitios, y cualquier cambio de paleta o de
+  # anotacion habia que hacerlo cuatro veces.
+  draw_deg_heatmap <- function(n = 30) {
+    if (is.null(state$deg_rv$vst_mat)) {
+      plot.new(); title("Sin datos para el heatmap."); return(invisible())
+    }
     genes <- top_var_genes(state$deg_rv$vst_mat, n = n)
     if (!length(genes)) {
       plot.new(); title("No hay genes para el heatmap."); return(invisible())
     }
     m <- state$deg_rv$vst_mat[genes, , drop = FALSE]
-    if (requireNamespace("pheatmap", quietly = TRUE)) {
-      ann <- NULL
+    pal <- grDevices::colorRampPalette(c("#A8DADC", "#FFFFFF", "#F4A6A6"))(50)
+    if (isTRUE(HAS_PHEATMAP)) {
       meta <- state$deg_rv$meta
-      if (!is.null(meta) && "condition" %in% names(meta)) {
-        ann <- data.frame(condition = meta$condition,
-                          row.names = meta$sample_id,
-                          stringsAsFactors = FALSE)
-      }
+      ann <- if (!is.null(meta) && "condition" %in% names(meta)) {
+        data.frame(condition = meta$condition, row.names = meta$sample_id,
+                   stringsAsFactors = FALSE)
+      } else NULL
       pheatmap::pheatmap(m, scale = "row", annotation_col = ann,
                          show_rownames = TRUE, show_colnames = TRUE,
-                         color = grDevices::colorRampPalette(c("#A8DADC", "#FFFFFF", "#F4A6A6"))(50),
-                         silent = FALSE)
+                         color = pal, silent = FALSE)
     } else {
-      stats::heatmap(m, scale = "row",
-                     col = grDevices::colorRampPalette(c("#A8DADC", "#FFFFFF", "#F4A6A6"))(50))
+      stats::heatmap(m, scale = "row", col = pal)
     }
-  })
+  }
 
-  # ── Distancia entre muestras ───────────────────────────────────────────────
-  output$deg_dist_heatmap <- renderPlot({
-    req(state$deg_rv$vst_mat)
-    dm <- sample_distance_matrix(state$deg_rv$vst_mat)
-    if (is.null(dm)) { plot.new(); title("Sin matriz de distancias."); return(invisible()) }
-    if (requireNamespace("pheatmap", quietly = TRUE)) {
-      pheatmap::pheatmap(dm,
-                         color = grDevices::colorRampPalette(c("#244B34", "#A8DDB8", "#FFFFFF"))(50),
+  draw_deg_dist_heatmap <- function() {
+    dm <- if (is.null(state$deg_rv$vst_mat)) NULL
+          else sample_distance_matrix(state$deg_rv$vst_mat)
+    if (is.null(dm)) {
+      plot.new(); title("Sin matriz de distancias."); return(invisible())
+    }
+    pal <- grDevices::colorRampPalette(c("#244B34", "#A8DDB8", "#FFFFFF"))(50)
+    if (isTRUE(HAS_PHEATMAP)) {
+      pheatmap::pheatmap(dm, color = pal,
                          clustering_distance_rows = stats::as.dist(dm),
                          clustering_distance_cols = stats::as.dist(dm),
                          silent = FALSE)
     } else {
-      stats::heatmap(dm, symm = TRUE,
-                     col = grDevices::colorRampPalette(c("#244B34", "#A8DDB8", "#FFFFFF"))(50))
+      stats::heatmap(dm, symm = TRUE, col = pal)
     }
+  }
+
+  #' Descarga PNG de un grafico de graficos base.
+  png_download <- function(prefix, draw_fun, width = 1200, height = 900) {
+    downloadHandler(
+      filename = function() paste0(prefix, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png"),
+      content = function(f) {
+        grDevices::png(f, width = width, height = height, res = 120)
+        on.exit(grDevices::dev.off(), add = TRUE)
+        draw_fun()
+      }
+    )
+  }
+
+  output$deg_heatmap <- renderPlot({
+    req(state$deg_rv$vst_mat)
+    draw_deg_heatmap(input$deg_heatmap_topn %||% 30)
+  })
+
+  output$deg_dist_heatmap <- renderPlot({
+    req(state$deg_rv$vst_mat)
+    draw_deg_dist_heatmap()
   })
 
   # ── Diagnosticos post-ajuste ───────────────────────────────────────────────
@@ -1069,12 +1100,21 @@ server_tab_deg <- function(input, output, session, state) {
   # Las longitudes salen de la anotacion de la ejecucion. Con una matriz subida no
   # hay anotacion asociada, asi que el diagnostico no es calculable y se dice.
   deg_gene_lengths <- reactive({
-    af <- if (identical(input$deg_source %||% "current", "saved")) {
-      annotation_file_for_run(input$selected_deg_run_dir %||% "")
-    } else {
-      p <- state$run_params_rv()
-      p$annotation_file %||% annotation_file_for_run(p$output_dir %||% "")
-    }
+    src <- input$deg_source %||% "current"
+    af <- switch(
+      src,
+      "saved"   = annotation_file_for_run(input$selected_deg_run_dir %||% ""),
+      "current" = {
+        p <- state$run_params_rv()
+        p$annotation_file %||% annotation_file_for_run(p$output_dir %||% "")
+      },
+      # Una matriz subida no tiene anotacion asociada. Antes caia en la rama de
+      # la ejecucion actual y usaba SU anotacion, que no tiene por que
+      # corresponder a los genes de la matriz: si los identificadores
+      # solapaban parcialmente, el diagnostico de sesgo de longitud salia
+      # calculado sobre longitudes de otro organismo.
+      NULL
+    )
     if (is.null(af) || !nzchar(af %||% "")) return(NULL)
     gene_lengths_from_annotation(af)
   })
@@ -1549,53 +1589,11 @@ server_tab_deg <- function(input, output, session, state) {
   output$download_deg_pca_plot <- plotly_download(
     "deg_pca", function() make_deg_pca_plot(input$deg_pca_color))
 
-  output$download_deg_heatmap <- downloadHandler(
-    filename = function() paste0("deg_heatmap_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png"),
-    content = function(f) {
-      req(state$deg_rv$vst_mat)
-      n <- input$deg_heatmap_topn %||% 30
-      genes <- top_var_genes(state$deg_rv$vst_mat, n = n)
-      if (!length(genes)) return(invisible())
-      m <- state$deg_rv$vst_mat[genes, , drop = FALSE]
-      grDevices::png(f, width = 1200, height = 900, res = 120)
-      on.exit(grDevices::dev.off(), add = TRUE)
-      if (requireNamespace("pheatmap", quietly = TRUE)) {
-        ann <- NULL
-        meta <- state$deg_rv$meta
-        if (!is.null(meta) && "condition" %in% names(meta)) {
-          ann <- data.frame(condition = meta$condition, row.names = meta$sample_id, stringsAsFactors = FALSE)
-        }
-        pheatmap::pheatmap(m, scale = "row", annotation_col = ann,
-                           show_rownames = TRUE, show_colnames = TRUE,
-                           color = grDevices::colorRampPalette(c("#A8DADC", "#FFFFFF", "#F4A6A6"))(50),
-                           silent = FALSE)
-      } else {
-        stats::heatmap(m, scale = "row",
-                       col = grDevices::colorRampPalette(c("#A8DADC", "#FFFFFF", "#F4A6A6"))(50))
-      }
-    }
-  )
+  output$download_deg_heatmap <- png_download(
+    "deg_heatmap", function() draw_deg_heatmap(input$deg_heatmap_topn %||% 30))
 
-  output$download_deg_dist_heatmap <- downloadHandler(
-    filename = function() paste0("deg_dist_heatmap_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png"),
-    content = function(f) {
-      req(state$deg_rv$vst_mat)
-      dm <- sample_distance_matrix(state$deg_rv$vst_mat)
-      req(!is.null(dm))
-      grDevices::png(f, width = 900, height = 800, res = 120)
-      on.exit(grDevices::dev.off(), add = TRUE)
-      if (requireNamespace("pheatmap", quietly = TRUE)) {
-        pheatmap::pheatmap(dm,
-                           color = grDevices::colorRampPalette(c("#244B34", "#A8DDB8", "#FFFFFF"))(50),
-                           clustering_distance_rows = stats::as.dist(dm),
-                           clustering_distance_cols = stats::as.dist(dm),
-                           silent = FALSE)
-      } else {
-        stats::heatmap(dm, symm = TRUE,
-                       col = grDevices::colorRampPalette(c("#244B34", "#A8DDB8", "#FFFFFF"))(50))
-      }
-    }
-  )
+  output$download_deg_dist_heatmap <- png_download(
+    "deg_dist_heatmap", function() draw_deg_dist_heatmap(), width = 900, height = 800)
 
   output$download_enrich_table <- csv_download(
     "enriquecimiento",

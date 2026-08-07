@@ -15,24 +15,6 @@
 #'   2. El nivel de FDR que va a usar quien llama se pasa a los motores, porque
 #'      DESeq2 lo necesita en `alpha` para calibrar su filtrado independiente.
 
-#' Convierte porcentaje o fraccion (>1 o <=1) — no se usa aqui, helper similar.
-num_safe <- function(x) suppressWarnings(as.numeric(x))
-
-#' Construye un data.frame "estandar" DEG con NA para columnas que falten
-deg_empty_row <- function(gene = character(0)) {
-  data.frame(
-    gene = gene,
-    baseMean = NA_real_,
-    log2FC = NA_real_,
-    log2FC_shrunk = NA_real_,
-    lfcSE = NA_real_,
-    stat = NA_real_,
-    pvalue = NA_real_,
-    padj = NA_real_,
-    stringsAsFactors = FALSE
-  )[seq_along(gene), , drop = FALSE]
-}
-
 #' Valida un samplesheet contra la matriz de conteos.
 #' Devuelve list(ok = TRUE/FALSE, errors = character).
 validate_samplesheet <- function(df, samples_in_counts) {
@@ -267,6 +249,17 @@ edger_is_v4 <- function() {
   isTRUE(tryCatch(utils::packageVersion("edgeR") >= "4.0.0", error = function(e) FALSE))
 }
 
+#' Estructura de metadatos que devuelven todos los motores.
+#'
+#' Centraliza el contrato: si se anade un campo, se anade una vez y no cinco. El
+#' bloque estaba repetido literalmente en cada motor.
+deg_engine_info <- function(d) {
+  list(contrast = NA_character_, coef = NA_character_,
+       n_levels = length(d$levels), shrink = "ninguno",
+       padj_method = "BH", disp_data = NULL, cooks = NULL,
+       coef_available = character(0))
+}
+
 #' Elige el mejor tipo de encogido de log2FC disponible.
 #' `apeglm` es la recomendacion de la vinieta de DESeq2 (prior de colas anchas:
 #' encoge el ruido sin aplastar los efectos grandes reales).
@@ -338,10 +331,7 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
     return(list(table = NULL, error = "DESeq2 no esta instalado."))
   }
   d <- build_design(meta, ref_level, batch, design_formula)
-  info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL,
-               coef_available = character(0))
+  info <- deg_engine_info(d)
   out <- tryCatch({
     dds <- DESeq2::DESeqDataSetFromMatrix(
       countData = round(as.matrix(counts)),
@@ -435,10 +425,7 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
     return(list(table = NULL, error = "edgeR no esta instalado."))
   }
   d <- build_design(meta, ref_level, batch, design_formula)
-  info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL,
-               coef_available = character(0))
+  info <- deg_engine_info(d)
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
     y <- edgeR::DGEList(counts = round(as.matrix(counts)), group = d$meta$condition)
@@ -511,10 +498,7 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
     return(list(table = NULL, error = "Se requieren limma y edgeR para limma-voom."))
   }
   d <- build_design(meta, ref_level, batch, design_formula)
-  info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL,
-               coef_available = character(0))
+  info <- deg_engine_info(d)
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
     y <- edgeR::DGEList(counts = round(as.matrix(counts)), group = d$meta$condition)
@@ -595,10 +579,7 @@ run_deg_wilcoxon <- function(counts, meta, ref_level = NULL, batch = NULL,
                              contrast_num = NULL, use_ihw = FALSE,
                              design_formula = NULL, test_coef = NULL) {
   d <- build_design(meta, ref_level, batch)
-  info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL,
-               coef_available = character(0))
+  info <- deg_engine_info(d)
   num <- if (!is.null(contrast_num) && nzchar(contrast_num %||% "")) contrast_num
          else utils::tail(d$levels, 1)
   den <- d$ref
@@ -651,10 +632,7 @@ run_deg_dearseq <- function(counts, meta, ref_level = NULL, batch = NULL,
                             contrast_num = NULL, use_ihw = FALSE,
                             design_formula = NULL, test_coef = NULL) {
   d <- build_design(meta, ref_level, batch)
-  info <- list(contrast = NA_character_, coef = NA_character_,
-               n_levels = length(d$levels), shrink = "ninguno",
-               padj_method = "BH", disp_data = NULL, cooks = NULL,
-               coef_available = character(0))
+  info <- deg_engine_info(d)
   if (!requireNamespace("dearseq", quietly = TRUE)) {
     return(c(list(table = NULL, error = "dearseq no esta instalado."), info))
   }

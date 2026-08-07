@@ -9,17 +9,44 @@
 #' pseudoalineamiento) den los MISMOS identificadores, el gen canonico de
 #' `tx2gene` es tambien el locus_tag.
 
+#' Cache de la anotacion parseada.
+#'
+#' Parsear el GFF es CARO: 7 segundos para los 9.523 features de E. coli, y un
+#' GTF humano es dos ordenes de magnitud mayor. Cuatro funciones distintas lo
+#' necesitan (`tx2gene`, longitudes de gen, deteccion de splicing, genes de
+#' rRNA), invocadas desde cuatro puntos de la aplicacion, asi que sin cache el
+#' mismo fichero se parseaba cuatro veces por sesion como minimo, y de nuevo en
+#' cada invalidacion reactiva.
+#'
+#' Se guarda una sola entrada: el patron de uso es una anotacion por ejecucion, y
+#' el data.frame de un GTF humano ocupa cientos de MB. La clave incluye mtime y
+#' tamano para que un fichero modificado se vuelva a leer.
+.annotation_cache <- new.env(parent = emptyenv())
+
 #' Lee un GFF/GTF y devuelve sus atributos como data.frame.
 #' Devuelve NULL (sin error) si no se puede leer, para que quien llame decida.
-read_annotation_features <- function(path) {
+read_annotation_features <- function(path, use_cache = TRUE) {
   if (is.null(path) || !length(path) || !nzchar(path) || !file.exists(path)) return(NULL)
   if (!requireNamespace("rtracklayer", quietly = TRUE)) return(NULL)
-  tryCatch({
+
+  info <- file.info(path)
+  key <- paste(normalizePath(path, mustWork = FALSE), info$mtime, info$size, sep = "|")
+  if (isTRUE(use_cache) && identical(.annotation_cache$key, key)) {
+    return(.annotation_cache$value)
+  }
+
+  df <- tryCatch({
     gr <- rtracklayer::import(path)
-    df <- as.data.frame(S4Vectors::mcols(gr), stringsAsFactors = FALSE)
-    df$.width <- BiocGenerics::width(gr)
-    df
+    out <- as.data.frame(S4Vectors::mcols(gr), stringsAsFactors = FALSE)
+    out$.width <- BiocGenerics::width(gr)
+    out
   }, error = function(e) NULL)
+
+  if (isTRUE(use_cache) && !is.null(df)) {
+    .annotation_cache$key <- key
+    .annotation_cache$value <- df
+  }
+  df
 }
 
 #' Primera columna no vacia de entre varias candidatas.

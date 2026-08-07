@@ -23,7 +23,6 @@ HAS_DESEQ2          <- pkg_ok("DESeq2")
 HAS_EDGER           <- pkg_ok("edgeR")
 HAS_LIMMA           <- pkg_ok("limma")
 HAS_CLUSTERPROFILER <- pkg_ok("clusterProfiler")
-HAS_ENRICHPLOT      <- pkg_ok("enrichplot")
 HAS_PHEATMAP        <- pkg_ok("pheatmap")
 HAS_ORGECDB         <- pkg_ok("org.EcK12.eg.db")
 # Encogido de log2FC (lfcShrink). apeglm es la opcion recomendada por la

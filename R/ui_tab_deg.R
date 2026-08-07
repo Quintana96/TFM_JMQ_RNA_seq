@@ -12,12 +12,24 @@ ui_tab_deg_missing_pkgs <- function() {
   if (!isTRUE(HAS_EDGER))   pkgs <- c(pkgs, "edgeR")
   if (!isTRUE(HAS_LIMMA))   pkgs <- c(pkgs, "limma")
 
+  # clusterProfiler es requerido para el enriquecimiento, no opcional: sin el la
+  # pestana entera queda inservible, asi que va en el aviso fuerte.
+  if (!isTRUE(HAS_CLUSTERPROFILER)) pkgs <- c(pkgs, "clusterProfiler")
+
   optional <- c()
   if (!isTRUE(HAS_APEGLM) && !isTRUE(HAS_ASHR))
     optional <- c(optional, "apeglm (encogido de log2FC)")
   if (!isTRUE(HAS_FGSEA))  optional <- c(optional, "fgsea (GSEA)")
   if (!isTRUE(HAS_IHW))    optional <- c(optional, "IHW (ponderacion de hipotesis)")
+  if (!isTRUE(HAS_QVALUE)) optional <- c(optional, "qvalue (segunda estimacion de pi0)")
   if (!isTRUE(HAS_ORGECDB)) optional <- c(optional, "org.EcK12.eg.db (GO de E. coli)")
+  if (!isTRUE(HAS_PHEATMAP))
+    optional <- c(optional, "pheatmap (heatmaps con dendrograma)")
+  # rtracklayer sostiene tres cosas a la vez, y sin el fallan las tres en
+  # silencio desde el punto de vista del usuario.
+  if (!isTRUE(HAS_RTRACKLAYER))
+    optional <- c(optional, paste("rtracklayer (mapa transcrito-gen para tximport,",
+                                  "longitudes de gen y deteccion de rRNA)"))
 
   if (!length(pkgs) && !length(optional)) return(NULL)
   tagList(
