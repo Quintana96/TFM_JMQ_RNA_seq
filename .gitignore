@@ -33,6 +33,7 @@ data/
 # Salidas del pipeline
 Output/
 output/
+outputs/
 results/
 01_quality/
 02_trimmed_reads/
