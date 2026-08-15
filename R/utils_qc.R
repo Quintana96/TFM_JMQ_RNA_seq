@@ -360,6 +360,97 @@ pseudo_qc_summary <- function(out_dir) {
   if (!nrow(out)) message_df("No se encontraron resultados de pseudoalineamiento para este analisis.") else out
 }
 
+#' Semaforo de calidad por muestra a partir de los modulos de FastQC.
+#'
+#' FastQC define los cortes del modulo "per base sequence quality" asi: aviso si
+#' el primer cuartil de alguna posicion baja de 10 o la mediana de 25; fallo si
+#' el cuartil baja de 5 o la mediana de 20. MultiQC no expone los cuartiles por
+#' posicion, pero si el veredicto por modulo, que aplica exactamente esos cortes.
+#'
+#' Se traduce a un semaforo por muestra indicando QUE modulo falla: un fallo en
+#' calidad por base y uno en contenido de adaptadores no significan lo mismo ni
+#' se arreglan igual.
+#'
+#' El modulo de duplicados NO cuenta para el veredicto: en RNA-seq de expresion
+#' los duplicados son senal, no artefacto, y su "fail" es esperable en los genes
+#' muy expresados.
+#'
+#' @return data.frame(sample_id, estado, modulos_fail, modulos_warn) o NULL
+fastqc_traffic_light <- function(out_dir) {
+  fq <- fastqc_stats(out_dir)
+  if (is.null(fq) || !nrow(fq) || !"Sample" %in% names(fq)) return(NULL)
+  meta_cols <- c("Sample", "Filename", "File type", "Encoding", "Total Sequences",
+                 "Total Bases", "Sequences flagged as poor quality",
+                 "Sequence length", "%GC", "total_deduplicated_percentage",
+                 "avg_sequence_length", "median_sequence_length")
+  qc_cols <- setdiff(names(fq), meta_cols)
+  if (!length(qc_cols)) return(NULL)
+  m <- as.matrix(fq[, qc_cols, drop = FALSE])
+  criticos <- grep("per_base_sequence_quality|per_sequence_quality|per_base_n_content|adapter_content",
+                   qc_cols, ignore.case = TRUE, value = TRUE)
+  legible <- function(x) gsub("_", " ", x)
+  do.call(rbind, lapply(seq_len(nrow(fq)), function(i) {
+    fila <- m[i, , drop = TRUE]
+    fails <- names(fila)[!is.na(fila) & fila == "fail"]
+    warns <- names(fila)[!is.na(fila) & fila == "warn"]
+    estado <- if (length(intersect(fails, criticos))) "fail"
+              else if (length(fails) || length(intersect(warns, criticos))) "warn"
+              else "ok"
+    data.frame(sample_id = as.character(fq$Sample[i]), estado = estado,
+               modulos_fail = paste(legible(fails), collapse = "; "),
+               modulos_warn = paste(legible(warns), collapse = "; "),
+               stringsAsFactors = FALSE)
+  }))
+}
+
+#' Saturacion de la libreria: cuantos genes nuevos aporta secuenciar mas.
+#'
+#' Submuestreo binomial de los conteos observados. Es una curva de rendimientos
+#' decrecientes: si al 50 % de la profundidad ya se detectan casi los mismos
+#' genes que al 100 %, secuenciar mas no aporta y el limite del experimento son
+#' las replicas, no la profundidad — que es justo la conclusion de Liu, Zhou y
+#' White (Bioinformatics 2014): compensa mas replicar que profundizar.
+#'
+#' @param counts matriz de conteos (genes x muestras)
+#' @param fracciones proporciones de la profundidad a evaluar
+#' @param min_count conteos minimos para considerar detectado un gen
+#' @param seed semilla: el submuestreo es aleatorio
+#' @return data.frame(sample_id, fraccion, genes_detectados) o NULL
+library_saturation <- function(counts, fracciones = c(0.1, 0.25, 0.5, 0.75, 1),
+                               min_count = 1L, seed = 1L) {
+  if (is.null(counts) || !nrow(counts) || !ncol(counts)) return(NULL)
+  cm <- round(as.matrix(counts))
+  cm[is.na(cm)] <- 0
+  withr::with_seed(seed, {
+    filas <- lapply(colnames(cm), function(s) {
+      total <- sum(cm[, s])
+      if (!is.finite(total) || total <= 0) return(NULL)
+      do.call(rbind, lapply(fracciones, function(f) {
+        sub <- if (f >= 1) cm[, s] else stats::rbinom(nrow(cm), cm[, s], f)
+        data.frame(sample_id = s, fraccion = f,
+                   genes_detectados = sum(sub >= min_count),
+                   stringsAsFactors = FALSE)
+      }))
+    })
+    filas <- filas[!vapply(filas, is.null, logical(1))]
+    if (!length(filas)) return(NULL)
+    do.call(rbind, filas)
+  })
+}
+
+#' Resume la curva de saturacion en un veredicto por muestra.
+#' @return data.frame(sample_id, genes_full, pct_al_50, saturada)
+saturation_verdict <- function(sat, umbral = 0.95) {
+  if (is.null(sat) || !nrow(sat)) return(NULL)
+  do.call(rbind, lapply(split(sat, sat$sample_id), function(d) {
+    full <- d$genes_detectados[which.max(d$fraccion)]
+    mitad <- d$genes_detectados[which.min(abs(d$fraccion - 0.5))]
+    pct <- if (full > 0) mitad / full else NA_real_
+    data.frame(sample_id = d$sample_id[1], genes_full = full, pct_al_50 = pct,
+               saturada = !is.na(pct) && pct >= umbral, stringsAsFactors = FALSE)
+  }))
+}
+
 #' Alertas heuristicas sobre el alineamiento clasico
 align_qc_alerts <- function(out_dir, thresholds = qc_thresholds) {
   x <- align_qc_summary(out_dir)

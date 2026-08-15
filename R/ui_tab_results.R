@@ -7,7 +7,7 @@ ui_tab_results_content <- function(s) {
     layout_columns(
       col_widths = c(6, 6),
       # Izquierda: cajas 2x2 con metricas resumen
-      div(style = "display:grid; grid-template-columns:repeat(2,1fr); gap:10px;",
+      div(style = "display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;",
         div(class = "metric-card",
           div(class = "metric-card-value",
             if (!is.null(s)) status_badge(s$status) else "—"),
@@ -23,10 +23,14 @@ ui_tab_results_content <- function(s) {
             if (!is.null(s)) pct_label(s$mean_mapped) else "—"),
           div(class = "metric-card-label", "Mapeo medio")
         ),
+        # Antes esta tarjeta repetia n_features, que es el numero de FILAS de la
+        # matriz y no los genes detectados. Mostrar dos veces el mismo numero con
+        # etiquetas distintas induce a error: ahora son los genes con al menos
+        # una lectura asignada.
         div(class = "metric-card",
           div(class = "metric-card-value",
-            if (!is.null(s)) (s$n_features %||% "—") else "—"),
-          div(class = "metric-card-label", "Genes detectados")
+            if (!is.null(s)) (s$n_detected %||% "—") else "—"),
+          div(class = "metric-card-label", "Genes con conteo > 0")
         )
       ),
       # Derecha: selector vertical de resultados
@@ -74,6 +78,22 @@ ui_tab_results_content <- function(s) {
           download_header("Lecturas asignadas a rRNA por muestra", "download_rrna_plot"),
           uiOutput("rrna_note"),
           plotly::plotlyOutput("rrna_plot", height = "320px")
+        ),
+        # Semaforo por muestra con los modulos de FastQC, que aplican los cortes
+        # del manual (aviso si el cuartil inferior baja de 10 o la mediana de 25;
+        # fallo si bajan de 5 y 20). Se indica QUE modulo falla, porque un fallo
+        # de calidad por base y uno de adaptadores no se arreglan igual.
+        card(
+          card_header("Calidad por muestra (FastQC)"),
+          uiOutput("fastqc_light_note"),
+          DTOutput("fastqc_light_table")
+        ),
+        # Saturacion: si al 50 % de la profundidad ya se detectan casi los mismos
+        # genes, secuenciar mas no aporta y el limite son las replicas.
+        card(
+          download_header("Saturacion de la libreria", "download_saturation_plot"),
+          uiOutput("saturation_note"),
+          plotly::plotlyOutput("saturation_plot", height = "320px")
         )
       ),
       nav_panel(
@@ -180,7 +200,7 @@ ui_tab_results_content <- function(s) {
 #' Incluye boton para refrescar la lista de outputs/.
 ui_tab_results_empty <- function() {
   div(class = "alert alert-info mt-4", icon("clock"),
-      " Ejecuta el workflow en la pestaña 2 para ver los resultados o usa una ejecucion previa guardada en outputs/.",
+      " Ejecuta el workflow en la pestana 2 para ver los resultados o usa una ejecucion previa guardada en outputs/.",
       div(style = "margin-top:10px;",
           actionButton("refresh_results_btn",
                        tagList(icon("rotate"), " Refrescar lista de outputs/"),

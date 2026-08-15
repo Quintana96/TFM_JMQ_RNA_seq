@@ -119,6 +119,90 @@ server_tab_results <- function(input, output, session, state) {
   output$download_rrna_plot <- plotly_download(
     "rrna_por_muestra", function() make_rrna_plot(selected_rrna()))
 
+  # ── Semaforo de FastQC por muestra ────────────────────────────────────────
+  selected_fastqc_light <- reactive({
+    d <- selected_result_dir()
+    if (!nzchar(d)) return(NULL)
+    fastqc_traffic_light(d)
+  })
+
+  output$fastqc_light_note <- renderUI({
+    tl <- selected_fastqc_light()
+    if (is.null(tl)) {
+      return(div(class = "small text-muted",
+                 "Sin datos de FastQC en MultiQC para esta ejecucion."))
+    }
+    n_fail <- sum(tl$estado == "fail"); n_warn <- sum(tl$estado == "warn")
+    div(class = "small text-muted mb-1",
+        paste0(nrow(tl), " ficheros analizados  ·  ", n_fail, " con fallo critico  ·  ",
+               n_warn, " con aviso. "),
+        tags$span(paste("Umbrales de FastQC: aviso si el cuartil inferior de alguna",
+                        "posicion baja de 10 o la mediana de 25; fallo si bajan de 5",
+                        "y 20. El modulo de duplicados no cuenta para el veredicto:",
+                        "en RNA-seq de expresion los duplicados son senal.")))
+  })
+
+  output$fastqc_light_table <- renderDT({
+    tl <- selected_fastqc_light()
+    if (is.null(tl)) return(dt_table(message_df("Sin datos de FastQC.")))
+    df <- data.frame(
+      Muestra = tl$sample_id,
+      Estado = ifelse(tl$estado == "fail", "FALLO",
+               ifelse(tl$estado == "warn", "Aviso", "OK")),
+      `Modulos con fallo` = ifelse(nzchar(tl$modulos_fail), tl$modulos_fail, "—"),
+      `Modulos con aviso` = ifelse(nzchar(tl$modulos_warn), tl$modulos_warn, "—"),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    dt_table(df, page_length = 10)
+  })
+
+  # ── Saturacion de la libreria ─────────────────────────────────────────────
+  selected_saturation <- reactive({
+    p <- selected_result_params()
+    d <- selected_result_dir()
+    if (!length(p) || !nzchar(d)) return(NULL)
+    counts <- tryCatch(
+      load_counts_from_workflow(d, p$tool %||% "",
+                                annotation_file = annotation_file_for_run(d)),
+      error = function(e) NULL)
+    if (is.null(counts)) return(NULL)
+    sat <- library_saturation(counts)
+    list(curva = sat, veredicto = saturation_verdict(sat))
+  })
+
+  output$saturation_note <- renderUI({
+    s <- selected_saturation()
+    if (is.null(s) || is.null(s$veredicto)) {
+      return(div(class = "small text-muted",
+                 "Hace falta una matriz de conteos para estimar la saturacion."))
+    }
+    v <- s$veredicto
+    n_sat <- sum(v$saturada, na.rm = TRUE)
+    div(class = "small text-muted mb-1",
+        paste0("Al 50 % de la profundidad se detecta de media el ",
+               round(100 * mean(v$pct_al_50, na.rm = TRUE), 1),
+               " % de los genes  ·  ", n_sat, " de ", nrow(v), " muestras saturadas. "),
+        tags$span(paste("Si la curva ya esta plana, secuenciar mas no aporta y el",
+                        "limite del experimento son las replicas, no la",
+                        "profundidad.")))
+  })
+
+  make_saturation_plot <- function(s) {
+    if (is.null(s) || is.null(s$curva)) {
+      return(plotly_message("Sin datos para estimar la saturacion."))
+    }
+    df <- s$curva
+    df$pct <- 100 * df$fraccion
+    plotly::plot_ly(df, x = ~pct, y = ~genes_detectados, color = ~sample_id,
+                    type = "scatter", mode = "lines+markers",
+                    hovertemplate = "%{y} genes al %{x} %% de profundidad<extra>%{fullData.name}</extra>") |>
+      plotly::layout(xaxis = list(title = "% de la profundidad original"),
+                     yaxis = list(title = "genes detectados"))
+  }
+
+  output$saturation_plot <- plotly::renderPlotly(make_saturation_plot(selected_saturation()))
+  output$download_saturation_plot <- plotly_download(
+    "saturacion_libreria", function() make_saturation_plot(selected_saturation()))
+
   selected_counts_tables <- reactive({
     p <- selected_result_params()
     out_dir <- selected_result_dir()
@@ -187,7 +271,7 @@ server_tab_results <- function(input, output, session, state) {
       ),
       tags$div(style = "margin-top:6px;",
                tags$small(class = "text-muted",
-                          "También puedes escribir para filtrar las ejecuciones guardadas."))
+                          "Tambien puedes escribir para filtrar las ejecuciones guardadas."))
     )
   })
 
@@ -202,7 +286,7 @@ server_tab_results <- function(input, output, session, state) {
       rel = "noopener noreferrer",
       class = "btn btn-sm btn-primary",
       style = "align-self:flex-start;",
-      title = "Abrir el informe MultiQC de esta ejecución en una nueva pestaña",
+      title = "Abrir el informe MultiQC de esta ejecucion en una nueva pestana",
       tagList(icon("up-right-from-square"), " Abrir MultiQC")
     )
   })
@@ -274,7 +358,7 @@ server_tab_results <- function(input, output, session, state) {
     }
     if (!is.na(s$fastqc_fail)) {
       items <- c(items, list(tags$li(tags$b("Checks FastQC fallidos: "), s$fastqc_fail,
-                                if (s$fastqc_fail > 0) tags$span(class = "text-warning", "  Revisar pestaña Calidad.") else NULL)))
+                                if (s$fastqc_fail > 0) tags$span(class = "text-warning", "  Revisar pestana Calidad.") else NULL)))
     }
 
     tagList(
