@@ -38,9 +38,11 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     approach <- input$deg_enrich_approach %||% "ora"
     org_code <- trimws(input$deg_kegg_organism %||% "eco")
     if (!nzchar(org_code)) org_code <- "eco"
-    # Fondo = los genes efectivamente testeados, no el genoma completo. Aplica
-    # tanto a GO como a KEGG.
-    universe <- state$deg_rv$results$gene
+    # Fondo = los genes efectivamente EVALUABLES (los que tienen padj), no el
+    # genoma completo ni la tabla entera. Un gen descartado por el filtrado
+    # independiente nunca podria haber entrado en la lista de significativos, asi
+    # que contarlo como fondo infla el enriquecimiento. Aplica a GO y a KEGG.
+    universe <- ctx$deg_universe()
 
     if (identical(approach, "gsea")) {
       # GSEA parte del ranking completo, sin umbralizar: por eso usa la tabla
@@ -67,9 +69,14 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                       else input$deg_go_keytype %||% "SYMBOL",
                       exponent = 0)
     } else {
-      df <- ctx$deg_filtered()
+      # La lista del ORA sale del FDR con el que se AJUSTO el modelo, no de los
+      # filtros de la tarjeta 5: esos son de visualizacion y no recortan el
+      # universo, asi que dejarlos entrar aqui cambiaba el enriquecimiento al
+      # mover un deslizador declarado cosmetico.
+      df <- ctx$deg_significant()
       if (is.null(df) || !nrow(df)) {
-        showNotification("No hay genes significativos con los filtros actuales.",
+        showNotification(paste0("No hay genes significativos a FDR <= ",
+                                state$deg_rv$fdr %||% 0.05, "."),
                          type = "warning"); return()
       }
       genes <- df$gene

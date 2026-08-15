@@ -841,6 +841,39 @@ apply_deg_filters <- function(deg_df, fdr = 0.05, abs_log2fc = 0, base_mean = 0)
   deg_df[keep, , drop = FALSE]
 }
 
+#' Lista de genes significativos para el ENRIQUECIMIENTO.
+#'
+#' Solo aplica el FDR con el que se ajusto el modelo. Deliberadamente NO acepta
+#' los filtros de |log2FC| ni de baseMean: esos son de visualizacion y no
+#' recortan el universo, de modo que usarlos aqui cambiaria el resultado del ORA
+#' al mover un deslizador declarado cosmetico, y ademas dejaria lista y fondo
+#' definidos con criterios distintos.
+#'
+#' @param deg_df tabla de resultados del motor
+#' @param fdr FDR objetivo del ajuste
+#' @return data.frame con las filas significativas
+deg_significant_genes <- function(deg_df, fdr = 0.05) {
+  apply_deg_filters(deg_df, fdr = fdr, abs_log2fc = 0, base_mean = 0)
+}
+
+#' Universo (fondo) del enriquecimiento: los genes EVALUABLES.
+#'
+#' Son los que tienen p-valor ajustado. Un gen sin `padj` —descartado por el
+#' filtrado independiente, con conteo cero o marcado como outlier de Cook— nunca
+#' habria podido entrar en la lista de significativos, asi que contarlo como
+#' fondo infla el enriquecimiento (Wijesooriya et al., 2022: el fondo mal
+#' definido es el error mas extendido en analisis de sobre-representacion).
+#'
+#' @param deg_df tabla de resultados del motor
+#' @return vector de identificadores de gen
+deg_testable_universe <- function(deg_df) {
+  if (is.null(deg_df) || !nrow(deg_df)) return(character(0))
+  u <- deg_df$gene[!is.na(deg_df$padj)]
+  # Un motor que no rellene padj dejaria el universo vacio, lo que romperia el
+  # enriquecimiento entero; en ese caso es preferible el fondo completo.
+  if (!length(u)) deg_df$gene else u
+}
+
 #' Transformacion estabilizadora de varianza para visualizacion.
 #' Usa DESeq2::vst si nrow >= 1000 (mas rapido), rlog si menos (mas suave).
 vst_or_rlog <- function(counts, meta, blind = TRUE) {

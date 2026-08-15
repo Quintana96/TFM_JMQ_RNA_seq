@@ -644,6 +644,29 @@ server_tab_deg <- function(input, output, session, state) {
     )
   })
 
+  # Lista de significativos SIN los filtros de visualizacion: unicamente el FDR
+  # con el que se ajusto el modelo.
+  #
+  # Es la que debe alimentar el enriquecimiento. Usar la tabla filtrada hacia que
+  # mover un deslizador declarado "solo visual" cambiase el resultado del ORA, y
+  # ademas recortaba la lista sin recortar el universo, que es exactamente el
+  # sesgo de fondo mal definido que la Fase 1 elimino de las listas DEG.
+  deg_significant <- reactive({
+    tab <- state$deg_rv$results
+    if (is.null(tab)) return(NULL)
+    deg_significant_genes(tab, fdr = state$deg_rv$fdr %||% 0.05)
+  })
+
+  # Universo del enriquecimiento: los genes efectivamente EVALUABLES, es decir
+  # los que tienen padj. Los descartados por el filtrado independiente nunca
+  # podrian haber entrado en la lista de significativos, asi que incluirlos en el
+  # fondo infla artificialmente el enriquecimiento.
+  deg_universe <- reactive({
+    tab <- state$deg_rv$results
+    if (is.null(tab)) return(NULL)
+    deg_testable_universe(tab)
+  })
+
   # ── UI de resultados ───────────────────────────────────────────────────────
   output$deg_results_ui <- renderUI({
     if (is.null(state$deg_rv$results)) {
@@ -667,7 +690,9 @@ server_tab_deg <- function(input, output, session, state) {
   ctx <- new.env(parent = emptyenv())
   ctx$meta_rv           <- meta_rv            # lo lee la sugerencia de metodo
   ctx$deg_counts_source <- deg_counts_source
-  ctx$deg_filtered      <- deg_filtered       # lo leen resultados y enriquecimiento
+  ctx$deg_filtered      <- deg_filtered       # tabla y graficos (filtros visuales)
+  ctx$deg_significant   <- deg_significant    # enriquecimiento: solo el FDR del ajuste
+  ctx$deg_universe      <- deg_universe       # fondo del enriquecimiento
 
   # El orden importa: los diagnosticos publican en `ctx` los reactivos que el
   # informe reproducible consume, asi que tienen que registrarse antes.
