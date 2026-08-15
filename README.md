@@ -34,13 +34,20 @@ La aplicación puede operar en dos modos:
 
 ## Características principales
 
+### Tab 0 — Inicio
+- Portada con los cuatro pasos del análisis y el estado de cada uno (pendiente, listo, en ejecución, completado).
+- Resumen de la sesión: fuente de los conteos, muestras detectadas, matriz en memoria y número de ejecuciones guardadas.
+- Cada tarjeta es un acceso directo al paso correspondiente.
+
 ### Tab 1 — Configuración
 - Selección del modo de inicio: workflow completo o carga de matriz de conteos.
 - Elección del tipo de análisis: **alineamiento clásico** (Bowtie2 + featureCounts) o **pseudoalineamiento** (Salmon / Kallisto).
 - Soporte para lecturas **paired-end** y **single-end**.
 - Selección interactiva de directorios para archivos FASTQ de entrada, genoma de referencia y anotación.
 - Detección automática de muestras y previsualización del número de archivos FASTQ detectados.
-- Checklist de validación que verifica todos los parámetros antes de permitir continuar.
+- Checklist de validación que verifica todos los parámetros antes de permitir continuar, con la lista de errores concretos junto al botón de continuar.
+- En modo "matriz de conteos" se ocultan los campos del pipeline, que en ese modo no aplican.
+- Opciones avanzadas del pipeline y calculadora de potencia en un acordeón plegado.
 
 ### Tab 2 — Procesamiento
 - Ejecución del pipeline `workflow.sh` directamente desde la interfaz.
@@ -59,6 +66,7 @@ La aplicación puede operar en dos modos:
 - Tablas interactivas de conteos (genes × muestras) con opción de descarga en CSV.
 - Tabla de artefactos de salida con acceso a los archivos generados.
 - Resumen MultiQC integrado.
+- Control de calidad específico del método (alineamiento o pseudoalineamiento) como pestaña más del mismo navegador de pestañas; solo se muestra el que corresponde a la herramienta de la ejecución.
 
 ### Tab 4 — Expresión diferencial
 - Tres motores estadísticos seleccionables: **DESeq2**, **edgeR** y **limma-voom**.
@@ -72,6 +80,7 @@ La aplicación puede operar en dos modos:
   - MA plot.
 - Análisis de enriquecimiento funcional GO (requiere OrgDb de Bioconductor).
 - Descarga de resultados en CSV.
+- Los parámetros viven en una barra lateral plegable (acordeón de seis secciones) y los resultados ocupan el área principal, agrupados en seis pestañas: Genes, Muestras, Diagnósticos, Robustez, Enriquecimiento y Reproducibilidad.
 
 ---
 
@@ -160,7 +169,7 @@ La aplicación se abrirá en el navegador por defecto. Por defecto acepta upload
 ### Flujo típico: workflow completo
 
 ```
-Tab 1 → Tab 2 → Tab 3 → Tab 4
+Tab 0 (Inicio) → Tab 1 → Tab 2 → Tab 3 → Tab 4
 Configurar  Ejecutar   Revisar   Analizar DEG
 ```
 
@@ -234,11 +243,13 @@ rnaseq_app/
     ├── utils_enrich.R       # Enriquecimiento funcional GO (clusterProfiler)
     │
     ├── ui_helpers.R         # Helpers UI: botones de descarga, headers con CSV/Plotly
-    ├── ui_tab_config.R      # UI del Tab 1 (6 cards en grid 3×2)
+    ├── ui_tab_home.R        # UI del Tab 0 (portada: pasos y estado de la sesión)
+    ├── ui_tab_config.R      # UI del Tab 1 (configuración + estado, en dos columnas)
     ├── ui_tab_processing.R  # UI del Tab 2 (activa y versión bloqueada)
     ├── ui_tab_results.R     # UI del Tab 3 (activa y versión vacía)
     ├── ui_tab_deg.R         # UI del Tab 4 (configuración + visualizaciones DEG)
     │
+    ├── server_tab_home.R        # Lógica Tab 0: estado de cada paso y navegación
     ├── server_tab_config.R      # Lógica Tab 1: validación, detección de muestras
     ├── server_tab_processing.R  # Lógica Tab 2: ejecución del pipeline, log en vivo
     ├── server_tab_results.R     # Lógica Tab 3: carga y renderizado de resultados
