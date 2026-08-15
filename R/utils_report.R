@@ -311,8 +311,11 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
   if (!is.null(diagnostics)) {
     bits <- list()
     if (!is.null(diagnostics$verdict)) {
-      bits[["Forma del histograma de p-valores"]] <-
-        paste0(diagnostics$verdict$label, " — ", diagnostics$verdict$detail)
+      # Se acepta tanto la lista de diagnose_pvalue_shape() como una cadena
+      # suelta: el informe no puede caerse por la forma de un diagnostico.
+      v <- diagnostics$verdict
+      bits[["Forma del histograma de p-valores"]] <- if (is.list(v))
+        paste0(v$label %||% "—", " — ", v$detail %||% "") else as.character(v)
     }
     if (!is.null(diagnostics$pi0) && !is.na(diagnostics$pi0)) {
       bits[["pi0 (proporcion de nulas ciertas)"]] <- round(diagnostics$pi0, 4)

@@ -58,3 +58,31 @@ test_that("tabla vacia o nula no rompe el universo", {
   expect_equal(deg_testable_universe(NULL), character(0))
   expect_equal(deg_testable_universe(tabla_deg()[0, ]), character(0))
 })
+
+test_that("el ranking de GSEA se limita a los genes evaluables", {
+  tab <- tabla_deg()
+  # g05 y g08 no tienen padj: no eran evaluables, asi que no pueden entrar en el
+  # ranking. Incluirlos rompe la coherencia con el universo del ORA y sesga el
+  # resultado: los genes no evaluables (baja expresion) se concentran en la cola,
+  # de modo que cualquier conjunto realista queda desplazado hacia la cabeza.
+  # La tabla de prueba no trae columna `stat`, asi que se usa log2FC.
+  rk <- deg_ranking_metric(tab, "log2FC")
+  expect_false("g05" %in% names(rk$ranked))
+  expect_false("g08" %in% names(rk$ranked))
+  expect_equal(rk$n_descartados, sum(is.na(tab$padj)))
+
+  # El comportamiento anterior sigue disponible para comparar.
+  rk_all <- deg_ranking_metric(tab, "log2FC", solo_testables = FALSE)
+  expect_gt(length(rk_all$ranked), length(rk$ranked))
+
+  # El ranking y el universo del ORA describen el mismo conjunto de genes.
+  expect_setequal(names(rk$ranked), deg_testable_universe(tab))
+})
+
+test_that("sin ningun padj el ranking usa la tabla entera", {
+  tab <- tabla_deg(); tab$padj <- NA_real_
+  # Un motor que no rellene padj dejaria el ranking vacio y GSEA no podria
+  # correr; es preferible un ranking imperfecto a ninguno.
+  rk <- deg_ranking_metric(tab, "log2FC")
+  expect_gt(length(rk$ranked), 0)
+})

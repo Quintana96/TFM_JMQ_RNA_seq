@@ -416,10 +416,34 @@ run_ora_directional <- function(deg_df, runner, include_all = TRUE) {
 #'     EMPATES cuando los p-valores saturan, y GSEA no los resuelve: el orden
 #'     dentro de un grupo empatado queda arbitrario. Por eso se devuelve
 #'     `ties_frac` y la interfaz avisa.
-deg_ranking_metric <- function(deg_df, metric = c("stat", "log2FC", "signed_p")) {
+#' @param solo_testables si TRUE (por defecto) el ranking se limita a los genes
+#'   EVALUABLES, es decir los que tienen p-valor ajustado.
+#'
+#'   Que GSEA use el ranking completo significa que no se umbraliza por
+#'   SIGNIFICACION, y eso es correcto: esa es su ventaja sobre el ORA. Pero el
+#'   filtrado independiente es otra cosa: los genes sin `padj` no eran
+#'   evaluables, y meterlos en el ranking rompe la coherencia con el universo
+#'   del ORA y sesga el resultado.
+#'
+#'   El sesgo es medible. Con conjuntos de 100 genes tomados AL AZAR del
+#'   universo evaluable, 8 de cada 10 salian "significativos" solo por estar
+#'   definidos sobre un subconjunto distinto del ranking; tomados del ranking
+#'   completo, 0 de 10. Los genes no evaluables (baja expresion) se concentran
+#'   en la cola, asi que cualquier conjunto realista queda desplazado hacia la
+#'   cabeza por construccion. Ademas los empates pasaban del 18 % al 0,05 %:
+#'   los p-valores de los genes sin evaluar saturan y GSEA no resuelve empates.
+deg_ranking_metric <- function(deg_df, metric = c("stat", "log2FC", "signed_p"),
+                               solo_testables = TRUE) {
   metric <- match.arg(metric)
   if (is.null(deg_df) || !nrow(deg_df)) {
     return(list(ranked = NULL, error = "Sin tabla DEG.", metric = metric))
+  }
+  n_total <- nrow(deg_df)
+  if (isTRUE(solo_testables) && "padj" %in% names(deg_df)) {
+    testables <- !is.na(deg_df$padj)
+    # Si ningun gen tiene padj (motores que no lo rellenan), se usa la tabla
+    # entera: es preferible un ranking imperfecto a no poder correr GSEA.
+    if (any(testables)) deg_df <- deg_df[testables, , drop = FALSE]
   }
   v <- switch(metric,
     "stat"     = deg_df$stat,
@@ -439,7 +463,8 @@ deg_ranking_metric <- function(deg_df, metric = c("stat", "log2FC", "signed_p"))
   v <- sort(v, decreasing = TRUE)
   # Fraccion de genes que comparten su valor con al menos otro gen.
   ties_frac <- if (length(v)) sum(duplicated(v) | duplicated(v, fromLast = TRUE)) / length(v) else NA_real_
-  list(ranked = v, metric = metric, n = length(v), ties_frac = ties_frac, error = NULL)
+  list(ranked = v, metric = metric, n = length(v), n_total = n_total,
+       n_descartados = n_total - nrow(deg_df), ties_frac = ties_frac, error = NULL)
 }
 
 #' GSEA sobre el ranking completo, via clusterProfiler (backend fgsea).
