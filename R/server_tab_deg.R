@@ -787,13 +787,16 @@ server_tab_deg <- function(input, output, session, state) {
 
   # ── UI de resultados ───────────────────────────────────────────────────────
   output$deg_results_ui <- renderUI({
-    if (is.null(state$deg_rv$results)) {
-      return(div(class = "alert alert-info mt-3",
-                 icon("circle-info"),
-                 " Configura datos y metadatos, y pulsa 'Lanzar DEG' para ver los resultados."))
-    }
+    if (is.null(state$deg_rv$results)) return(ui_tab_deg_placeholder())
     ui_tab_deg_results()
   })
+
+  # Nota sobre la pestana activa: cada ajuste reconstruye el navset de
+  # resultados entero, y Shiny restaura la pestana que estuviera seleccionada
+  # antes de la sustitucion. Es el comportamiento deseable —quien estaba mirando
+  # el volcano y relanza el ajuste sigue en el volcano— asi que NO se fuerza la
+  # vuelta a la primera pestana. En un ajuste inicial, donde no hay valor previo
+  # que restaurar, queda seleccionada la primera.
 
   # ── Contexto compartido y delegacion en las partes del modulo ──────────────
   #

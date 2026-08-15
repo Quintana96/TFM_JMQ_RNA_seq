@@ -47,155 +47,161 @@ ui_tab_deg_missing_pkgs <- function() {
 }
 
 #' UI del Tab 4 (cards de configuracion + zona de resultados).
-ui_tab_deg <- function() {
-  tagList(
-    ui_tab_deg_missing_pkgs(),
-    tags$div(
-      style = paste(
-        "display:grid;",
-        "grid-template-columns:repeat(3, minmax(280px, 1fr));",
-        "grid-auto-rows:minmax(220px, auto);",
-        "gap:12px; align-items:stretch; margin-top:6px;"
-      ),
+#' Panel 1 del acordeon: de donde salen los conteos.
+ui_deg_panel_datos <- function() {
+  accordion_panel(
+    "1 · Datos", value = "datos", icon = icon("table"),
+    radioButtons("deg_source", label = NULL,
+                 choices = c("Ejecucion actual" = "current",
+                             "Ejecucion guardada" = "saved",
+                             "Matriz subida" = "upload"),
+                 selected = "current"),
+    conditionalPanel(
+      "input.deg_source === 'saved'",
+      uiOutput("deg_saved_run_ui")
+    ),
+    conditionalPanel(
+      "input.deg_source === 'upload'",
+      fileInput("deg_counts_upload", "Matriz de conteos (TSV/CSV)",
+                accept = c(".tsv", ".csv", ".txt"), width = "100%")
+    ),
+    tags$small(class = "text-muted",
+               "Genes por filas, muestras por columnas. Se autodetectan los IDs de muestra.")
+  )
+}
 
-      # Card 1: Datos
-      card(
-        card_header("1. Datos"),
-        radioButtons("deg_source", label = NULL,
-                     choices = c("Ejecucion actual" = "current",
-                                 "Ejecucion guardada" = "saved",
-                                 "Matriz subida" = "upload"),
-                     selected = "current"),
-        conditionalPanel(
-          "input.deg_source === 'saved'",
-          uiOutput("deg_saved_run_ui")
-        ),
-        conditionalPanel(
-          "input.deg_source === 'upload'",
-          fileInput("deg_counts_upload", "Matriz de conteos (TSV/CSV)",
-                    accept = c(".tsv", ".csv", ".txt"))
-        ),
-        tags$small(class = "text-muted",
-                   "Genes por filas, muestras por columnas. Se autodetectan los IDs de muestra.")
-      ),
+#' Panel 2: samplesheet editable.
+ui_deg_panel_metadatos <- function() {
+  accordion_panel(
+    "2 · Metadatos", value = "metadatos", icon = icon("list-check"),
+    fileInput("deg_meta_upload", "Samplesheet (CSV/TSV)",
+              accept = c(".csv", ".tsv", ".txt"), width = "100%"),
+    div(class = "d-flex gap-2 flex-wrap mb-2",
+        actionButton("deg_meta_sync_btn",
+                     tagList(icon("rotate"), " Sincronizar"),
+                     class = "btn-sm btn-outline-secondary",
+                     title = "Sincronizar con las muestras detectadas"),
+        actionButton("deg_meta_add_row_btn",
+                     tagList(icon("plus"), " Anadir fila"),
+                     class = "btn-sm btn-outline-secondary")
+    ),
+    tags$small(class = "text-muted d-block mb-2",
+               "Columnas requeridas: sample_id, condition. Opcional: batch."),
+    # Seudonimizacion: los identificadores de muestra de un estudio clinico
+    # suelen ser identificativos y aqui viajan a graficos, informes y ficheros
+    # persistidos.
+    checkboxInput("deg_pseudonymize",
+                  "Seudonimizar identificadores de muestra", FALSE),
+    uiOutput("deg_identifying_cols"),
+    DTOutput("deg_meta_table")
+  )
+}
 
-      # Card 2: Metadatos
-      card(
-        card_header("2. Metadatos"),
-        fileInput("deg_meta_upload", "Samplesheet (CSV/TSV)",
-                  accept = c(".csv", ".tsv", ".txt")),
-        div(style = "display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;",
-            actionButton("deg_meta_sync_btn",
-                         tagList(icon("rotate"), " Sincronizar con muestras detectadas"),
-                         class = "btn-sm"),
-            actionButton("deg_meta_add_row_btn",
-                         tagList(icon("plus"), " Anadir fila"),
-                         class = "btn-sm")
-        ),
-        tags$small(class = "text-muted",
-                   "Columnas requeridas: sample_id, condition. Opcional: batch."),
-        # Seudonimizacion: los identificadores de muestra de un estudio clinico
-        # suelen ser identificativos y aqui viajan a graficos, informes y
-        # ficheros persistidos.
-        checkboxInput("deg_pseudonymize",
-                      "Seudonimizar identificadores de muestra", FALSE),
-        uiOutput("deg_identifying_cols"),
-        DTOutput("deg_meta_table")
-      ),
+#' Panel 3: diseno y contraste. El contraste se elige explicitamente (numerador
+#' y denominador) en lugar de deducirse del nivel de referencia: con tres o mas
+#' niveles, "nivel de referencia" dejaba sin decir cual de las comparaciones
+#' posibles se estaba mostrando.
+ui_deg_panel_diseno <- function() {
+  accordion_panel(
+    "3 · Diseno y contraste", value = "diseno", icon = icon("code-branch"),
+    selectInput("deg_condition_col", "Columna de condicion",
+                choices = c("condition"), selected = "condition"),
+    layout_columns(
+      col_widths = c(6, 6),
+      selectInput("deg_contrast_num", "Numerador", choices = NULL),
+      selectInput("deg_contrast_den", "Denominador", choices = NULL)
+    ),
+    tags$small(class = "text-muted d-block mb-2",
+               "log2FC > 0 significa mayor expresion en el numerador."),
+    checkboxInput("deg_use_batch", "Incluir variable batch", FALSE),
+    conditionalPanel(
+      "input.deg_use_batch === true && input.deg_advanced_design !== true",
+      selectInput("deg_batch_col", "Columna de batch",
+                  choices = c("batch"), selected = "batch")
+    ),
+    tags$hr(class = "my-2"),
+    checkboxInput("deg_advanced_design", "Diseno avanzado (formula libre)", FALSE),
+    conditionalPanel(
+      "input.deg_advanced_design === true",
+      textInput("deg_design_formula", NULL, value = "~ condition",
+                placeholder = "~ subject + condition", width = "100%"),
+      tags$small(class = "text-muted d-block mb-1",
+                 paste("Permite disenos pareados (~ subject + condition),",
+                       "covariables continuas (~ edad + condition) e",
+                       "interacciones (~ genotipo * condition). Se valida antes",
+                       "de ajustar.")),
+      uiOutput("deg_design_feedback"),
+      selectInput("deg_test_coef", "Coeficiente a testear", choices = NULL),
+      tags$small(class = "text-muted d-block",
+                 paste("Se rellena con los coeficientes del ultimo ajuste.",
+                       "Dejalo en automatico para testear el contraste de la",
+                       "condicion."))
+    )
+  )
+}
 
-      # Card 3: Diseno. El contraste se elige explicitamente (numerador y
-      # denominador) en lugar de deducirse del nivel de referencia: con tres o
-      # mas niveles, "nivel de referencia" dejaba sin decir cual de las
-      # comparaciones posibles se estaba mostrando.
-      card(
-        card_header("3. Diseno y contraste"),
-        selectInput("deg_condition_col", "Columna de condicion",
-                    choices = c("condition"), selected = "condition"),
-        layout_columns(
-          col_widths = c(6, 6),
-          selectInput("deg_contrast_num", "Numerador", choices = NULL),
-          selectInput("deg_contrast_den", "Denominador (referencia)", choices = NULL)
-        ),
-        tags$small(class = "text-muted d-block mb-2",
-                   "log2FC > 0 significa mayor expresion en el numerador."),
-        checkboxInput("deg_use_batch", "Incluir variable batch", FALSE),
-        conditionalPanel(
-          "input.deg_use_batch === true && input.deg_advanced_design !== true",
-          selectInput("deg_batch_col", "Columna de batch",
-                      choices = c("batch"), selected = "batch")
-        ),
-        tags$hr(class = "my-2"),
-        checkboxInput("deg_advanced_design", "Diseno avanzado (formula libre)", FALSE),
-        conditionalPanel(
-          "input.deg_advanced_design === true",
-          textInput("deg_design_formula", NULL, value = "~ condition",
-                    placeholder = "~ subject + condition"),
-          tags$small(class = "text-muted d-block mb-1",
-                     paste("Permite disenos pareados (~ subject + condition),",
-                           "covariables continuas (~ edad + condition) e",
-                           "interacciones (~ genotipo * condition). Se valida antes",
-                           "de ajustar.")),
-          uiOutput("deg_design_feedback"),
-          selectInput("deg_test_coef", "Coeficiente a testear", choices = NULL),
-          tags$small(class = "text-muted d-block",
-                     paste("Se rellena con los coeficientes del ultimo ajuste.",
-                           "Dejalo en automatico para testear el contraste de la",
-                           "condicion."))
-        )
+#' Panel 4: todo lo que forma parte del TEST. Cambiar cualquier cosa de aqui
+#' obliga a reajustar el modelo.
+ui_deg_panel_analisis <- function() {
+  accordion_panel(
+    "4 · Test estadistico", value = "analisis", icon = icon("flask"),
+    tags$small(class = "text-muted d-block mb-2",
+               "Define el test: cambiar algo de aqui exige relanzar el analisis."),
+    selectInput(
+      "deg_method", "Motor",
+      choices = list(
+        "Parametricos" = as.list(stats::setNames(DEG_METHODS_PARAMETRIC,
+                                                DEG_METHODS_PARAMETRIC)),
+        # Los robustos solo tienen sentido con n grande; se ofrecen siempre
+        # pero la app los sugiere unicamente cuando el tamano lo justifica.
+        "Robustos (n grande)" = as.list(stats::setNames(
+          c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"),
+          c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"))),
+        "Con incertidumbre de cuantificacion" = as.list(stats::setNames(
+          if (isTRUE(HAS_FISHPOND)) "Swish" else character(0),
+          if (isTRUE(HAS_FISHPOND)) "Swish" else character(0)))
       ),
+      selected = "DESeq2"),
+    uiOutput("deg_method_hint"),
+    selectInput("deg_prefilter_mode", "Prefiltrado de genes",
+                choices = c("Automatico (filterByExpr)" = "auto",
+                            "Manual (umbral explicito)" = "manual"),
+                selected = "auto"),
+    conditionalPanel(
+      "input.deg_prefilter_mode === 'manual'",
+      layout_columns(
+        col_widths = c(6, 6),
+        numericInput("deg_min_count", "Min. cuenta/fila", value = 10, min = 0, step = 1),
+        numericInput("deg_min_samples", "Min. muestras", value = NA, min = 1, step = 1)
+      ),
+      tags$small(class = "text-muted d-block mb-2",
+                 "Min. muestras vacio = tamano del grupo mas pequeno.")
+    ),
+    sliderInput("deg_fdr_target", "FDR objetivo (alpha)",
+                min = 0.01, max = 0.5, value = 0.05, step = 0.01),
+    numericInput("deg_lfc_threshold", "Umbral |log2FC| del test",
+                 value = 0, min = 0, max = 5, step = 0.25),
+    tags$small(class = "text-muted d-block mb-2",
+               paste("0 = test clasico (H0: log2FC = 0). Un valor > 0 testea",
+                     "H0: |log2FC| <= umbral dentro del modelo",
+                     "(lfcThreshold / glmTreat / treat), que es la forma de",
+                     "exigir un fold-change minimo sin perder el control de la FDR.")),
 
-      # Card 4: Analisis. Todo lo que hay aqui forma parte del TEST, asi que
-      # cambiarlo obliga a reajustar el modelo (boton "Lanzar DEG").
-      card(
-        card_header("4. Analisis DEG (define el test)"),
-        selectInput(
-          "deg_method", "Motor",
-          choices = list(
-            "Parametricos" = as.list(stats::setNames(DEG_METHODS_PARAMETRIC,
-                                                    DEG_METHODS_PARAMETRIC)),
-            # Los robustos solo tienen sentido con n grande; se ofrecen siempre
-            # pero la app los sugiere unicamente cuando el tamano lo justifica.
-            "Robustos (n grande)" = as.list(stats::setNames(
-              c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"),
-              c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"))),
-            "Con incertidumbre de cuantificacion" = as.list(stats::setNames(
-              if (isTRUE(HAS_FISHPOND)) "Swish" else character(0),
-              if (isTRUE(HAS_FISHPOND)) "Swish" else character(0)))
-          ),
-          selected = "DESeq2"),
-        uiOutput("deg_method_hint"),
-        selectInput("deg_prefilter_mode", "Prefiltrado de genes",
-                    choices = c("Automatico (filterByExpr)" = "auto",
-                                "Manual (umbral explicito)" = "manual"),
-                    selected = "auto"),
-        conditionalPanel(
-          "input.deg_prefilter_mode === 'manual'",
-          layout_columns(
-            col_widths = c(6, 6),
-            numericInput("deg_min_count", "Min. cuenta por fila", value = 10, min = 0, step = 1),
-            numericInput("deg_min_samples", "Min. muestras", value = NA, min = 1, step = 1)
-          ),
-          tags$small(class = "text-muted d-block mb-2",
-                     "Min. muestras vacio = tamano del grupo mas pequeno.")
-        ),
-        sliderInput("deg_fdr_target", "FDR objetivo (alpha)",
-                    min = 0.01, max = 0.5, value = 0.05, step = 0.01),
-        numericInput("deg_lfc_threshold", "Umbral |log2FC| del test",
-                     value = 0, min = 0, max = 5, step = 0.25),
-        tags$small(class = "text-muted d-block mb-2",
-                   paste("0 = test clasico (H0: log2FC = 0). Un valor > 0 testea",
-                         "H0: |log2FC| <= umbral dentro del modelo",
-                         "(lfcThreshold / glmTreat / treat), que es la forma de",
-                         "exigir un fold-change minimo sin perder el control de la FDR.")),
+    # Las opciones que solo aplican a DESeq2 van juntas y anunciadas como tales.
+    # Antes se intercalaban con las generales y cada una repetia "Solo DESeq2"
+    # en su propia nota al pie.
+    tags$details(class = "mb-2",
+      tags$summary(class = "small text-muted", "Opciones especificas de DESeq2"),
+      tags$div(class = "mt-2",
         checkboxInput("deg_shrink", "Encoger log2FC para visualizacion (apeglm)", TRUE),
         tags$small(class = "text-muted d-block mb-2",
-                   "Solo DESeq2. Anade la columna log2FC_shrunk; no altera los p-valores."),
+                   "Anade la columna log2FC_shrunk; no altera los p-valores."),
         if (isTRUE(HAS_IHW)) tagList(
           checkboxInput("deg_use_ihw", "Ponderar hipotesis con IHW en lugar de BH", FALSE),
           tags$small(class = "text-muted d-block mb-2",
-                     paste("Solo DESeq2. IHW pondera cada gen segun su baseMean y gana",
-                           "potencia sin perder el control de la FDR, pero necesita",
-                           "muchos tests para poder formar bins: con pocos genes se",
+                     paste("IHW pondera cada gen segun su baseMean y gana potencia",
+                           "sin perder el control de la FDR, pero necesita muchos",
+                           "tests para poder formar bins: con pocos genes se",
                            "reduce a BH."))
         ) else NULL,
         selectInput("deg_outliers", "Outliers de Cook",
@@ -204,77 +210,128 @@ ui_tab_deg <- function() {
                       "Sustituir el valor atipico y volver a testear" = "refit",
                       "Ignorar el filtro: tratarlos como biologia real" = "keep"),
                     selected = "na", width = "100%"),
+        tags$small(class = "text-muted d-block",
+                   paste("Un gen con un valor extremo en una muestra queda sin",
+                         "p-valor ajustado. Sustituirlo lo devuelve al test;",
+                         "ignorar el filtro es lo apropiado cuando el valor",
+                         "extremo ES el hallazgo (un gen que solo se expresa en",
+                         "una muestra tratada) y no un artefacto."))
+      )
+    )
+  )
+}
+
+#' Panel 5: variacion no deseada. La separacion entre las dos mitades es el
+#' punto didactico: corregir-para-testear y corregir-para-visualizar no son la
+#' misma operacion.
+ui_deg_panel_variacion <- function() {
+  accordion_panel(
+    "5 · Variacion no deseada", value = "variacion", icon = icon("wave-square"),
+    div(class = "alert alert-secondary py-2 px-2 small mb-2",
+        icon("circle-info"),
+        tags$b(" Dos cosas distintas."), " Para TESTEAR, la variacion se",
+        " modela como covariable y los conteos se dejan intactos. Para",
+        " VISUALIZAR (PCA, heatmap) hay que corregir la matriz, porque un",
+        " grafico no puede incluir covariables. Corregir la matriz y luego",
+        " testear sobre ella infla los falsos positivos."),
+    tags$b(class = "small d-block", "En el modelo (afecta al test)"),
+    if (isTRUE(HAS_SVA)) tagList(
+      checkboxInput("deg_use_sva",
+                    "Estimar variables sustitutas (sva) y anadirlas al diseno",
+                    FALSE),
+      conditionalPanel(
+        "input.deg_use_sva === true",
+        numericInput("deg_n_sv", "Numero de variables sustitutas (0 = automatico)",
+                     value = 0, min = 0, max = 10, step = 1),
         tags$small(class = "text-muted d-block mb-2",
-                   paste("Solo DESeq2. Un gen con un valor extremo en una muestra",
-                         "queda sin p-valor ajustado. Sustituirlo lo devuelve al",
-                         "test; ignorar el filtro es lo apropiado cuando el valor",
-                         "extremo ES el hallazgo (un gen que solo se expresa en una",
-                         "muestra tratada) y no un artefacto.")),
+                   paste("Cada variable sustituta consume un grado de libertad.",
+                         "Se reservan 3 g.l. residuales como minimo."))
+      )
+    ) else tags$small(class = "text-muted d-block mb-2",
+                      "sva no esta instalado."),
+    tags$hr(class = "my-2"),
+    tags$b(class = "small d-block", "Solo en los graficos (no afecta al test)"),
+    selectInput("deg_viz_correction", NULL,
+                choices = c("Sin correccion" = "none",
+                            "removeBatchEffect (limma)" = "rbe",
+                            "ComBat-seq (sva)" = "combat"),
+                selected = "none"),
+    tags$small(class = "text-muted d-block",
+               "Se aplica al PCA, al heatmap y a la matriz de distancias.")
+  )
+}
+
+#' Panel 6: filtros que solo recortan lo que se ve. Deliberadamente separados
+#' del panel 4 para que no se confundan con los umbrales del test.
+ui_deg_panel_filtros <- function() {
+  accordion_panel(
+    "6 · Filtros de visualizacion", value = "filtros", icon = icon("eye"),
+    div(class = "alert alert-secondary py-2 px-2 small mb-2",
+        icon("eye"),
+        tags$b(" Solo afectan a lo que se muestra."),
+        " No cambian el modelo ni el control de la FDR. Para exigir un",
+        " fold-change minimo con garantia estadistica usa el umbral del test",
+        " en el panel 4."),
+    sliderInput("deg_log2fc_cutoff", "|log2FC| minimo (visual)",
+                min = 0, max = 5, value = 0, step = 0.1),
+    sliderInput("deg_basemean_cutoff", "baseMean minimo (visual)",
+                min = 0, max = 1000, value = 0, step = 5)
+  )
+}
+
+#' UI del Tab 4.
+#'
+#' Antes era un grid rigido de seis tarjetas en tres columnas seguido de la zona
+#' de resultados. Los seis bloques tienen tamanos muy distintos —el del test
+#' ocupaba mas que los otros cinco juntos— asi que el grid quedaba desigual, y
+#' habia que recorrer una pantalla entera de parametros antes de ver el primer
+#' grafico, incluso para volver a mirar un resultado ya calculado.
+#'
+#' Ahora los parametros viven en una barra lateral plegable y los resultados
+#' ocupan el area principal: el ciclo real de trabajo es ajustar un parametro y
+#' mirar el efecto, no rellenar un formulario de una sola vez.
+ui_tab_deg <- function() {
+  tagList(
+    ui_tab_deg_missing_pkgs(),
+    layout_sidebar(
+      sidebar = sidebar(
+        title = "Parametros",
+        width = 400,
+        open = "desktop",
+        # La accion principal va arriba del todo y fuera del acordeon: estaba
+        # enterrada al final del cuarto bloque de seis, de modo que para
+        # relanzar el analisis habia que desplegar y recorrer esa tarjeta.
         actionButton("run_deg_btn",
                      tagList(icon("flask"), " Lanzar DEG"),
-                     class = "btn-success btn-lg"),
-        tags$div(style = "margin-top:8px;",
-                 verbatimTextOutput("deg_status_text", placeholder = TRUE))
+                     class = "btn-primary btn-lg w-100"),
+        tags$div(class = "mt-2",
+                 verbatimTextOutput("deg_status_text", placeholder = TRUE)),
+        accordion(
+          ui_deg_panel_datos(),
+          ui_deg_panel_metadatos(),
+          ui_deg_panel_diseno(),
+          ui_deg_panel_analisis(),
+          ui_deg_panel_variacion(),
+          ui_deg_panel_filtros(),
+          open = c("datos", "diseno"),
+          multiple = TRUE
+        )
       ),
-
-      # Card 5: variacion no deseada. La separacion entre las dos mitades de esta
-      # tarjeta es el punto didactico: corregir-para-testear y
-      # corregir-para-visualizar no son la misma operacion.
-      card(
-        card_header("5. Variacion no deseada"),
-        div(class = "alert alert-secondary py-2 px-2 small mb-2",
-            icon("circle-info"),
-            tags$b(" Dos cosas distintas."), " Para TESTEAR, la variacion se",
-            " modela como covariable y los conteos se dejan intactos. Para",
-            " VISUALIZAR (PCA, heatmap) hay que corregir la matriz, porque un",
-            " grafico no puede incluir covariables. Corregir la matriz y luego",
-            " testear sobre ella infla los falsos positivos."),
-        tags$b(class = "small d-block", "En el modelo (afecta al test)"),
-        if (isTRUE(HAS_SVA)) tagList(
-          checkboxInput("deg_use_sva",
-                        "Estimar variables sustitutas (sva) y anadirlas al diseno",
-                        FALSE),
-          conditionalPanel(
-            "input.deg_use_sva === true",
-            numericInput("deg_n_sv", "Numero de variables sustitutas (0 = automatico)",
-                         value = 0, min = 0, max = 10, step = 1),
-            tags$small(class = "text-muted d-block mb-2",
-                       paste("Cada variable sustituta consume un grado de libertad.",
-                             "Se reservan 3 g.l. residuales como minimo."))
-          )
-        ) else tags$small(class = "text-muted d-block mb-2",
-                          "sva no esta instalado."),
-        tags$hr(class = "my-2"),
-        tags$b(class = "small d-block", "Solo en los graficos (no afecta al test)"),
-        selectInput("deg_viz_correction", NULL,
-                    choices = c("Sin correccion" = "none",
-                                "removeBatchEffect (limma)" = "rbe",
-                                "ComBat-seq (sva)" = "combat"),
-                    selected = "none"),
-        tags$small(class = "text-muted d-block",
-                   "Se aplica al PCA, al heatmap y a la matriz de distancias.")
-      ),
-
-      # Card 6: filtros que solo recortan lo que se ve. Deliberadamente separados
-      # de la card 4 para que no se confundan con los umbrales del test.
-      card(
-        card_header("6. Filtros de visualizacion"),
-        div(class = "alert alert-secondary py-2 px-2 small mb-2",
-            icon("eye"),
-            tags$b(" Solo afectan a lo que se muestra."),
-            " No cambian el modelo ni el control de la FDR. Para exigir un",
-            " fold-change minimo con garantia estadistica usa el umbral del test",
-            " en la tarjeta 4."),
-        sliderInput("deg_log2fc_cutoff", "|log2FC| minimo (visual)",
-                    min = 0, max = 5, value = 0, step = 0.1),
-        sliderInput("deg_basemean_cutoff", "baseMean minimo (visual)",
-                    min = 0, max = 1000, value = 0, step = 5)
-      )
-    ),
-
-    # Zona de resultados (cargada al lanzar run_deg)
-    tags$div(class = "mt-3", uiOutput("deg_results_ui"))
+      # Zona de resultados (cargada al lanzar run_deg)
+      uiOutput("deg_results_ui")
+    )
   )
+}
+
+#' Estado inicial del area de resultados, antes del primer ajuste.
+#' Antes esta zona quedaba sencillamente vacia y no habia nada que indicara que
+#' faltaba pulsar "Lanzar DEG".
+ui_tab_deg_placeholder <- function(msg = NULL) {
+  div(class = "alert alert-secondary mt-2",
+      icon("circle-info"),
+      tags$b(" Sin resultados todavia. "),
+      msg %||% paste("Revisa los parametros de la barra lateral y pulsa",
+                     "\"Lanzar DEG\" para ajustar el modelo."))
 }
 
 #' Panel de diagnosticos post-ajuste.
@@ -290,19 +347,14 @@ ui_tab_deg_diagnostics <- function() {
     nav_panel(
       "p-valores",
       card(
-        card_header(tags$div(
-          class = "card-title-download",
-          tags$span("Distribucion de p-valores"),
-          div(style = "display:flex;gap:6px;align-items:center;",
-              selectInput("deg_diag_pv_subset", NULL,
-                          choices = c("Genes que pasan el filtrado independiente" = "tested",
-                                      "Todos los genes con p-valor" = "all"),
-                          selected = "tested", width = "320px"),
-              downloadButton("download_deg_pvalue_hist", label = NULL,
-                             icon = icon("download"),
-                             class = "btn-sm btn-outline-secondary header-download",
-                             title = "Descargar histograma"))
-        )),
+        card_header_tools(
+          "Distribucion de p-valores",
+          selectInput("deg_diag_pv_subset", NULL,
+                      choices = c("Genes que pasan el filtrado independiente" = "tested",
+                                  "Todos los genes con p-valor" = "all"),
+                      selected = "tested", width = "320px"),
+          download_id = "download_deg_pvalue_hist"
+        ),
         uiOutput("deg_diag_verdict"),
         plotly::plotlyOutput("deg_pvalue_hist", height = "340px")
       ),
@@ -377,9 +429,17 @@ ui_tab_deg_results <- function() {
     # para interpretar un volcano, y ademas es donde avisamos de que con >2
     # niveles de condition solo se esta mostrando una de las comparaciones.
     uiOutput("deg_contrast_banner"),
+    # Once pestanas al mismo nivel no caben en una linea a 1440 px: se partian
+    # en dos filas y la barra dejaba de leerse como una barra. Se agrupan por lo
+    # que responden —que genes cambian, como se parecen las muestras, se sostiene
+    # el ajuste, que significa— y dentro de cada grupo van pildoras.
     navset_tab(
       id = "deg_result_tabs",
       nav_panel(
+        "Genes",
+        navset_pill(
+          id = "deg_genes_tabs",
+          nav_panel(
         "Tabla",
         card(
           download_header("Tabla DEG (filtrada)", "download_deg_table"),
@@ -404,20 +464,21 @@ ui_tab_deg_results <- function() {
           plotly::plotlyOutput("deg_ma_plot", height = "480px")
         )
       ),
+        )
+      ),
       nav_panel(
+        "Muestras",
+        navset_pill(
+          id = "deg_samples_tabs",
+          nav_panel(
         "PCA",
         card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("PCA (vst/rlog)"),
-            div(style = "display:flex;gap:6px;align-items:center;",
-                selectInput("deg_pca_color", NULL, choices = c("condition"),
-                            selected = "condition", width = "190px"),
-                downloadButton("download_deg_pca_plot", label = NULL,
-                               icon = icon("download"),
-                               class = "btn-sm btn-outline-secondary header-download",
-                               title = "Descargar PCA"))
-          )),
+          card_header_tools(
+            "PCA (vst/rlog)",
+            selectInput("deg_pca_color", NULL, choices = c("condition"),
+                        selected = "condition", width = "190px"),
+            download_id = "download_deg_pca_plot"
+          ),
           # Colorear por covariable es lo que convierte el PCA en un diagnostico:
           # con el color fijado en `condition` es imposible ver que el batch esta
           # confundido con la condicion, que es justo lo que hay que detectar.
@@ -432,16 +493,12 @@ ui_tab_deg_results <- function() {
       nav_panel(
         "Heatmap top-N",
         card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("Heatmap top-N genes"),
-            div(style = "display:flex;gap:6px;align-items:center;",
-              numericInput("deg_heatmap_topn", NULL, value = 30, min = 5, max = 200, step = 5, width = "100px"),
-              downloadButton("download_deg_heatmap", label = NULL, icon = icon("download"),
-                             class = "btn-sm btn-outline-secondary header-download",
-                             title = "Descargar heatmap como PNG")
-            )
-          )),
+          card_header_tools(
+            "Heatmap top-N genes",
+            numericInput("deg_heatmap_topn", NULL, value = 30, min = 5, max = 200,
+                         step = 5, width = "100px"),
+            download_id = "download_deg_heatmap"
+          ),
           plotOutput("deg_heatmap", height = "560px")
         )
       ),
@@ -452,22 +509,26 @@ ui_tab_deg_results <- function() {
           plotOutput("deg_dist_heatmap", height = "520px")
         )
       ),
+        )
+      ),
       nav_panel(
         "Diagnosticos",
         ui_tab_deg_diagnostics()
       ),
       nav_panel(
+        "Robustez",
+        navset_pill(
+          id = "deg_robust_tabs",
+          nav_panel(
         "Replicabilidad",
         card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("Replicabilidad por bootstrap"),
-            div(style = "display:flex;gap:6px;align-items:center;",
-                numericInput("deg_boot_n", NULL, value = 20, min = 5, max = 100,
-                             step = 5, width = "90px"),
-                actionButton("deg_run_boot_btn", tagList(icon("dice"), " Estimar"),
-                             class = "btn-sm"))
-          )),
+          card_header_tools(
+            "Replicabilidad por bootstrap",
+            numericInput("deg_boot_n", NULL, value = 20, min = 5, max = 100,
+                         step = 5, width = "90px"),
+            actionButton("deg_run_boot_btn", tagList(icon("dice"), " Estimar"),
+                         class = "btn-sm btn-outline-secondary")
+          ),
           tags$p(class = "small text-muted mb-1",
                  paste("Remuestrea las muestras, repite el analisis y mide si la",
                        "lista aguanta. Es el procedimiento que recomienda el estudio",
@@ -482,16 +543,13 @@ ui_tab_deg_results <- function() {
       nav_panel(
         "Comparar metodos",
         card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("Solapamiento entre metodos"),
-            div(style = "display:flex;gap:6px;align-items:center;",
-                selectInput("deg_compare_method", NULL, choices = NULL,
-                            width = "180px"),
-                actionButton("deg_run_compare_btn", tagList(icon("code-compare"),
-                                                           " Comparar"),
-                             class = "btn-sm"))
-          )),
+          card_header_tools(
+            "Solapamiento entre metodos",
+            selectInput("deg_compare_method", NULL, choices = NULL, width = "180px"),
+            actionButton("deg_run_compare_btn",
+                         tagList(icon("code-compare"), " Comparar"),
+                         class = "btn-sm btn-outline-secondary")
+          ),
           tags$p(class = "small text-muted mb-1",
                  paste("Corre un segundo motor sobre los mismos datos y compara las",
                        "listas de significativos. Con n grande, la discrepancia entre",
@@ -501,76 +559,87 @@ ui_tab_deg_results <- function() {
           plotly::plotlyOutput("deg_compare_plot", height = "300px")
         )
       ),
+        )
+      ),
       nav_panel(
         "Enriquecimiento",
         card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("Enriquecimiento funcional"),
-            div(style = "display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;",
-                # ORA parte de la lista umbralizada y por tanto es ciego a
-                # senales debiles pero coordinadas; GSEA usa el ranking completo.
-                selectInput("deg_enrich_approach", NULL,
-                            choices = c(c("ORA (lista significativa)" = "ora"),
-                                        if (isTRUE(HAS_FGSEA))
-                                          c("GSEA (ranking completo)" = "gsea")),
-                            selected = "ora", width = "215px"),
-                # GMT no es una ontologia mas: es la via para trabajar sin OrgDb
-                # (organismos no modelo) y con colecciones curadas como MSigDB.
-                selectInput("deg_ontology", NULL,
-                            choices = c("GO: Procesos biologicos" = "BP",
-                                        "GO: Funcion molecular" = "MF",
-                                        "GO: Componente celular" = "CC",
-                                        "KEGG" = "KEGG",
-                                        "Gene sets propios (GMT)" = "GMT"),
-                            selected = "BP", width = "200px"),
-                conditionalPanel(
-                  "input.deg_enrich_approach === 'gsea'",
-                  selectInput("deg_gsea_metric", NULL,
-                              choices = c("Metrica: stat" = "stat",
-                                          "Metrica: log2FC" = "log2FC",
-                                          "Metrica: signo x -log10(p)" = "signed_p"),
-                              selected = "stat", width = "220px")
-                ),
-                # keyType: los IDs de featureCounts sobre un GFF procariota son
-                # locus tags, no simbolos. Fijarlo a SYMBOL hacia fallar el mapeo
-                # en silencio, asi que ahora es explicito y seleccionable.
-                # Organismo: la app tenia el OrgDb cableado a E. coli, asi que
-                # con datos de cualquier otro organismo el enriquecimiento GO no
-                # podia funcionar aunque su paquete estuviera instalado.
-                conditionalPanel(
-                  "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
-                  selectInput("deg_orgdb", NULL,
-                              choices = if (length(ORGDBS_DISPONIBLES))
-                                stats::setNames(ORGDBS_DISPONIBLES,
-                                                vapply(ORGDBS_DISPONIBLES, orgdb_label,
-                                                       character(1)))
-                              else c("(sin OrgDb instalado)" = ""),
-                              selected = if (length(ORGDBS_DISPONIBLES))
-                                ORGDBS_DISPONIBLES[1] else "",
-                              width = "260px")
-                ),
-                conditionalPanel(
-                  "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
-                  selectInput("deg_go_keytype", NULL,
-                              choices = c("SYMBOL"), selected = "SYMBOL",
-                              width = "150px")
-                ),
-                conditionalPanel(
-                  "input.deg_ontology === 'KEGG'",
-                  textInput("deg_kegg_organism", NULL, value = "eco",
-                            placeholder = "eco, hsa, mmu...", width = "110px")
-                ),
-                conditionalPanel(
-                  "input.deg_ontology === 'KEGG'",
-                  selectInput("deg_kegg_keytype", NULL,
-                              choices = c("kegg", "ncbi-geneid", "ncbi-proteinid", "uniprot"),
-                              selected = "kegg", width = "150px")
-                ),
-                actionButton("deg_run_enrich_btn",
-                             tagList(icon("play"), " Calcular"),
-                             class = "btn-sm"))
-          )),
+          # Los siete selectores de este bloque vivian dentro de la cabecera de
+          # la tarjeta, sin etiqueta ninguna, apoyados solo en que su valor por
+          # defecto se leyera como titulo ("ORA (lista significativa)",
+          # "GO: Procesos biologicos", "Metrica: stat"...). En cuanto se cambiaba
+          # uno dejaba de estar claro que era, y los que aparecen y desaparecen
+          # segun la ontologia hacian saltar el ancho de la cabecera. Ahora van
+          # en el cuerpo, con etiqueta, y en la cabecera queda solo la accion.
+          card_header_tools(
+            "Enriquecimiento funcional",
+            actionButton("deg_run_enrich_btn",
+                         tagList(icon("play"), " Calcular"),
+                         class = "btn-sm btn-primary")
+          ),
+
+          div(class = "border rounded p-2 mb-3",
+            layout_columns(
+              col_widths = c(4, 4, 4),
+              # ORA parte de la lista umbralizada y por tanto es ciego a
+              # senales debiles pero coordinadas; GSEA usa el ranking completo.
+              selectInput("deg_enrich_approach", "Enfoque",
+                          choices = c(c("ORA (lista significativa)" = "ora"),
+                                      if (isTRUE(HAS_FGSEA))
+                                        c("GSEA (ranking completo)" = "gsea")),
+                          selected = "ora"),
+              # GMT no es una ontologia mas: es la via para trabajar sin OrgDb
+              # (organismos no modelo) y con colecciones curadas como MSigDB.
+              selectInput("deg_ontology", "Coleccion",
+                          choices = c("GO: Procesos biologicos" = "BP",
+                                      "GO: Funcion molecular" = "MF",
+                                      "GO: Componente celular" = "CC",
+                                      "KEGG" = "KEGG",
+                                      "Gene sets propios (GMT)" = "GMT"),
+                          selected = "BP"),
+              conditionalPanel(
+                "input.deg_enrich_approach === 'gsea'",
+                selectInput("deg_gsea_metric", "Metrica de ranking",
+                            choices = c("stat" = "stat",
+                                        "log2FC" = "log2FC",
+                                        "signo x -log10(p)" = "signed_p"),
+                            selected = "stat")
+              )
+            ),
+            # keyType: los IDs de featureCounts sobre un GFF procariota son
+            # locus tags, no simbolos. Fijarlo a SYMBOL hacia fallar el mapeo
+            # en silencio, asi que ahora es explicito y seleccionable.
+            # Organismo: la app tenia el OrgDb cableado a E. coli, asi que con
+            # datos de cualquier otro organismo el enriquecimiento GO no podia
+            # funcionar aunque su paquete estuviera instalado.
+            conditionalPanel(
+              "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
+              layout_columns(
+                col_widths = c(8, 4),
+                selectInput("deg_orgdb", "Organismo (OrgDb)",
+                            choices = if (length(ORGDBS_DISPONIBLES))
+                              stats::setNames(ORGDBS_DISPONIBLES,
+                                              vapply(ORGDBS_DISPONIBLES, orgdb_label,
+                                                     character(1)))
+                            else c("(sin OrgDb instalado)" = ""),
+                            selected = if (length(ORGDBS_DISPONIBLES))
+                              ORGDBS_DISPONIBLES[1] else ""),
+                selectInput("deg_go_keytype", "Tipo de identificador",
+                            choices = c("SYMBOL"), selected = "SYMBOL")
+              )
+            ),
+            conditionalPanel(
+              "input.deg_ontology === 'KEGG'",
+              layout_columns(
+                col_widths = c(6, 6),
+                textInput("deg_kegg_organism", "Codigo de organismo KEGG",
+                          value = "eco", placeholder = "eco, hsa, mmu..."),
+                selectInput("deg_kegg_keytype", "Tipo de identificador",
+                            choices = c("kegg", "ncbi-geneid", "ncbi-proteinid", "uniprot"),
+                            selected = "kegg")
+              )
+            )
+          ),
 
           # Conjuntos propios en formato GMT. Con esto el enriquecimiento deja de
           # depender de que exista un OrgDb del organismo: basta con un fichero
@@ -657,12 +726,9 @@ ui_tab_deg_results <- function() {
               plotly::plotlyOutput("deg_enrich_dotplot", height = "440px"),
               tags$hr(),
               tags$div(
-                class = "card-title-download",
-                style = "margin-bottom:6px;",
-                tags$span("Tabla de terminos enriquecidos"),
-                downloadButton("download_enrich_table", label = NULL, icon = icon("download"),
-                               class = "btn-sm btn-outline-secondary header-download",
-                               title = "Descargar tabla de enriquecimiento")
+                class = "card-title-download mb-2",
+                tags$span(class = "fw-semibold", "Tabla de terminos enriquecidos"),
+                header_download_btn("download_enrich_table", "la tabla de enriquecimiento")
               ),
               DTOutput("deg_enrich_table")
             ),
