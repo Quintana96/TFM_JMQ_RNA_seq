@@ -1,6 +1,10 @@
 #!/bin/bash
 
-set -euo pipefail
+# -E (errtrace) hace que el trap ERR se herede en funciones y subshells. Sin el,
+# un fallo dentro de run_cmd o del pipe bowtie2|samtools terminaba el script
+# (correcto) pero sin el mensaje que dice en que linea, que es justo lo que se
+# necesita para diagnosticarlo.
+set -Eeuo pipefail
 shopt -s nullglob
 
 # ============================================================================
@@ -107,7 +111,43 @@ run_cmd() {
     "$@"
 }
 
-trap 'log "ERROR: fallo en la linea ${LINENO}. Revisa el comando anterior."' ERR
+# Helpers portables: macOS trae `md5` y `stat -f`, Linux `md5sum` y `stat -c`.
+md5_of() {
+    [[ -f "$1" ]] || { echo "—"; return 0; }
+    if command -v md5sum >/dev/null 2>&1; then
+        md5sum "$1" | awk '{print $1}'
+    elif command -v md5 >/dev/null 2>&1; then
+        md5 -q "$1"
+    else
+        echo "—"
+    fi
+}
+
+file_size() {
+    [[ -e "$1" ]] || { echo 0; return 0; }
+    stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo 0
+}
+
+trap 'log "ERROR: fallo en la linea ${BASH_LINENO[0]:-$LINENO}${FUNCNAME[0]:+ (funcion ${FUNCNAME[0]})}. Revisa el comando anterior."' ERR
+
+# Estado de salida como FICHERO, no solo como texto en el log.
+#
+# La app deducia si una ejecucion habia terminado bien buscando la frase
+# "Analysis completed successfully" en el log y clasificaba como error cualquier
+# tail que contuviera "Error". Eso es fragil por partida doble: cambiar el texto
+# del log rompe la deteccion, y el aviso de una herramienta que mencione "Error"
+# marca como fallida una ejecucion correcta. Con esto queda un dato explicito.
+RUN_STATUS_FILE=""
+write_exit_status() {
+    local code=$1
+    [[ -n "$RUN_STATUS_FILE" ]] || return 0
+    {
+        printf 'exit_code\t%s\n'   "$code"
+        printf 'status\t%s\n'      "$([[ "$code" -eq 0 ]] && echo success || echo error)"
+        printf 'finished_at\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+    } > "$RUN_STATUS_FILE"
+}
+trap 'write_exit_status $?' EXIT
 
 check_command() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -141,6 +181,12 @@ salmon_index_type() {
     fi
 }
 
+# El estado de salida se habilita ANTES de validar las herramientas: la causa
+# mas frecuente de fallo temprano es justamente que falte un binario en PATH, y
+# esa ejecucion tambien tiene que dejar constancia de por que murio.
+mkdir -p "$OUTPUT"
+RUN_STATUS_FILE="${OUTPUT}/exit_status.tsv"
+
 # Validate required tools early
 log "Validando herramientas en PATH..."
 log "PATH=$PATH"
@@ -172,6 +218,7 @@ KALLISTO_INDEX="${OUTPUT}/indices/kallisto/ecoli.idx"
 mkdir -p "$QC" "$TRIMMED" "$ALIGNMENTS" "$COUNTS"
 mkdir -p "$(dirname "$BOWTIE_INDEX")" "$(dirname "$SALMON_INDEX")" "$(dirname "$KALLISTO_INDEX")"
 
+
 FASTQ_FILES=( "$INPUT"/*.fastq.gz "$INPUT"/*.fastq )
 R1_FILES=( "$INPUT"/*_1.fastq.gz "$INPUT"/*_R1.fastq.gz "$INPUT"/*_1.fastq "$INPUT"/*_R1.fastq )
 SINGLE_FILES=()
@@ -196,6 +243,30 @@ if [[ "$READ_TYPE" == "se" && ${#SINGLE_FILES[@]} -eq 0 ]]; then
     exit 1
 fi
 
+# ── Integridad de los FASTQ ────────────────────────────────────────────────
+# Un .gz truncado (transferencia interrumpida, disco lleno) fallaba tarde y con
+# un error criptico de fastp o del alineador, a veces despues de horas de
+# ejecucion. Comprobarlo aqui cuesta segundos y el mensaje dice que fichero es.
+log "Comprobando integridad de los FASTQ..."
+corruptos=0
+for fq in "${FASTQ_FILES[@]}"; do
+    [[ -e "$fq" ]] || continue
+    if [[ "$fq" == *.gz ]]; then
+        if ! gzip -t "$fq" 2>/dev/null; then
+            log "! FASTQ corrupto o truncado: $fq"
+            corruptos=$((corruptos + 1))
+        fi
+    elif [[ ! -s "$fq" ]]; then
+        log "! FASTQ vacio: $fq"
+        corruptos=$((corruptos + 1))
+    fi
+done
+if [[ $corruptos -gt 0 ]]; then
+    log "Error: $corruptos fichero(s) FASTQ no superan la comprobacion de integridad."
+    exit 1
+fi
+log "+ ${#FASTQ_FILES[@]} FASTQ integros"
+
 log "Entrada: $INPUT"
 log "Salida: $OUTPUT"
 log "Genoma/transcriptoma: $GENOME_FILE"
@@ -206,18 +277,71 @@ log "Tipo de lectura: $READ_TYPE"
 # Parametros en formato legible por la app. Sin esto, una ejecucion guardada no
 # deja rastro de con que anotacion se hizo, y la app no puede construir el mapa
 # transcrito-gen para tximport ni identificar los genes de rRNA.
+RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
 {
+    printf 'run_id\t%s\n'          "$RUN_ID"
     printf 'input_dir\t%s\n'       "$INPUT"
     printf 'output_dir\t%s\n'      "$OUTPUT"
     printf 'genome_file\t%s\n'     "$GENOME_FILE"
     printf 'annotation_file\t%s\n' "$ANNOTATION_FILE"
     printf 'alignment_type\t%s\n'  "$ALIGNMENT_TYPE"
+    printf 'tool\t%s\n'            "$ALIGNMENT_TYPE"
     printf 'read_type\t%s\n'       "$READ_TYPE"
+    printf 'fragment_length\t%s\n' "$FRAGMENT_LENGTH"
+    printf 'fragment_sd\t%s\n'     "$FRAGMENT_SD"
     printf 'inferential_reps\t%s\n' "$INFERENTIAL_REPS"
     printf 'feature_type\t%s\n'     "$FEATURE_TYPE"
     printf 'feature_attr\t%s\n'     "$FEATURE_ATTR"
+    printf 'threads\t%s\n'          "$THREADS"
+    printf 'n_fastq\t%s\n'          "${#FASTQ_FILES[@]}"
+    # Quien, donde y con que version del pipeline. Es el minimo de un registro
+    # de auditoria y lo exigen las buenas practicas de laboratorio clinico para
+    # los componentes informaticos.
+    printf 'user\t%s\n'             "$(whoami 2>/dev/null || echo '—')"
+    printf 'host\t%s\n'             "$(hostname 2>/dev/null || echo '—')"
+    printf 'workflow_md5\t%s\n'     "$(md5_of "${BASH_SOURCE[0]}")"
+    printf 'workflow_git_commit\t%s\n' \
+        "$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo '—')"
     printf 'started_at\t%s\n'      "$(date '+%Y-%m-%d %H:%M:%S')"
 } > "${OUTPUT}/run_params.tsv"
+
+# ── Versiones de las herramientas ──────────────────────────────────────────
+# Sin esto es imposible reconstruir que produjo exactamente un resultado. Se ha
+# demostrado que cambiar la version de una herramienta del pipeline altera la
+# lista de genes diferenciales (Wessels Perelo et al., NAR Genom Bioinform 2024),
+# asi que la version es parte del resultado, no un detalle de instalacion.
+log "Registrando versiones de las herramientas..."
+{
+    printf 'tool\tversion\tpath\n'
+    for t in fastqc fastp multiqc bowtie2 samtools featureCounts salmon kallisto; do
+        if command -v "$t" >/dev/null 2>&1; then
+            v="$("$t" --version 2>&1 | head -1 | tr -d '\r' | sed 's/\t/ /g')"
+            printf '%s\t%s\t%s\n' "$t" "${v:-—}" "$(command -v "$t")"
+        else
+            printf '%s\t(no instalado)\t—\n' "$t"
+        fi
+    done
+    printf 'R\t%s\t%s\n' \
+        "$(Rscript -e 'cat(as.character(getRversion()))' 2>/dev/null || echo '—')" \
+        "$(command -v Rscript || echo '—')"
+} > "${OUTPUT}/versions.tsv"
+
+# ── Huella de los ficheros de entrada ──────────────────────────────────────
+# Permite demostrar que dos ejecuciones partieron de los mismos datos, y
+# detectar que una entrada cambio despues de analizarla.
+log "Calculando checksums de las entradas..."
+{
+    printf 'file\tsize_bytes\tmd5\n'
+    for f in "$GENOME_FILE" "$ANNOTATION_FILE"; do
+        [[ -f "$f" ]] || continue
+        printf '%s\t%s\t%s\n' "$f" "$(file_size "$f")" "$(md5_of "$f")"
+    done
+    for fq in "${FASTQ_FILES[@]}"; do
+        [[ -e "$fq" ]] || continue
+        printf '%s\t%s\t%s\n' "$fq" "$(file_size "$fq")" "$(md5_of "$fq")"
+    done
+} > "${OUTPUT}/checksums.tsv"
+log "+ versions.tsv y checksums.tsv escritos"
 if [[ "$READ_TYPE" == "se" && "$ALIGNMENT_TYPE" == "kallisto" ]]; then
     log "Fragment length for kallisto single-end: mean=$FRAGMENT_LENGTH sd=$FRAGMENT_SD"
 fi

@@ -1,8 +1,33 @@
 #' utils_status.R
 #' Estado de una run a partir de su log y badges visuales.
 
-#' Infiere el estado ("completado" / "error" / "incompleto" / "sin log") leyendo el tail del log
+#' Lee el estado de salida que el workflow deja como fichero.
+#'
+#' @return list(exit_code, status, finished_at) o NULL si no existe.
+read_exit_status <- function(out_dir) {
+  f <- file.path(out_dir, "exit_status.tsv")
+  if (!file.exists(f)) return(NULL)
+  df <- tryCatch(
+    utils::read.delim(f, header = FALSE, col.names = c("key", "value"),
+                      stringsAsFactors = FALSE, quote = ""),
+    error = function(e) NULL)
+  if (is.null(df) || !nrow(df)) return(NULL)
+  as.list(stats::setNames(trimws(df$value), trimws(df$key)))
+}
+
+#' Infiere el estado de una ejecucion: "completado" / "error" / "incompleto" / "sin log".
+#'
+#' Prioriza el fichero `exit_status.tsv` que escribe el workflow con un `trap
+#' EXIT`, porque es un dato explicito. El respaldo por texto del log queda para
+#' ejecuciones anteriores a que ese fichero existiera, y es fragil por dos
+#' motivos: depende de una frase concreta en ingles, y clasifica como fallida
+#' cualquier ejecucion cuyo log contenga la palabra "Error", aunque venga de un
+#' aviso inocuo de una herramienta.
 status_from_log <- function(out_dir) {
+  st <- read_exit_status(out_dir)
+  if (!is.null(st) && !is.null(st$status)) {
+    return(switch(st$status, success = "completado", error = "error", "incompleto"))
+  }
   log_file <- file.path(out_dir, "workflow_live.log")
   if (!file.exists(log_file)) return("sin log")
   txt <- read_tail_text(log_file, max_bytes = 512000L)
@@ -11,6 +36,24 @@ status_from_log <- function(out_dir) {
   if (grepl("ERROR|Error \\(codigo|fallo en la linea", txt, ignore.case = TRUE))
     return("error")
   "incompleto"
+}
+
+#' Versiones de las herramientas registradas por el workflow.
+#' @return data.frame(tool, version, path) o NULL.
+read_tool_versions <- function(out_dir) {
+  f <- file.path(out_dir, "versions.tsv")
+  if (!file.exists(f)) return(NULL)
+  tryCatch(utils::read.delim(f, stringsAsFactors = FALSE, quote = ""),
+           error = function(e) NULL)
+}
+
+#' Checksums de las entradas registrados por el workflow.
+#' @return data.frame(file, size_bytes, md5) o NULL.
+read_input_checksums <- function(out_dir) {
+  f <- file.path(out_dir, "checksums.tsv")
+  if (!file.exists(f)) return(NULL)
+  tryCatch(utils::read.delim(f, stringsAsFactors = FALSE, quote = ""),
+           error = function(e) NULL)
 }
 
 #' Renderiza un badge HTML con color pastel segun el estado
