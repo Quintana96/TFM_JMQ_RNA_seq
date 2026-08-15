@@ -47,7 +47,9 @@ multiqc_data/
 .env
 .Renviron
 
-# Documentacion de auditoria interna (notas de trabajo, no forman parte del
-# codigo entregable ni de la memoria)
+# Documentacion de trabajo. El unico markdown que se versiona es README.md: el
+# resto son notas de auditoria, validacion y planificacion que acompanan al
+# desarrollo pero no forman parte del codigo entregable.
 docs/
 R/CHANGELOG_AUDIT.md
+VALIDACION.md
