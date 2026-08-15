@@ -1,229 +1,263 @@
 #' ui_tab_config.R
-#' Contenido del nav_panel "1 . Configuracion" (6 cards en grid 3x2).
+#' Contenido del nav_panel "1 . Configuracion".
+#'
+#' Reorganizacion respecto de la version anterior (un grid de seis a ocho
+#' tarjetas de igual peso):
+#'
+#'   - Se separa lo que el usuario RELLENA (columna izquierda) de lo que la
+#'     aplicacion le RESPONDE (columna derecha: checklist, errores, muestras).
+#'     Antes ambas cosas se alternaban en el mismo grid, de modo que el
+#'     checklist podia quedar a dos tarjetas de distancia del campo que lo
+#'     dejaba en rojo.
+#'   - La tarjeta "Resumen" se ha eliminado: repetia `textOutput("input_dir_path")`
+#'     y `textOutput("output_base_path")`, que ya estaban en "Rutas y archivos".
+#'     Shiny vincula cada valor de salida a UN solo elemento del DOM, asi que la
+#'     segunda copia se quedaba permanentemente en blanco; en la pantalla se veia
+#'     un "Directorio de salida automatico" vacio con la ruta correcta a dos
+#'     tarjetas de distancia. Cada salida aparece ahora una unica vez.
+#'   - `uiOutput("validation_ui")` estaba definido en el server pero no existia
+#'     en ninguna parte de la interfaz: la lista de errores concretos no se
+#'     mostraba nunca y el boton de continuar se quedaba gris sin explicar por
+#'     que. Ahora acompana al checklist.
+#'   - Las opciones avanzadas y la calculadora de potencia bajan a un acordeon
+#'     plegado. Son utiles, pero no forman parte de configurar una ejecucion, y
+#'     ocupaban dos terceras partes del alto de la pestana.
+
+#' Bloque de rutas efectivas (cada salida aparece una sola vez en toda la app).
+ui_config_paths <- function() {
+  tags$dl(class = "row small mb-0 mt-2",
+    tags$dt(class = "col-4 text-muted", "Entrada"),
+    tags$dd(class = "col-8 mb-1", tags$code(textOutput("input_dir_path", inline = TRUE))),
+    tags$dt(class = "col-4 text-muted", "Salida"),
+    tags$dd(class = "col-8 mb-1", tags$code(textOutput("output_base_path", inline = TRUE))),
+    tags$dt(class = "col-4 text-muted", "Workflow"),
+    tags$dd(class = "col-8 mb-0", tags$code(textOutput("workflow_path_text", inline = TRUE)))
+  )
+}
+
+#' Acordeon con lo que no forma parte de configurar la ejecucion en curso.
+ui_config_extras <- function() {
+  paneles <- list(
+    accordion_panel(
+      "Opciones avanzadas del pipeline",
+      icon = icon("sliders"),
+      value = "adv",
+      tags$p(class = "small text-muted",
+             "Orientacion de la libreria, hilos y replicas inferenciales."),
+      layout_columns(
+        col_widths = c(4, 4, 4),
+        selectInput("adv_strandedness", "Orientacion de la libreria",
+                    choices = c("Inferir de los datos" = "auto",
+                                "Sin orientar (-s 0)" = "0",
+                                "Directa (-s 1)" = "1",
+                                "Inversa, protocolos dUTP (-s 2)" = "2"),
+                    selected = "auto"),
+        numericInput("adv_threads", "Hilos",
+                     value = max(1, parallel::detectCores() - 1),
+                     min = 1, max = 64, step = 1),
+        numericInput("adv_inferential_reps", "Replicas inferenciales",
+                     value = 20, min = 0, max = 100, step = 5)
+      ),
+      tags$small(class = "text-muted d-block",
+                 paste("Contar como no orientada una libreria stranded suma las",
+                       "lecturas antisentido y degrada la especificidad, sobre",
+                       "todo en genomas densos como los procariotas. Las replicas",
+                       "inferenciales (salmon/kallisto) son las que necesita el",
+                       "motor Swish; 0 las desactiva."))
+    )
+  )
+
+  # La calculadora de potencia va en configuracion porque la decision que
+  # informa (cuantas replicas) se toma ANTES de secuenciar, no despues.
+  if (isTRUE(HAS_RNASEQPOWER)) {
+    paneles <- c(paneles, list(accordion_panel(
+      "Potencia y tamano muestral",
+      icon = icon("chart-line"),
+      value = "power",
+      tags$p(class = "small text-muted mb-2",
+             paste("El tamano muestral es el determinante mas fuerte de la",
+                   "calidad del resultado. Esta calculadora orienta, no",
+                   "garantiza: ninguna herramienta es fiable cuando se exigen",
+                   "efectos pequenos y potencias altas, porque los parametros",
+                   "no se pueden fijar bien desde datos piloto limitados.")),
+      layout_columns(
+        col_widths = c(3, 3, 3, 3),
+        numericInput("pw_n", "Replicas por grupo", value = 3, min = 2, max = 100, step = 1),
+        numericInput("pw_effect", "Fold-change a detectar", value = 2, min = 1.1,
+                     max = 10, step = 0.1),
+        numericInput("pw_cv", "CV biologico", value = 0.4, min = 0.05, max = 1.5,
+                     step = 0.05),
+        numericInput("pw_depth", "Profundidad media por gen", value = 20, min = 1,
+                     max = 1000, step = 5)
+      ),
+      # El CV y la profundidad son justo los parametros que quien usa la app no
+      # conoce, y de los que depende todo el resultado. Si hay una matriz
+      # cargada se pueden MEDIR en lugar de adivinarse.
+      tags$div(class = "d-flex align-items-center gap-2 mb-2 flex-wrap",
+        actionButton("pw_estimate_btn",
+                     tagList(icon("wand-magic-sparkles"), " Estimar de mis datos"),
+                     class = "btn-outline-secondary btn-sm"),
+        tags$small(class = "text-muted", uiOutput("pw_estimate_note", inline = TRUE))
+      ),
+      tags$small(class = "text-muted d-block mb-2",
+                 paste("CV tipico: 0,1 en lineas celulares, 0,4 en muestras",
+                       "humanas. La profundidad es el numero medio de conteos por",
+                       "gen, no el total de lecturas.")),
+      uiOutput("pw_verdict"),
+      plotly::plotlyOutput("pw_curve", height = "300px")
+    )))
+  }
+
+  tagList(
+    section_title("Herramientas de apoyo",
+                  "No hacen falta para lanzar el analisis; se despliegan cuando se necesitan."),
+    do.call(accordion, c(paneles, list(open = FALSE, multiple = TRUE)))
+  )
+}
 
 #' Devuelve el contenido (tagList) del Tab 1
 ui_tab_config <- function() {
-  layout_columns(
-    col_widths = c(12),
-    div(style = "display:flex; justify-content:flex-end; margin-bottom:12px;",
-        actionButton("btn_to_processing",
-                     tagList("Continuar al procesamiento", icon("arrow-right")),
-                     class = "btn-continue-blue btn-lg")
-    ),
-    tags$div(
-      style = paste(
-        "display:grid;",
-        "grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));",
-        "grid-auto-rows:minmax(240px, auto);",
-        "gap:12px; align-items:stretch;"
-      ),
+  tagList(
 
-      # Card 1: Modo de inicio
-      card(
-        card_header("Modo de inicio"),
-        style = "min-height:240px; display:flex; flex-direction:column; justify-content:space-between; overflow:auto;",
-        radioButtons(
-          "start_mode", label = NULL,
-          choices  = c("Ejecutar workflow completo" = "workflow",
-                       "Analisis a partir de matriz de conteos" = "load"),
-          selected = "workflow", inline = TRUE
-        ),
-        conditionalPanel(
-          condition = "input.start_mode === 'load'",
-          layout_columns(
-            col_widths = c(6, 6),
-            div(
-              tags$strong("Matriz de conteos (TSV/CSV)"),
-              tags$br(),
-              tags$small(class = "text-muted",
-                "Genes como filas, muestras como columnas. Primera columna = ID de gen."),
-              fileInput("upload_counts", label = NULL,
-                        accept = c(".tsv", ".csv", ".txt"))
-            ),
-            div(
-              tags$strong("Uso"),
-              tags$p(class = "text-muted small",
-                     "Carga una matriz externa o usa la pestana Resultados para revisar ejecuciones previas guardadas automaticamente en outputs/.")
-            )
+    # ── Modo de inicio: gobierna todo lo que se ve debajo ────────────────────
+    card(
+      card_header("Modo de inicio"),
+      radioButtons(
+        "start_mode", label = NULL,
+        choices  = c("Ejecutar workflow completo" = "workflow",
+                     "Analisis a partir de matriz de conteos" = "load"),
+        selected = "workflow", inline = TRUE
+      ),
+      # En modo "matriz" no hay pipeline que configurar. Antes se seguian
+      # mostrando las tarjetas de FASTQ, genoma y anotacion junto a un checklist
+      # en rojo que exigia rellenarlas: requisitos que en ese modo no aplican.
+      conditionalPanel(
+        condition = "input.start_mode === 'load'",
+        layout_columns(
+          col_widths = c(7, 5),
+          div(
+            tags$strong("Matriz de conteos (TSV/CSV)"),
+            tags$br(),
+            tags$small(class = "text-muted",
+              "Genes como filas, muestras como columnas. Primera columna = ID de gen."),
+            fileInput("upload_counts", label = NULL,
+                      accept = c(".tsv", ".csv", ".txt"), width = "100%")
           ),
           div(
-            style = "text-align:right; margin-top:8px;",
+            tags$strong("Uso"),
+            tags$p(class = "text-muted small",
+                   paste("Carga una matriz externa o usa la pestana Resultados",
+                         "para revisar ejecuciones previas guardadas",
+                         "automaticamente en outputs/.")),
             actionButton("btn_load_existing",
-                         tagList(icon("upload"), " Analisis a partir de matriz de conteos"),
-                         class = "btn-success btn-sm")
+                         tagList(icon("upload"), " Cargar y continuar"),
+                         class = "btn-primary")
           )
         )
-      ),
+      )
+    ),
 
-      # Card 2: Tipo de analisis
-      card(
-        card_header("Tipo de analisis"),
-        style = "min-height:240px; display:flex; flex-direction:column; justify-content:space-between;",
-        radioButtons(
-          "analysis_type", label = NULL,
-          choices  = c("Alineamiento"      = "alignment",
-                       "Pseudoalineamiento" = "pseudo"),
-          selected = "alignment"
-        ),
-        radioButtons(
-          "read_type", "Tipo de lectura",
-          choices = c("Paired-end" = "pe", "Single-end" = "se"),
-          selected = "pe",
-          inline = TRUE
-        ),
-        conditionalPanel(
-          "input.analysis_type === 'alignment'",
-          tags$p(class = "text-muted small mb-0",
-                 icon("circle-info"), " Bowtie2 + featureCounts")
-        ),
-        conditionalPanel(
-          "input.analysis_type === 'pseudo'",
-          selectInput("pseudo_tool", "Herramienta",
-                      choices  = c("Salmon" = "salmon", "Kallisto" = "kallisto"),
-                      selected = "salmon"),
-          conditionalPanel(
-            "input.pseudo_tool === 'kallisto' && input.read_type === 'se'",
+    # ── Configuracion del pipeline (solo en modo workflow) ──────────────────
+    conditionalPanel(
+      condition = "input.start_mode === 'workflow'",
+
+      layout_columns(
+        col_widths = c(7, 5),
+
+        # Columna izquierda: lo que el usuario rellena
+        tags$div(
+          card(
+            card_header("Tipo de analisis"),
             layout_columns(
               col_widths = c(6, 6),
-              numericInput("fragment_length", "Longitud media fragmento", value = 200, min = 1, step = 1),
-              numericInput("fragment_sd", "SD fragmento", value = 20, min = 1, step = 1)
+              radioButtons(
+                "analysis_type", "Estrategia",
+                choices  = c("Alineamiento"       = "alignment",
+                             "Pseudoalineamiento" = "pseudo"),
+                selected = "alignment"
+              ),
+              radioButtons(
+                "read_type", "Tipo de lectura",
+                choices = c("Paired-end" = "pe", "Single-end" = "se"),
+                selected = "pe"
+              )
+            ),
+            conditionalPanel(
+              "input.analysis_type === 'alignment'",
+              tags$p(class = "text-muted small mb-0",
+                     icon("circle-info"), " Bowtie2 + featureCounts")
+            ),
+            conditionalPanel(
+              "input.analysis_type === 'pseudo'",
+              selectInput("pseudo_tool", "Herramienta",
+                          choices  = c("Salmon" = "salmon", "Kallisto" = "kallisto"),
+                          selected = "salmon"),
+              conditionalPanel(
+                "input.pseudo_tool === 'kallisto' && input.read_type === 'se'",
+                layout_columns(
+                  col_widths = c(6, 6),
+                  numericInput("fragment_length", "Longitud media fragmento",
+                               value = 200, min = 1, step = 1),
+                  numericInput("fragment_sd", "SD fragmento", value = 20, min = 1, step = 1)
+                )
+              )
             )
-          )
-        )
-      ),
+          ),
 
-      # Card 3: Rutas y archivos
-      card(
-        card_header("Rutas y archivos"),
-        style = "min-height:240px; display:flex; flex-direction:column; justify-content:space-between; overflow:auto;",
-        tags$div(style = "display:flex;gap:12px;align-items:flex-start;",
-          tags$div(style = "flex:1;",
+          card(
+            card_header("Rutas y archivos"),
             shinyDirButton("input_dir_btn", "Seleccionar directorio de FASTQs",
                            "Seleccionar...", class = "btn-picker"),
-            tags$div(style = "margin-top:6px;", textOutput("input_dir_path")),
             uiOutput("genome_label_ui"),
             conditionalPanel(
               "input.analysis_type === 'alignment'",
-              fileInput("annotation_file_upload", "Archivo de anotacion GFF/GTF (requerido)",
-                        accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE),
+              fileInput("annotation_file_upload",
+                        "Archivo de anotacion GFF/GTF (requerido)",
+                        accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE,
+                        width = "100%"),
               # Aviso si la anotacion tiene genes con varios exones: bowtie2 no es
               # splice-aware y perderia las uniones exon-exon.
               uiOutput("splice_warning_ui")
             ),
             conditionalPanel(
               "input.analysis_type === 'pseudo'",
-              tagList(
-                fileInput("annotation_file_pseudo_upload", "Archivo de anotacion GFF/GTF (opcional)",
-                          accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE),
-                tags$small(class = "text-muted", icon("circle-info"),
-                           " Si se omite, se pasa /dev/null al script.")
-              )
+              fileInput("annotation_file_pseudo_upload",
+                        "Archivo de anotacion GFF/GTF (opcional)",
+                        accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE,
+                        width = "100%"),
+              tags$small(class = "text-muted", icon("circle-info"),
+                         " Si se omite, se pasa /dev/null al script.")
             ),
-            tags$strong("Directorio de salida automatico"),
-            tags$div(style = "margin-top:6px;", textOutput("output_base_path"))
+            tags$hr(class = "my-2"),
+            ui_config_paths()
+          )
+        ),
+
+        # Columna derecha: lo que la aplicacion responde
+        tags$div(
+          card(
+            card_header("Estado de la configuracion"),
+            uiOutput("checklist_ui"),
+            tags$hr(class = "my-2"),
+            uiOutput("validation_ui"),
+            tags$div(class = "mt-3 d-grid",
+              actionButton("btn_to_processing",
+                           tagList("Continuar al procesamiento", icon("arrow-right")),
+                           class = "btn-primary btn-lg")
+            )
+          ),
+          card(
+            card_header("Muestras detectadas"),
+            max_height = "460px",
+            uiOutput("sample_preview_ui")
           )
         )
-      ),
+      )
+    ),
 
-      # Card 4: Resumen
-      card(
-        card_header("Resumen"),
-        style = "min-height:240px; display:flex; flex-direction:column; justify-content:space-between;",
-        tags$dl(class = "row small mb-0",
-          tags$dt(class = "col-6", "Entrada:"),
-          tags$dd(class = "col-6", tags$code(class = "small", textOutput("input_dir_path", inline = TRUE))),
-          tags$dt(class = "col-6", "Salida (base):"),
-          tags$dd(class = "col-6", tags$code(textOutput("output_base_path", inline = TRUE))),
-          tags$dt(class = "col-6", "Workflow:"),
-          tags$dd(class = "col-6", tags$code(textOutput("workflow_path_text", inline = TRUE)))
-        )
-      ),
-
-      # Card 5: Checklist
-      card(
-        card_header("Checklist"),
-        style = "min-height:240px; display:flex; flex-direction:column; justify-content:center; overflow:auto;",
-        tags$div(style = "flex:1; display:flex; align-items:center; justify-content:center;",
-          uiOutput("checklist_ui")
-        )
-      ),
-
-      # Card 6: Muestras detectadas
-      card(
-        card_header("Muestras detectadas"),
-        style = "min-height:240px; overflow:auto; max-height:420px;",
-        uiOutput("sample_preview_ui")
-      ),
-
-      # Card: opciones avanzadas del pipeline. Van plegadas porque los valores
-      # por defecto son correctos para el caso habitual, pero el workflow ya
-      # aceptaba estos flags y desde la interfaz no habia forma de fijarlos.
-      card(
-        card_header("Opciones avanzadas del pipeline"),
-        style = "grid-column: 1 / -1;",
-        tags$details(
-          tags$summary(class = "small text-muted mb-2",
-                       "Orientacion de la libreria, hilos y replicas inferenciales"),
-          layout_columns(
-            col_widths = c(4, 4, 4),
-            selectInput("adv_strandedness", "Orientacion de la libreria",
-                        choices = c("Inferir de los datos" = "auto",
-                                    "Sin orientar (-s 0)" = "0",
-                                    "Directa (-s 1)" = "1",
-                                    "Inversa, protocolos dUTP (-s 2)" = "2"),
-                        selected = "auto"),
-            numericInput("adv_threads", "Hilos",
-                         value = max(1, parallel::detectCores() - 1),
-                         min = 1, max = 64, step = 1),
-            numericInput("adv_inferential_reps", "Replicas inferenciales",
-                         value = 20, min = 0, max = 100, step = 5)
-          ),
-          tags$small(class = "text-muted d-block",
-                     paste("Contar como no orientada una libreria stranded suma las",
-                           "lecturas antisentido y degrada la especificidad, sobre",
-                           "todo en genomas densos como los procariotas. Las replicas",
-                           "inferenciales (salmon/kallisto) son las que necesita el",
-                           "motor Swish; 0 las desactiva."))
-        )
-      ),
-
-      # Card 7: Potencia a priori. Va en configuracion porque la decision que
-      # informa (cuantas replicas) se toma ANTES de secuenciar, no despues.
-      if (isTRUE(HAS_RNASEQPOWER)) card(
-        card_header("Potencia y tamano muestral"),
-        style = "grid-column: 1 / -1;",
-        tags$p(class = "small text-muted mb-2",
-               paste("El tamano muestral es el determinante mas fuerte de la",
-                     "calidad del resultado. Esta calculadora orienta, no",
-                     "garantiza: ninguna herramienta es fiable cuando se exigen",
-                     "efectos pequenos y potencias altas, porque los parametros",
-                     "no se pueden fijar bien desde datos piloto limitados.")),
-        layout_columns(
-          col_widths = c(3, 3, 3, 3),
-          numericInput("pw_n", "Replicas por grupo", value = 3, min = 2, max = 100, step = 1),
-          numericInput("pw_effect", "Fold-change a detectar", value = 2, min = 1.1,
-                       max = 10, step = 0.1),
-          numericInput("pw_cv", "CV biologico", value = 0.4, min = 0.05, max = 1.5,
-                       step = 0.05),
-          numericInput("pw_depth", "Profundidad media por gen", value = 20, min = 1,
-                       max = 1000, step = 5)
-        ),
-        # El CV y la profundidad son justo los parametros que quien usa la app no
-        # conoce, y de los que depende todo el resultado. Si hay una matriz
-        # cargada se pueden MEDIR en lugar de adivinarse.
-        tags$div(class = "d-flex align-items-center gap-2 mb-2",
-          actionButton("pw_estimate_btn",
-                       tagList(icon("wand-magic-sparkles"), " Estimar de mis datos"),
-                       class = "btn-secondary btn-sm"),
-          tags$small(class = "text-muted", uiOutput("pw_estimate_note", inline = TRUE))
-        ),
-        tags$small(class = "text-muted d-block mb-2",
-                   paste("CV tipico: 0,1 en lineas celulares, 0,4 en muestras",
-                         "humanas. La profundidad es el numero medio de conteos por",
-                         "gen, no el total de lecturas.")),
-        uiOutput("pw_verdict"),
-        plotly::plotlyOutput("pw_curve", height = "300px")
-      ) else NULL
-    )
+    # Fuera del conditionalPanel: la calculadora de potencia sirve igual en modo
+    # matriz, donde ademas es cuando puede estimar el CV y la profundidad de los
+    # datos reales en lugar de pedirlos a ojo.
+    ui_config_extras()
   )
 }
