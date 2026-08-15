@@ -98,7 +98,8 @@ ui_tab_config <- function() {
         style = "min-height:240px; display:flex; flex-direction:column; justify-content:space-between; overflow:auto;",
         tags$div(style = "display:flex;gap:12px;align-items:flex-start;",
           tags$div(style = "flex:1;",
-            shinyDirButton("input_dir_btn", "Seleccionar directorio de FASTQs", "Seleccionar..."),
+            shinyDirButton("input_dir_btn", "Seleccionar directorio de FASTQs",
+                           "Seleccionar...", class = "btn-picker"),
             tags$div(style = "margin-top:6px;", textOutput("input_dir_path")),
             uiOutput("genome_label_ui"),
             conditionalPanel(

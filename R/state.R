@@ -58,6 +58,11 @@ create_app_state <- function(session) {
     end_time        = NULL,
     checkpoints     = character(0),
     cp_idx          = 0,
+    # Paso en el que se interrumpio la ejecucion, y por que. Sin esto, al fallar
+    # o cancelar se marcaba la lista ENTERA como completada y el usuario veia
+    # todos los pasos en verde justo despues del aviso de error.
+    cp_failed       = NA_integer_,
+    cp_failed_kind  = NA_character_,   # "error" | "cancelled"
     samp_stat       = list(),
     cur_sample      = NULL,
     n_total         = 0,

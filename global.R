@@ -224,10 +224,17 @@ app_css <- HTML("
     border-radius: 8px;
   }
 
+  /* Botones de seleccion de ficheros y directorios (shinyFiles, fileInput).
+     Antes esta regla usaba el selector button[id$='_btn'], que por
+     especificidad (0,1,1 frente a 0,1,0) VENCIA a .btn-success y .btn-danger:
+     como todos los botones de accion terminan en _btn, el de ejecutar el
+     workflow (verde) y el de detener (rojo) se pintaban con este azul de
+     selector de ficheros, y se perdia la semantica de color de la accion
+     principal y de la destructiva. Ahora se marcan con .btn-picker. */
   .btn-default,
   .btn-file,
   .input-group .btn,
-  button[id$='_btn'] {
+  .btn-picker {
     background: #D7EEF1;
     border: var(--thin-border);
     color: #244A50;
@@ -237,7 +244,7 @@ app_css <- HTML("
   .btn-default:hover,
   .btn-file:hover,
   .input-group .btn:hover,
-  button[id$='_btn']:hover {
+  .btn-picker:hover {
     background: #C6E5EA;
     border-color: #5F6F66;
     color: #1F454B;

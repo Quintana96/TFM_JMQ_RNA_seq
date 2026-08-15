@@ -181,7 +181,8 @@ server_tab_results <- function(input, output, session, state) {
           )
         ),
         div(style = "flex:0 0 auto;margin-bottom:16px;",
-          shinyDirButton("select_result_dir_btn", "Seleccionar carpeta...", "Seleccionar...")
+          shinyDirButton("select_result_dir_btn", "Seleccionar carpeta...",
+                         "Seleccionar...", class = "btn-picker")
         )
       ),
       tags$div(style = "margin-top:6px;",

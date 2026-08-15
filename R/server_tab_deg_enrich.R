@@ -34,6 +34,14 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
   observeEvent(input$deg_run_enrich_btn, {
     req(state$deg_rv$results)
+    # El enriquecimiento tarda entre segundos y un minuto largo (mas con
+    # simplify(), que calcula similitud semantica entre todos los terminos). Sin
+    # feedback la app parece colgada y el usuario vuelve a pulsar, encolando
+    # ejecuciones. El resto de acciones largas (ajuste DEG, bootstrap) ya
+    # bloquean su boton y muestran progreso; esta era la excepcion.
+    shinyjs::disable("deg_run_enrich_btn")
+    on.exit(shinyjs::enable("deg_run_enrich_btn"), add = TRUE)
+
     ont <- input$deg_ontology %||% "BP"
     approach <- input$deg_enrich_approach %||% "ora"
     org_code <- trimws(input$deg_kegg_organism %||% "eco")
@@ -44,6 +52,10 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     # que contarlo como fondo infla el enriquecimiento. Aplica a GO y a KEGG.
     universe <- ctx$deg_universe()
 
+    res <- withProgress(
+      message = if (identical(approach, "gsea")) "Calculando GSEA..."
+                else "Calculando enriquecimiento...",
+      value = 0.3, {
     if (identical(approach, "gsea")) {
       # GSEA parte del ranking completo, sin umbralizar: por eso usa la tabla
       # entera y no la lista filtrada.
@@ -62,12 +74,13 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
           type = "warning", duration = 16
         )
       }
-      res <- run_gsea(rk$ranked, ont = ont, OrgDb = deg_orgdb(),
-                      organism = org_code,
-                      keyType = if (identical(ont, "KEGG"))
-                        input$deg_kegg_keytype %||% "kegg"
-                      else input$deg_go_keytype %||% "SYMBOL",
-                      exponent = 0)
+      setProgress(value = 0.6, detail = "permutaciones")
+      run_gsea(rk$ranked, ont = ont, OrgDb = deg_orgdb(),
+               organism = org_code,
+               keyType = if (identical(ont, "KEGG"))
+                 input$deg_kegg_keytype %||% "kegg"
+               else input$deg_go_keytype %||% "SYMBOL",
+               exponent = 0)
     } else {
       # La lista del ORA sale del FDR con el que se AJUSTO el modelo, no de los
       # filtros de la tarjeta 5: esos son de visualizacion y no recortan el
@@ -80,16 +93,18 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                          type = "warning"); return()
       }
       genes <- df$gene
+      setProgress(value = 0.6, detail = paste0(length(genes), " genes"))
       if (identical(ont, "KEGG")) {
-        res <- run_enrichment_kegg(genes, universe = universe, organism = org_code,
-                                   keyType = input$deg_kegg_keytype %||% "kegg")
+        run_enrichment_kegg(genes, universe = universe, organism = org_code,
+                            keyType = input$deg_kegg_keytype %||% "kegg")
       } else {
-        res <- run_enrichment_go(genes, universe = universe,
-                                 OrgDb = deg_orgdb(), ont = ont,
-                                 keyType = input$deg_go_keytype %||% "SYMBOL",
-                                 simplify_terms = isTRUE(input$deg_go_simplify))
+        run_enrichment_go(genes, universe = universe,
+                          OrgDb = deg_orgdb(), ont = ont,
+                          keyType = input$deg_go_keytype %||% "SYMBOL",
+                          simplify_terms = isTRUE(input$deg_go_simplify))
       }
     }
+    })
 
     enrich_mapping_rv(res$mapping)
     # Un mapeo bajo hace el resultado no interpretable, asi que se avisa aunque

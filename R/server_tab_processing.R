@@ -169,7 +169,19 @@ server_tab_processing <- function(input, output, session, state) {
         proc_rv$bytes_done <- (proc_rv$bytes_done %||% 0) + bytes
         proc_rv$cur_sample <- NULL
       }
-      proc_rv$cp_idx <- length(proc_rv$checkpoints)
+      # Solo se dan por completados TODOS los pasos si el proceso termino bien.
+      # Con un codigo de salida distinto de 0, el paso que estaba en curso queda
+      # marcado como fallido y los posteriores siguen pendientes: marcar la lista
+      # entera en verde contradecia la notificacion de error que se muestra a
+      # continuacion.
+      if (identical(exit_code, 0L) || identical(exit_code, 0)) {
+        proc_rv$cp_idx <- length(proc_rv$checkpoints)
+        proc_rv$cp_failed <- NA_integer_
+        proc_rv$cp_failed_kind <- NA_character_
+      } else {
+        proc_rv$cp_failed <- min(proc_rv$cp_idx + 1L, length(proc_rv$checkpoints))
+        proc_rv$cp_failed_kind <- "error"
+      }
 
       finalize_run(exit_code, state$run_params_rv()$output_dir %||% "")
     } else {
@@ -287,15 +299,27 @@ server_tab_processing <- function(input, output, session, state) {
     cps    <- proc_rv$checkpoints
     cp_idx <- proc_rv$cp_idx
     if (length(cps) == 0) return(NULL)
+    failed <- proc_rv$cp_failed
+    kind   <- proc_rv$cp_failed_kind
+    # El simbolo va acompanado de texto porque el color por si solo no es un
+    # canal accesible: sin el, un usuario con daltonismo o un lector de pantalla
+    # no distinguen "completado" de "fallido".
     tags$ul(class = "list-unstyled mb-0",
       lapply(seq_along(cps), function(i) {
-        if (i <= cp_idx)
+        if (!is.na(failed) && i == failed) {
+          etiqueta <- if (identical(kind, "cancelled")) "cancelado" else "fallido"
+          tags$li(style = "color:#8A1F1F;font-weight:650;",
+                  tags$span(if (identical(kind, "cancelled")) "■ " else "✗ "),
+                  cps[i],
+                  tags$span(class = "small ms-1", paste0("(", etiqueta, ")")))
+        } else if (i <= cp_idx) {
           tags$li(style = "color:#315342;font-weight:600;", tags$span("✓ "), cps[i])
-        else if (proc_rv$running && i == cp_idx + 1L)
+        } else if (proc_rv$running && i == cp_idx + 1L) {
           tags$li(style = "color:#8A6D1C; font-weight:650;",
                   tags$span("⟳ "), cps[i])
-        else
+        } else {
           tags$li(style = "color:#7C9185;", tags$span("◷ "), cps[i])
+        }
       })
     )
   })
@@ -402,6 +426,9 @@ server_tab_processing <- function(input, output, session, state) {
 
     proc_rv$checkpoints <- cps
     proc_rv$cp_idx      <- 0L
+    # Una ejecucion nueva parte sin el fallo de la anterior.
+    proc_rv$cp_failed      <- NA_integer_
+    proc_rv$cp_failed_kind <- NA_character_
     proc_rv$n_total     <- length(samps)
     proc_rv$samp_stat   <- setNames(as.list(rep("pending", length(samps))), samps)
     proc_rv$cur_sample  <- NULL
@@ -466,7 +493,10 @@ server_tab_processing <- function(input, output, session, state) {
       proc_rv$running <- FALSE
       proc_rv$end_time <- Sys.time()
       proc_rv$proc <- NULL
-      proc_rv$cp_idx <- length(proc_rv$checkpoints)
+      # Cancelar no completa el pipeline: el paso en curso queda marcado como
+      # cancelado y los siguientes, pendientes.
+      proc_rv$cp_failed <- min(proc_rv$cp_idx + 1L, length(proc_rv$checkpoints))
+      proc_rv$cp_failed_kind <- "cancelled"
       proc_rv$cur_sample <- NULL
       ss <- proc_rv$samp_stat
       if (length(ss) > 0L) {
