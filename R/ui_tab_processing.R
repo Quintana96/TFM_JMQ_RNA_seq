@@ -37,10 +37,18 @@ ui_tab_processing_content <- function(cfg, total_sz) {
                    textOutput("cmd_preview_text", inline = TRUE))
         ),
         hr(),
-        div(style = "display:flex;gap:8px;align-items:center;",
-            actionButton("btn_back", tagList(icon("arrow-left"), " Volver"), class = "btn-secondary"),
-            actionButton("stop_btn", tagList(icon("stop"), " Detener"), class = "btn-danger", disabled = "disabled"),
-            actionButton("run_btn",  tagList(icon("play"), " Ejecutar workflow"), class = "btn-success btn-lg")
+        # La accion principal va primera y a ancho completo; las secundarias
+        # debajo. Antes "Ejecutar workflow" era el ultimo de tres botones en
+        # una fila, a la derecha del de detener.
+        tags$div(class = "d-grid gap-2",
+          actionButton("run_btn", tagList(icon("play"), " Ejecutar workflow"),
+                       class = "btn-success btn-lg"),
+          tags$div(class = "d-flex gap-2",
+            actionButton("btn_back", tagList(icon("arrow-left"), " Volver"),
+                         class = "btn-outline-secondary flex-fill"),
+            actionButton("stop_btn", tagList(icon("stop"), " Detener"),
+                         class = "btn-danger flex-fill", disabled = "disabled")
+          )
         )
       ),
 
@@ -48,17 +56,15 @@ ui_tab_processing_content <- function(cfg, total_sz) {
       card(
         card_header("Progreso en tiempo real"),
 
-        # Metricas de tiempo y muestras
-        div(class = "d-flex gap-3 mb-3 p-2 rounded",
-            style = "background:#F7F1FC; border:1px solid #E3D6F2; font-size:.9rem;",
-            div(icon("clock"), " Transcurrido: ",
-                tags$b(textOutput("elapsed_text", inline = TRUE))),
-            div(icon("hourglass-half"), " Tiempo restante: ",
-                tags$b(textOutput("eta_text", inline = TRUE))),
-            div(icon("percent"), " % completado: ",
-                tags$b(textOutput("remaining_pct", inline = TRUE))),
-            div(icon("vials"), " Muestras: ",
-                tags$b(textOutput("samp_prog_text", inline = TRUE)))
+        # Metricas de tiempo y muestras. Antes eran cuatro pares
+        # "etiqueta: valor" en una banda lila con un borde propio, un color que
+        # no aparecia en ningun otro sitio de la aplicacion. Son metricas, y las
+        # metricas ya tienen una forma definida.
+        tags$div(class = "stat-grid mb-3",
+          stat_tile(textOutput("elapsed_text", inline = TRUE), "Transcurrido", "info"),
+          stat_tile(textOutput("eta_text", inline = TRUE), "Tiempo restante", "info"),
+          stat_tile(textOutput("remaining_pct", inline = TRUE), "Completado", "info"),
+          stat_tile(textOutput("samp_prog_text", inline = TRUE), "Muestras", "info")
         ),
 
         uiOutput("checkpoints_ui"),
@@ -69,18 +75,17 @@ ui_tab_processing_content <- function(cfg, total_sz) {
 
     # Fila inferior: log ancho completo
     card(
-      card_header(
+      card_header_tools(
         "Log de terminal",
-        div(class = "float-end",
-            actionButton("refresh_btn", icon("rotate"),
-                         class = "btn-sm btn-outline-secondary",
-                         title = "Actualizar lista de archivos"))
+        actionButton("refresh_btn", icon("rotate"),
+                     class = "btn-sm btn-outline-secondary header-download",
+                     title = "Actualizar lista de archivos")
       ),
-      tags$small(class = "text-muted",
-                 "Se muestra stdout/stderr en vivo. Copia completa: workflow_live.log en el directorio de salida."),
+      class = "log-pre",
+      tags$small(class = "text-muted mb-1 d-block",
+                 "stdout/stderr en vivo. Copia completa: workflow_live.log en el directorio de salida."),
       verbatimTextOutput("run_log"),
-      max_height = "420px",
-      style = "overflow-y:auto; width:100%; background:#ffffff; color:#111827;"
+      max_height = "420px"
     )
   )
 }
@@ -93,5 +98,5 @@ ui_tab_processing_locked <- function() {
       div(style = "margin-top:10px;",
           actionButton("btn_goto_config",
                        tagList(icon("gear"), " Ir a configuracion"),
-                       class = "btn-secondary btn-sm")))
+                       class = "btn-primary btn-sm")))
 }
