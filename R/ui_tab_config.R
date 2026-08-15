@@ -155,6 +155,38 @@ ui_tab_config <- function() {
         uiOutput("sample_preview_ui")
       ),
 
+      # Card: opciones avanzadas del pipeline. Van plegadas porque los valores
+      # por defecto son correctos para el caso habitual, pero el workflow ya
+      # aceptaba estos flags y desde la interfaz no habia forma de fijarlos.
+      card(
+        card_header("Opciones avanzadas del pipeline"),
+        style = "grid-column: 1 / -1;",
+        tags$details(
+          tags$summary(class = "small text-muted mb-2",
+                       "Orientacion de la libreria, hilos y replicas inferenciales"),
+          layout_columns(
+            col_widths = c(4, 4, 4),
+            selectInput("adv_strandedness", "Orientacion de la libreria",
+                        choices = c("Inferir de los datos" = "auto",
+                                    "Sin orientar (-s 0)" = "0",
+                                    "Directa (-s 1)" = "1",
+                                    "Inversa, protocolos dUTP (-s 2)" = "2"),
+                        selected = "auto"),
+            numericInput("adv_threads", "Hilos",
+                         value = max(1, parallel::detectCores() - 1),
+                         min = 1, max = 64, step = 1),
+            numericInput("adv_inferential_reps", "Replicas inferenciales",
+                         value = 20, min = 0, max = 100, step = 5)
+          ),
+          tags$small(class = "text-muted d-block",
+                     paste("Contar como no orientada una libreria stranded suma las",
+                           "lecturas antisentido y degrada la especificidad, sobre",
+                           "todo en genomas densos como los procariotas. Las replicas",
+                           "inferenciales (salmon/kallisto) son las que necesita el",
+                           "motor Swish; 0 las desactiva."))
+        )
+      ),
+
       # Card 7: Potencia a priori. Va en configuracion porque la decision que
       # informa (cuantas replicas) se toma ANTES de secuenciar, no despues.
       if (isTRUE(HAS_RNASEQPOWER)) card(

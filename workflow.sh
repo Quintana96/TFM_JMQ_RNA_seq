@@ -43,6 +43,13 @@ INFERENTIAL_REPS=20
 # cambio de excluir los genes no codificantes (rRNA, tRNA) del recuento.
 FEATURE_TYPE="gene"
 FEATURE_ATTR="locus_tag"
+# Orientacion de la libreria para featureCounts (-s): 0 sin orientar, 1 directa,
+# 2 inversa (el caso de los protocolos dUTP, que son la mayoria hoy). "auto"
+# la infiere de los propios datos.
+STRANDEDNESS="auto"
+# Hilos. Antes estaba cableado a 8, lo que sobresuscribe maquinas mas pequenas
+# y no quedaba registrado en ninguna parte.
+THREADS_ARG=""
 
 # Parse command-line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -58,6 +65,8 @@ while [[ "$#" -gt 0 ]]; do
         --INFERENTIAL_REPS) INFERENTIAL_REPS="$2"; shift 2 ;;
         --FEATURE_TYPE) FEATURE_TYPE="$2"; shift 2 ;;
         --FEATURE_ATTR) FEATURE_ATTR="$2"; shift 2 ;;
+        --STRANDEDNESS) STRANDEDNESS="$2"; shift 2 ;;
+        --THREADS) THREADS_ARG="$2"; shift 2 ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
 done
@@ -95,8 +104,20 @@ if [[ -z "$FEATURE_TYPE" || -z "$FEATURE_ATTR" ]]; then
     exit 1
 fi
 
-# Number of threads to accelerate analysis
-THREADS=8
+# Numero de hilos: el indicado, o los nucleos disponibles menos uno para no
+# dejar la maquina sin capacidad de respuesta.
+if [[ -n "$THREADS_ARG" ]]; then
+    THREADS="$THREADS_ARG"
+else
+    detected=$( (command -v nproc >/dev/null 2>&1 && nproc) || sysctl -n hw.ncpu 2>/dev/null || echo 4 )
+    THREADS=$(( detected > 1 ? detected - 1 : 1 ))
+fi
+if [[ ! "$THREADS" =~ ^[0-9]+$ ]] || [[ "$THREADS" -lt 1 ]]; then
+    echo "Error: THREADS debe ser un entero positivo"; exit 1
+fi
+if [[ ! "$STRANDEDNESS" =~ ^(auto|0|1|2)$ ]]; then
+    echo "Error: STRANDEDNESS debe ser auto, 0, 1 o 2"; exit 1
+fi
 
 # Directorio del propio script, para localizar scripts/ auxiliares con
 # independencia de desde donde se invoque el workflow.
@@ -211,9 +232,20 @@ ALIGNMENTS="${OUTPUT}/03_alignments/${ALIGNMENT_TYPE}"
 COUNTS="${OUTPUT}/04_counts"
 
 # Index paths for different aligners
-BOWTIE_INDEX="${OUTPUT}/indices/bowtie2/ecoli"
-SALMON_INDEX="${OUTPUT}/indices/salmon/ecoli"
-KALLISTO_INDEX="${OUTPUT}/indices/kallisto/ecoli.idx"
+# Los indices se cachean FUERA del directorio de la ejecucion, en una carpeta
+# indexada por el md5 de la referencia. Antes vivian en ${OUTPUT}/indices, y como
+# la app crea un directorio nuevo por ejecucion, la logica de "indice existente,
+# se reutiliza" no se activaba nunca: se reconstruia el indice en cada corrida,
+# que en genomas grandes es la parte mas lenta del pipeline.
+#
+# El md5 de la referencia como clave garantiza que un cambio en el genoma o el
+# transcriptoma invalida el indice automaticamente.
+GENOME_MD5="$(md5_of "$GENOME_FILE")"
+INDEX_CACHE="${INDEX_CACHE_DIR:-$(dirname "$OUTPUT")/.index_cache}/${GENOME_MD5}"
+mkdir -p "$INDEX_CACHE" 2>/dev/null || INDEX_CACHE="${OUTPUT}/indices"
+BOWTIE_INDEX="${INDEX_CACHE}/bowtie2/ref"
+SALMON_INDEX="${INDEX_CACHE}/salmon/ref"
+KALLISTO_INDEX="${INDEX_CACHE}/kallisto/ref.idx"
 
 mkdir -p "$QC" "$TRIMMED" "$ALIGNMENTS" "$COUNTS"
 mkdir -p "$(dirname "$BOWTIE_INDEX")" "$(dirname "$SALMON_INDEX")" "$(dirname "$KALLISTO_INDEX")"
@@ -527,6 +559,50 @@ fi
 log "Control de calidad post-trimming con FastQC..."
 run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 
+# ── Orientacion de la libreria ─────────────────────────────────────────────
+# featureCounts contaba SIEMPRE como no orientada (-s 0). La mayoria de los
+# protocolos actuales son stranded (dUTP, que corresponde a -s 2), y contar una
+# libreria stranded como no orientada suma las lecturas antisentido: en genomas
+# de alta densidad genica, como los procariotas, eso infla los conteos de genes
+# solapantes y degrada la especificidad (Zhao et al., BMC Genomics 2015).
+#
+# En modo "auto" se infiere de los propios datos contando un subconjunto de
+# lecturas con las tres orientaciones y quedandose con la que asigna mas.
+infer_strandedness() {
+    local bam="$1" out s0 s1 s2 best
+    local tmp="${COUNTS}/.strand_check"
+    mkdir -p "$tmp"
+    for s in 0 1 2; do
+        featureCounts -T "$THREADS" -s "$s" -t "$FEATURE_TYPE" -g "$FEATURE_ATTR" \
+            -a "$ANNOTATION_FILE" -o "${tmp}/s${s}.txt" "$bam" >/dev/null 2>&1 || true
+    done
+    s0=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s0.txt.summary" 2>/dev/null || echo 0)
+    s1=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s1.txt.summary" 2>/dev/null || echo 0)
+    s2=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s2.txt.summary" 2>/dev/null || echo 0)
+    s0=${s0:-0}; s1=${s1:-0}; s2=${s2:-0}
+    log "  asignadas por orientacion -> sin orientar: $s0 | directa: $s1 | inversa: $s2"
+    best=0
+    if [[ "$s1" -gt "$s0" && "$s1" -ge "$s2" ]]; then best=1; fi
+    if [[ "$s2" -gt "$s0" && "$s2" -gt "$s1" ]]; then best=2; fi
+    rm -rf "$tmp"
+    echo "$best"
+}
+
+if [[ "$ALIGNMENT_TYPE" == "bowtie2" && "$STRANDEDNESS" == "auto" ]]; then
+    FIRST_BAM=$( (shopt -s nullglob; b=( "$ALIGNMENTS"/*.bam ); echo "${b[0]:-}") )
+    if [[ -n "$FIRST_BAM" && -f "$FIRST_BAM" ]]; then
+        log "Infiriendo la orientacion de la libreria a partir de $(basename "$FIRST_BAM")..."
+        STRANDEDNESS=$(infer_strandedness "$FIRST_BAM")
+        log "+ Orientacion inferida: -s $STRANDEDNESS"
+    else
+        STRANDEDNESS=0
+    fi
+elif [[ "$STRANDEDNESS" == "auto" ]]; then
+    # En pseudoalineamiento la detecta el propio cuantificador (salmon -l A).
+    STRANDEDNESS=0
+fi
+printf 'strandedness\t%s\n' "$STRANDEDNESS" >> "${OUTPUT}/run_params.tsv"
+
 # Generate count matrix based on alignment type
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
     log "Generating count matrix from Bowtie2 alignments..."
@@ -541,7 +617,7 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
             -T "$THREADS" \
             -p \
             --countReadPairs \
-            -s 0 \
+            -s "$STRANDEDNESS" \
             -t "$FEATURE_TYPE" \
             -g "$FEATURE_ATTR" \
             -a "$ANNOTATION_FILE" \
@@ -550,7 +626,7 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
     else
         run_cmd featureCounts \
             -T "$THREADS" \
-            -s 0 \
+            -s "$STRANDEDNESS" \
             -t "$FEATURE_TYPE" \
             -g "$FEATURE_ATTR" \
             -a "$ANNOTATION_FILE" \

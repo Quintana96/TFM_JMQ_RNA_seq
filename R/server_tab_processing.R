@@ -382,11 +382,22 @@ server_tab_processing <- function(input, output, session, state) {
     })
     if (is.null(annotation_path)) return()
 
+    # Los flags avanzados se pasan SIEMPRE, aunque lleven el valor por defecto.
+    # Antes no se pasaba ninguno: el workflow aceptaba --INFERENTIAL_REPS,
+    # --FEATURE_TYPE y --FEATURE_ATTR, pero desde la interfaz era imposible
+    # fijarlos, hasta el punto de que el motor Swish recomendaba "relanza el
+    # workflow con --INFERENTIAL_REPS 20" sin que existiera forma de hacerlo.
+    # Pasarlos explicitamente los deja ademas registrados en run_params.tsv.
     cmd <- sprintf(
-      "bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s --ALIGNMENT_TYPE %s --READ_TYPE %s --FRAGMENT_LENGTH %s --FRAGMENT_SD %s",
+      paste0("bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s ",
+             "--ALIGNMENT_TYPE %s --READ_TYPE %s --FRAGMENT_LENGTH %s --FRAGMENT_SD %s ",
+             "--INFERENTIAL_REPS %s --STRANDEDNESS %s --THREADS %s"),
       shQuote(workflow_path), shQuote(shared$input_dir_val()), shQuote(shared$output_dir_val()),
       shQuote(genome_path), shQuote(annotation_path), shQuote(shared$effective_tool()), shQuote(shared$effective_read_type()),
-      shQuote(shared$effective_fragment_length()), shQuote(shared$effective_fragment_sd())
+      shQuote(shared$effective_fragment_length()), shQuote(shared$effective_fragment_sd()),
+      shQuote(as.character(input$adv_inferential_reps %||% 20)),
+      shQuote(as.character(input$adv_strandedness %||% "auto")),
+      shQuote(as.character(input$adv_threads %||% max(1, parallel::detectCores() - 1)))
     )
 
     samps <- shared$samples_eff()
