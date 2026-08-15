@@ -165,6 +165,22 @@ server_tab_deg <- function(input, output, session, state) {
     meta_rv(new_df)
   })
 
+  # Aviso de columnas potencialmente identificativas del samplesheet. Avisa; no
+  # borra nada: la decision de que es identificativo depende del estudio.
+  output$deg_identifying_cols <- renderUI({
+    df <- meta_rv()
+    if (is.null(df) || !nrow(df)) return(NULL)
+    cols <- detect_identifying_columns(df)
+    if (!length(cols)) return(NULL)
+    div(class = "alert alert-warning py-1 px-2 small mb-2",
+        icon("triangle-exclamation"),
+        tags$b(" Columnas posiblemente identificativas: "),
+        paste(cols, collapse = ", "),
+        tags$div(class = "mt-1",
+                 paste("Viajaran al informe y a los ficheros guardados. Quitalas",
+                       "del samplesheet si no las necesitas para el diseno.")))
+  })
+
   observeEvent(input$deg_meta_add_row_btn, {
     cur <- meta_rv()
     if (is.null(cur)) cur <- data.frame(sample_id = character(0),

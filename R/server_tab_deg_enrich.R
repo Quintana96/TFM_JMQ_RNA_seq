@@ -23,8 +23,15 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
   # El OrgDb disponible hoy es solo el de E. coli K12; se centraliza aqui para
   # que el selector de keyType y el enriquecimiento no se desincronicen.
+  # OrgDb elegido en la interfaz. Estaba cableado a org.EcK12.eg.db, de modo que
+  # con datos de otro organismo el enriquecimiento GO no podia funcionar aunque
+  # su paquete estuviera instalado: el mapeo salia del 0 % y la app avisaba,
+  # correctamente, de algo que el usuario no tenia forma de arreglar.
   deg_orgdb <- reactive({
-    if (isTRUE(HAS_ORGECDB)) "org.EcK12.eg.db" else NULL
+    sel <- input$deg_orgdb %||% ""
+    if (nzchar(sel) && sel %in% ORGDBS_DISPONIBLES) return(sel)
+    if (length(ORGDBS_DISPONIBLES)) return(ORGDBS_DISPONIBLES[1])
+    NULL
   })
 
   # keyType seleccionable, poblado con los keytypes reales del OrgDb. Antes

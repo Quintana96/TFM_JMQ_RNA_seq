@@ -94,6 +94,12 @@ ui_tab_deg <- function() {
         ),
         tags$small(class = "text-muted",
                    "Columnas requeridas: sample_id, condition. Opcional: batch."),
+        # Seudonimizacion: los identificadores de muestra de un estudio clinico
+        # suelen ser identificativos y aqui viajan a graficos, informes y
+        # ficheros persistidos.
+        checkboxInput("deg_pseudonymize",
+                      "Seudonimizar identificadores de muestra", FALSE),
+        uiOutput("deg_identifying_cols"),
         DTOutput("deg_meta_table")
       ),
 
@@ -385,75 +391,6 @@ ui_tab_deg_results <- function() {
         )
       ),
       nav_panel(
-        "Diagnosticos",
-        ui_tab_deg_diagnostics()
-      ),
-      nav_panel(
-        "Replicabilidad",
-        card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("Replicabilidad por bootstrap"),
-            div(style = "display:flex;gap:6px;align-items:center;",
-                numericInput("deg_boot_n", NULL, value = 20, min = 5, max = 100,
-                             step = 5, width = "90px"),
-                actionButton("deg_run_boot_btn", tagList(icon("dice"), " Estimar"),
-                             class = "btn-sm"))
-          )),
-          tags$p(class = "small text-muted mb-1",
-                 paste("Remuestrea las muestras, repite el analisis y mide si la",
-                       "lista aguanta. Es el procedimiento que recomienda el estudio",
-                       "de replicabilidad en cohortes pequenas: Spearman > 0,9 indica",
-                       "precision alta y < 0,8 avisa de probables falsos positivos.",
-                       "Cuesta un reajuste del modelo por remuestreo.")),
-          uiOutput("deg_boot_verdict"),
-          DTOutput("deg_boot_table"),
-          plotly::plotlyOutput("deg_boot_plot", height = "300px")
-        )
-      ),
-      nav_panel(
-        "Comparar metodos",
-        card(
-          card_header(tags$div(
-            class = "card-title-download",
-            tags$span("Solapamiento entre metodos"),
-            div(style = "display:flex;gap:6px;align-items:center;",
-                selectInput("deg_compare_method", NULL, choices = NULL,
-                            width = "180px"),
-                actionButton("deg_run_compare_btn", tagList(icon("code-compare"),
-                                                           " Comparar"),
-                             class = "btn-sm"))
-          )),
-          tags$p(class = "small text-muted mb-1",
-                 paste("Corre un segundo motor sobre los mismos datos y compara las",
-                       "listas de significativos. Con n grande, la discrepancia entre",
-                       "parametricos y robustos es informativa: es el punto de la",
-                       "controversia sobre el control real de la FDR.")),
-          uiOutput("deg_compare_summary"),
-          plotly::plotlyOutput("deg_compare_plot", height = "300px")
-        )
-      ),
-      nav_panel(
-        "Reproducibilidad",
-        card(
-          card_header("Informe y script equivalente"),
-          tags$p(class = "small text-muted",
-                 paste("Una app grafica no deja rastro de que se hizo. El informe",
-                       "recoge todos los parametros, el contraste, la formula del",
-                       "diseno, los diagnosticos y las versiones de los paquetes;",
-                       "el script reproduce el mismo analisis con Bioconductor,",
-                       "fuera de la app.")),
-          div(style = "display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;",
-              downloadButton("download_deg_report", "Informe HTML",
-                             icon = icon("file-code"), class = "btn-sm"),
-              downloadButton("download_deg_script", "Script R equivalente",
-                             icon = icon("r-project"), class = "btn-sm")),
-          tags$hr(),
-          tags$b(class = "small", "Vista previa del script"),
-          verbatimTextOutput("deg_script_preview", placeholder = TRUE)
-        )
-      ),
-      nav_panel(
         "Volcano",
         card(
           download_header("Volcano plot", "download_deg_volcano_plot"),
@@ -516,6 +453,55 @@ ui_tab_deg_results <- function() {
         )
       ),
       nav_panel(
+        "Diagnosticos",
+        ui_tab_deg_diagnostics()
+      ),
+      nav_panel(
+        "Replicabilidad",
+        card(
+          card_header(tags$div(
+            class = "card-title-download",
+            tags$span("Replicabilidad por bootstrap"),
+            div(style = "display:flex;gap:6px;align-items:center;",
+                numericInput("deg_boot_n", NULL, value = 20, min = 5, max = 100,
+                             step = 5, width = "90px"),
+                actionButton("deg_run_boot_btn", tagList(icon("dice"), " Estimar"),
+                             class = "btn-sm"))
+          )),
+          tags$p(class = "small text-muted mb-1",
+                 paste("Remuestrea las muestras, repite el analisis y mide si la",
+                       "lista aguanta. Es el procedimiento que recomienda el estudio",
+                       "de replicabilidad en cohortes pequenas: Spearman > 0,9 indica",
+                       "precision alta y < 0,8 avisa de probables falsos positivos.",
+                       "Cuesta un reajuste del modelo por remuestreo.")),
+          uiOutput("deg_boot_verdict"),
+          DTOutput("deg_boot_table"),
+          plotly::plotlyOutput("deg_boot_plot", height = "300px")
+        )
+      ),
+      nav_panel(
+        "Comparar metodos",
+        card(
+          card_header(tags$div(
+            class = "card-title-download",
+            tags$span("Solapamiento entre metodos"),
+            div(style = "display:flex;gap:6px;align-items:center;",
+                selectInput("deg_compare_method", NULL, choices = NULL,
+                            width = "180px"),
+                actionButton("deg_run_compare_btn", tagList(icon("code-compare"),
+                                                           " Comparar"),
+                             class = "btn-sm"))
+          )),
+          tags$p(class = "small text-muted mb-1",
+                 paste("Corre un segundo motor sobre los mismos datos y compara las",
+                       "listas de significativos. Con n grande, la discrepancia entre",
+                       "parametricos y robustos es informativa: es el punto de la",
+                       "controversia sobre el control real de la FDR.")),
+          uiOutput("deg_compare_summary"),
+          plotly::plotlyOutput("deg_compare_plot", height = "300px")
+        )
+      ),
+      nav_panel(
         "Enriquecimiento",
         card(
           card_header(tags$div(
@@ -549,6 +535,21 @@ ui_tab_deg_results <- function() {
                 # keyType: los IDs de featureCounts sobre un GFF procariota son
                 # locus tags, no simbolos. Fijarlo a SYMBOL hacia fallar el mapeo
                 # en silencio, asi que ahora es explicito y seleccionable.
+                # Organismo: la app tenia el OrgDb cableado a E. coli, asi que
+                # con datos de cualquier otro organismo el enriquecimiento GO no
+                # podia funcionar aunque su paquete estuviera instalado.
+                conditionalPanel(
+                  "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
+                  selectInput("deg_orgdb", NULL,
+                              choices = if (length(ORGDBS_DISPONIBLES))
+                                stats::setNames(ORGDBS_DISPONIBLES,
+                                                vapply(ORGDBS_DISPONIBLES, orgdb_label,
+                                                       character(1)))
+                              else c("(sin OrgDb instalado)" = ""),
+                              selected = if (length(ORGDBS_DISPONIBLES))
+                                ORGDBS_DISPONIBLES[1] else "",
+                              width = "260px")
+                ),
                 conditionalPanel(
                   "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
                   selectInput("deg_go_keytype", NULL,
@@ -701,6 +702,30 @@ ui_tab_deg_results <- function() {
               DTOutput("deg_enrich_compare_table")
             )
           )
+        )
+      ),
+      nav_panel(
+        "Reproducibilidad",
+        card(
+          card_header("Informe y script equivalente"),
+          tags$p(class = "small text-muted",
+                 paste("Una app grafica no deja rastro de que se hizo. El informe",
+                       "recoge todos los parametros, el contraste, la formula del",
+                       "diseno, los diagnosticos y las versiones de los paquetes;",
+                       "el script reproduce el mismo analisis con Bioconductor,",
+                       "fuera de la app.")),
+          div(style = "display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;",
+              downloadButton("download_deg_report", "Informe HTML",
+                             icon = icon("file-code"), class = "btn-sm"),
+              downloadButton("download_deg_script", "Script R equivalente",
+                             icon = icon("r-project"), class = "btn-sm")),
+          tags$hr(),
+          # La correspondencia de la seudonimizacion se descarga aparte del
+          # informe: exportar los identificadores reales debe ser una decision
+          # deliberada, no un efecto colateral.
+          uiOutput("deg_pseudonym_ui"),
+          tags$b(class = "small", "Vista previa del script"),
+          verbatimTextOutput("deg_script_preview", placeholder = TRUE)
         )
       )
     )

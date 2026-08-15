@@ -244,7 +244,18 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
     if (!is.na(e$metrica %||% NA)) {
       campos[["Metrica del ranking"]] <- e$metrica
       campos[["Ponderacion (exponent)"]] <- e$exponent
+      # Estos cuatro cambian que conjuntos se testean y cuales se devuelven, de
+      # modo que sin ellos el resultado no es reproducible.
+      campos[["Tamano de conjunto"]] <- paste0(e$gsea_min_size %||% "—", " - ",
+                                               e$gsea_max_size %||% "—", " genes")
+      campos[["Corte de p ajustado"]] <- e$gsea_pcutoff %||% "—"
+      campos[["Precision del p-valor (eps)"]] <-
+        if (identical(e$gsea_eps %||% NA_real_, 0)) "exacto (eps = 0)"
+        else paste0("truncado en ", e$gsea_eps %||% "1e-10")
     }
+    if (!is.na(e$direccional %||% NA)) campos[["ORA por direccion"]] <- e$direccional
+    if (!is.na(e$gmt %||% NA)) campos[["Gene sets propios"]] <- e$gmt
+    if (!is.null(e$simbolos)) campos[["IDs a simbolos"]] <- e$simbolos
     if (!is.na(e$simplify %||% NA)) campos[["Colapsar redundantes"]] <- e$simplify
     if (!is.na(e$organismo_kegg %||% NA)) campos[["Organismo KEGG"]] <- e$organismo_kegg
     if (!is.na(e$error %||% NA)) campos[["Resultado"]] <- e$error

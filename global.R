@@ -25,6 +25,31 @@ HAS_LIMMA           <- pkg_ok("limma")
 HAS_CLUSTERPROFILER <- pkg_ok("clusterProfiler")
 HAS_PHEATMAP        <- pkg_ok("pheatmap")
 HAS_ORGECDB         <- pkg_ok("org.EcK12.eg.db")
+
+#' OrgDb instalados en el sistema, para el selector de organismo.
+#'
+#' La app tenia el OrgDb cableado a org.EcK12.eg.db, de modo que con datos de
+#' cualquier otro organismo el enriquecimiento GO no podia funcionar aunque su
+#' paquete de anotacion estuviera instalado: el mapeo salia del 0 % y la app
+#' avisaba, correctamente, de algo que no tenia forma de arreglar desde la
+#' interfaz. Se detectan al arrancar y se ofrecen todos.
+available_orgdbs <- function() {
+  pkgs <- tryCatch(rownames(utils::installed.packages()), error = function(e) character(0))
+  sort(grep("^org[.].*[.]db$", pkgs, value = TRUE))
+}
+ORGDBS_DISPONIBLES <- available_orgdbs()
+
+#' Nombre legible del organismo de un OrgDb, para no obligar a leer "org.Hs.eg.db".
+orgdb_label <- function(pkg) {
+  conocidos <- c(org.Hs.eg.db = "Homo sapiens", org.Mm.eg.db = "Mus musculus",
+                 org.Rn.eg.db = "Rattus norvegicus", org.Dm.eg.db = "Drosophila melanogaster",
+                 org.Ce.eg.db = "Caenorhabditis elegans", org.Sc.sgd.db = "Saccharomyces cerevisiae",
+                 org.Dr.eg.db = "Danio rerio", org.At.tair.db = "Arabidopsis thaliana",
+                 org.EcK12.eg.db = "Escherichia coli K12",
+                 org.EcSakai.eg.db = "Escherichia coli Sakai")
+  etiqueta <- unname(conocidos[pkg])
+  ifelse(is.na(etiqueta), pkg, paste0(etiqueta, " (", pkg, ")"))
+}
 # Encogido de log2FC (lfcShrink). apeglm es la opcion recomendada por la
 # vinieta de DESeq2; ashr sirve de alternativa. Sin ninguno de los dos se cae a
 # type = "normal".
