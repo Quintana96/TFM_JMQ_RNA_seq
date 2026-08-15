@@ -37,14 +37,38 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
   observeEvent(input$deg_run_boot_btn, {
     req(state$deg_rv$results, state$deg_rv$counts, state$deg_rv$meta)
     n_boot <- input$deg_boot_n %||% 20
+    # Swish trabaja sobre replicas inferenciales y a nivel de transcrito, no
+    # sobre la matriz de conteos: run_deg() ni siquiera lo acepta como motor, asi
+    # que el remuestreo moriria en match.arg con un error incomprensible.
+    if (identical(state$deg_rv$method, "Swish")) {
+      showNotification(paste0(
+        "El bootstrap de replicabilidad no esta disponible para Swish: remuestrea ",
+        "la matriz de conteos, y Swish parte de las replicas inferenciales de la ",
+        "cuantificacion."), type = "warning", duration = 14)
+      boot_rv(NULL); return()
+    }
     withProgress(message = "Estimando replicabilidad...", value = 0, {
+      # TODOS los parametros salen del estado del ajuste, no de la interfaz. Los
+      # selectores siguen vivos despues de ajustar, asi que leerlos aqui podia
+      # medir la replicabilidad de un contraste o un diseno distintos de los que
+      # produjeron los resultados que se estan evaluando.
+      #
+      # Limite conocido: si el diseno incluye variables sustitutas, el remuestreo
+      # reutiliza las SV estimadas sobre los datos COMPLETOS en lugar de
+      # reestimarlas en cada remuestreo. Reestimarlas seria lo correcto en
+      # sentido estricto, pero sva falla a menudo sobre submuestras y el coste se
+      # multiplica por n_boot. Reutilizarlas tiende a dar una replicabilidad algo
+      # OPTIMISTA, que es la direccion menos peligrosa para un aviso.
       res <- bootstrap_replicability(
         state$deg_rv$counts, state$deg_rv$meta,
         method = state$deg_rv$method %||% "DESeq2",
-        ref_level = input$deg_contrast_den, contrast_num = input$deg_contrast_num,
-        batch = if (isTRUE(input$deg_use_batch)) input$deg_batch_col else NULL,
+        ref_level = state$deg_rv$ref_level, contrast_num = state$deg_rv$contrast_num,
+        batch = state$deg_rv$batch,
         fdr = state$deg_rv$fdr %||% 0.05,
         lfc_threshold = state$deg_rv$lfc_threshold %||% 0,
+        design_formula = state$deg_rv$design_formula,
+        test_coef = state$deg_rv$test_coef,
+        seed = ANALYSIS_SEED,
         n_boot = n_boot,
         progress = function(i, n) setProgress(value = i / n,
                                               detail = paste0(i, " / ", n)))
@@ -123,13 +147,28 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
     if (!nzchar(other)) {
       showNotification("Elige un metodo con el que comparar.", type = "warning"); return()
     }
+    # Comparar contra Swish cruzaria identificadores de TRANSCRITO con
+    # identificadores de GEN, dando un solapamiento de 0 que parece un resultado
+    # y no lo es.
+    if (identical(state$deg_rv$method, "Swish")) {
+      showNotification(paste0(
+        "La comparacion entre metodos no esta disponible con Swish: sus ",
+        "resultados son por transcrito y los del resto por gen, asi que el ",
+        "solapamiento no seria interpretable."), type = "warning", duration = 14)
+      compare_rv(NULL); return()
+    }
     withProgress(message = paste0("Corriendo ", other, "..."), value = 0.4, {
+      # Mismo criterio que el bootstrap: el contraste y el diseno son los del
+      # ajuste, no los que tengan los selectores en este instante. De lo
+      # contrario se compararian dos analisis distintos entre si.
       r2 <- tryCatch(run_deg(
         state$deg_rv$counts, state$deg_rv$meta, method = other,
-        ref_level = input$deg_contrast_den, contrast_num = input$deg_contrast_num,
-        batch = if (isTRUE(input$deg_use_batch)) input$deg_batch_col else NULL,
+        ref_level = state$deg_rv$ref_level, contrast_num = state$deg_rv$contrast_num,
+        batch = state$deg_rv$batch,
         fdr = state$deg_rv$fdr %||% 0.05,
-        lfc_threshold = state$deg_rv$lfc_threshold %||% 0, shrink = FALSE),
+        lfc_threshold = state$deg_rv$lfc_threshold %||% 0, shrink = FALSE,
+        design_formula = state$deg_rv$design_formula,
+        test_coef = state$deg_rv$test_coef),
         error = function(e) list(table = NULL, error = conditionMessage(e)))
     })
     if (is.null(r2$table)) {
