@@ -439,12 +439,14 @@ server_tab_deg <- function(input, output, session, state) {
       setProgress(value = 0.85, detail = "preparando visualizaciones")
       out
     })
+    quant_tool_used <- NULL
     if (identical(method, "Swish")) {
       res$method <- method
       # Swish permuta etiquetas: sin semilla, el mismo input da q-valores
       # distintos en cada ejecucion.
       seeds_used$swish <- ANALYSIS_SEED
       seeds_used$swish_nperms <- res$n_perms %||% SWISH_NPERMS
+      quant_tool_used <- run_info$tool
     }
 
     if (is.null(res$table)) {
@@ -526,6 +528,7 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$batch          <- batch
     state$deg_rv$design_formula <- dsg_formula
     state$deg_rv$test_coef      <- test_coef
+    state$deg_rv$quant_tool     <- quant_tool_used
     state$deg_rv$seeds          <- seeds_used
 
     if (do_shrink && identical(method, "DESeq2") &&

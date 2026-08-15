@@ -183,10 +183,23 @@ build_deg_r_script <- function(rv) {
   fdr <- rv$fdr %||% 0.05
   lfc <- rv$lfc_threshold %||% 0
   coef <- rv$coef %||% ""
-  ref <- if (!is.null(rv$meta) && "condition" %in% names(rv$meta)) {
-    lv <- levels(as.factor(as.character(rv$meta$condition)))
-    lv[1]
-  } else ""
+  # Denominador REAL del contraste ajustado. Antes se tomaba el primer nivel en
+  # orden ALFABETICO, que solo coincide con el denominador elegido por
+  # casualidad: en cuanto el usuario contrastaba, por ejemplo, "ctrl vs trt", el
+  # script releveleaba a "ctrl" y luego pedia un coeficiente que no existe, de
+  # modo que fallaba al ejecutarse. El contraste es parte del ajuste, no algo
+  # que se pueda deducir de los datos a posteriori.
+  ref <- rv$ref_level %||%
+    # Respaldo para estados guardados antes de que se registrara ref_level:
+    # el contraste se muestra como "num vs den".
+    (if (!is.null(rv$contrast) && grepl(" vs ", rv$contrast, fixed = TRUE))
+       sub("^.* vs ", "", rv$contrast) else NULL) %||%
+    (if (!is.null(rv$meta) && "condition" %in% names(rv$meta))
+       levels(as.factor(as.character(rv$meta$condition)))[1] else "")
+  num <- rv$contrast_num %||%
+    (if (!is.null(rv$contrast) && grepl(" vs ", rv$contrast, fixed = TRUE))
+       sub(" vs .*$", "", rv$contrast) else "")
+  seeds <- rv$seeds %||% list()
   pf <- rv$prefilter
 
   header <- c(
@@ -197,17 +210,43 @@ build_deg_r_script <- function(rv) {
            "   |   Motor: ", method),
     "#",
     "# Entradas que hay que proporcionar:",
-    "#   counts.tsv  matriz de conteos (genes x muestras)",
+    if (identical(method, "Swish"))
+      "#   quant_dir   directorio 03_alignments de la ejecucion (salmon/kallisto)"
+    else "#   counts.tsv  matriz de conteos (genes x muestras)",
     "#   meta.tsv    samplesheet con sample_id, condition y las covariables del diseno",
     "",
-    'counts <- as.matrix(read.delim("counts.tsv", row.names = 1, check.names = FALSE))',
+    "# Semilla de todo lo estocastico del analisis. Sin fijarla, los resultados",
+    "# que dependen de permutaciones no son reproducibles.",
+    paste0("set.seed(", seeds$sva %||% seeds$swish %||% 1L, ")"),
+    "",
+    if (identical(method, "Swish")) character(0) else
+      'counts <- as.matrix(read.delim("counts.tsv", row.names = 1, check.names = FALSE))',
     'meta   <- read.delim("meta.tsv", stringsAsFactors = FALSE)',
     'meta   <- meta[match(colnames(counts), meta$sample_id), , drop = FALSE]',
+    paste0('# El denominador del contraste es el nivel de referencia del factor.'),
     paste0('meta$condition <- relevel(factor(meta$condition), ref = "', ref, '")'),
     ""
   )
 
-  prefilter <- if (!is.null(pf) && identical(pf$mode, "filterByExpr")) c(
+  # Variables sustitutas: la formula del diseno las menciona (SV1, SV2...) pero
+  # no estan en meta.tsv, asi que hay que volver a estimarlas o el script no
+  # correria. Se reproducen con la misma semilla y el mismo numero.
+  sva_block <- if (!is.null(seeds$n_sv) && seeds$n_sv > 0) c(
+    "# El diseno incluye variables sustitutas estimadas con sva. Para reproducir",
+    "# el ajuste hay que volver a estimarlas: no viajan en el samplesheet.",
+    "mod  <- model.matrix(~ condition, data = meta)",
+    "mod0 <- model.matrix(~ 1, data = meta)",
+    "cm_sv <- as.matrix(counts)[rowMeans(as.matrix(counts)) > 1, , drop = FALSE]",
+    paste0("sv <- sva::svaseq(cm_sv, mod, mod0, n.sv = ", seeds$n_sv, ")$sv"),
+    "colnames(sv) <- paste0(\"SV\", seq_len(ncol(sv)))",
+    "meta <- cbind(meta, as.data.frame(sv))",
+    ""
+  ) else character(0)
+
+  # Swish no parte de la matriz de conteos, asi que el prefiltrado no aplica:
+  # emitirlo produciria un script que referencia un objeto `counts` inexistente.
+  prefilter <- if (identical(method, "Swish")) character(0) else
+    if (!is.null(pf) && identical(pf$mode, "filterByExpr")) c(
     "# Prefiltrado: filterByExpr usa el tamano del grupo mas pequeno",
     paste0("design <- model.matrix(", design, ", data = meta)"),
     "y <- edgeR::DGEList(counts = round(counts), group = meta$condition)",
@@ -225,6 +264,12 @@ build_deg_r_script <- function(rv) {
   body <- switch(method,
     "DESeq2" = c(
       "library(DESeq2)",
+      # IHW necesita S4Vectors ATACHADO, no solo cargado: sin esto falla con
+      # "no se pudo encontrar la funcion mcols". Es el mismo tropiezo que tuvo
+      # la propia app, asi que el script no puede omitirlo.
+      if (identical(rv$padj_method, "IHW"))
+        "library(IHW); library(S4Vectors)  # IHW necesita S4Vectors atachado"
+      else character(0),
       paste0("dds <- DESeqDataSetFromMatrix(round(counts), meta, ", design, ")"),
       "dds <- DESeq(dds)",
       paste0("# alpha = FDR objetivo: calibra el filtrado independiente"),
@@ -279,6 +324,34 @@ build_deg_r_script <- function(rv) {
       "res <- dear_seq(exprmat = round(counts), variables2test = v2t,",
       "                which_test = \"asymptotic\", preprocessed = FALSE)$pvals"
     ),
+    "Swish" = c(
+      "library(fishpond); library(tximport); library(SummarizedExperiment)",
+      "# Swish no parte de la matriz de conteos: la incertidumbre de la",
+      "# cuantificacion vive en las replicas inferenciales de salmon/kallisto.",
+      "# El analisis queda a nivel de TRANSCRITO (txOut = TRUE).",
+      paste0('qfiles <- list.files("quant_dir", pattern = "',
+             if (identical(rv$quant_tool %||% "", "kallisto")) "abundance.h5"
+             else "quant.sf",
+             '", recursive = TRUE, full.names = TRUE)'),
+      "names(qfiles) <- basename(dirname(qfiles))",
+      "qfiles <- qfiles[match(meta$sample_id, names(qfiles))]",
+      paste0('txi <- tximport(qfiles, type = "', rv$quant_tool %||% "salmon",
+             '", txOut = TRUE, dropInfReps = FALSE)'),
+      "se <- SummarizedExperiment(",
+      "  assays = c(list(counts = txi$counts, abundance = txi$abundance,",
+      "                  length = txi$length), txi$infReps),",
+      "  colData = S4Vectors::DataFrame(meta))",
+      paste0('colData(se)$condition <- factor(as.character(meta$condition),',
+             ' levels = c("', ref, '", "', num, '"))'),
+      "y <- scaleInfReps(se)",
+      "y <- labelKeep(y)",
+      "y <- y[mcols(y)$keep, ]",
+      paste0("y <- swish(y, x = \"condition\", nperms = ",
+             seeds$swish_nperms %||% 30L, ")"),
+      "res <- as.data.frame(mcols(y))",
+      "# Swish reporta qvalue, no padj; se renombra para el resumen de abajo.",
+      "res$padj <- res$qvalue"
+    ),
     "# Motor no reconocido"
   )
 
@@ -289,5 +362,5 @@ build_deg_r_script <- function(rv) {
     "",
     "sessionInfo()"
   )
-  paste(c(header, prefilter, body, footer), collapse = "\n")
+  paste(c(header, sva_block, prefilter, body, footer), collapse = "\n")
 }

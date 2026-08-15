@@ -115,6 +115,7 @@ create_app_state <- function(session) {
     batch          = NULL,   # columna de batch incluida en el diseno, si la hay
     design_formula = NULL,   # formula libre usada (incluye las SV), o NULL
     test_coef      = NULL,   # coeficiente elegido en el modo avanzado, o NULL
+    quant_tool     = NULL,   # salmon/kallisto: lo necesita el motor Swish
     # Semillas y parametros estocasticos, para poder declararlos en el informe
     # y reproducir el resultado exactamente.
     seeds         = NULL,
