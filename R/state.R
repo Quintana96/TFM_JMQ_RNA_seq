@@ -21,9 +21,32 @@ create_app_state <- function(session) {
   outputs_dir_norm <- normalizePath(outputs_dir, mustWork = TRUE)
   addResourcePath("saved_outputs", outputs_dir_norm)
 
-  # Roots para shinyFiles (compartidos entre las pestanas 1 y 3)
-  roots <- c(wd = normalizePath(getwd()), home = normalizePath("~"))
-  roots_results <- c(outputs = normalizePath(outputs_dir, mustWork = FALSE))
+  # Roots para shinyFiles (compartidos entre las pestanas 1 y 3).
+  #
+  # Se pasan como FUNCION, no como vector: shinyFiles la reevalua en cada
+  # peticion, de modo que un disco externo montado con la app ya abierta aparece
+  # sin reiniciarla. Antes eran solo el directorio del proyecto y el home, asi
+  # que no habia forma de llegar a FASTQ, genomas o anotaciones guardados en
+  # otro volumen o fuera de la carpeta del usuario.
+  #
+  # getVolumes() enumera los volumenes montados (en macOS incluye
+  # /Volumes/<disco>, y los externos segun se conecten). Se anade la raiz del
+  # sistema para poder navegar a cualquier ruta absoluta.
+  roots <- function() {
+    vols <- tryCatch(shinyFiles::getVolumes()(), error = function(e) character(0))
+    base <- c("Proyecto" = normalizePath(getwd(), mustWork = FALSE),
+              "Inicio"   = normalizePath("~", mustWork = FALSE),
+              "Sistema (/)" = "/")
+    # Sin duplicar rutas: si un volumen coincide con una de las anteriores, se
+    # queda la primera (la de nombre mas descriptivo).
+    todo <- c(base, vols)
+    todo[!duplicated(normalizePath(todo, mustWork = FALSE))]
+  }
+  # El selector de resultados arranca en outputs/ por comodidad, pero tambien
+  # permite salir de ahi: una ejecucion guardada puede vivir en otro disco.
+  roots_results <- function() {
+    c("Resultados" = normalizePath(outputs_dir, mustWork = FALSE), roots())
+  }
 
   state <- new.env(parent = emptyenv())
 
