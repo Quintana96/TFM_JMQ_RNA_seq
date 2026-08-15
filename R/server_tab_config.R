@@ -390,6 +390,47 @@ server_tab_config <- function(input, output, session, state) {
          depth = max(1, input$pw_depth %||% 20))
   })
 
+  # Estimacion de los parametros a partir de la matriz cargada. Pedir el CV y la
+  # profundidad "a ojo" es la parte mas fragil del calculo, y la diferencia no es
+  # cosmetica: sobre datos reales, los valores por defecto (cv 0,4, profundidad
+  # 20) y los medidos sobre la misma matriz dan potencias muy distintas.
+  pw_estimated <- reactiveVal(NULL)
+  observeEvent(input$pw_estimate_btn, {
+    cm <- state$data_rv$count_matrix
+    if (is.null(cm) || !length(cm)) {
+      showNotification(paste0(
+        "No hay ninguna matriz de conteos cargada en esta sesion. Carga una en ",
+        "esta pestana o analiza una ejecucion guardada, y vuelve a pulsar."),
+        type = "warning", duration = 12)
+      return()
+    }
+    withProgress(message = "Estimando parametros de los datos...", value = 0.4, {
+      est <- estimate_power_params(cm, NULL)
+    })
+    if (is.null(est) || !is.finite(est$cv %||% NA_real_)) {
+      showNotification("No se han podido estimar los parametros de estos datos.",
+                       type = "error", duration = 10)
+      return()
+    }
+    updateNumericInput(session, "pw_cv", value = round(est$cv, 3))
+    updateNumericInput(session, "pw_depth", value = round(est$depth))
+    if (!is.na(est$n_por_grupo %||% NA)) {
+      updateNumericInput(session, "pw_n", value = est$n_por_grupo)
+    }
+    pw_estimated(est)
+  })
+
+  output$pw_estimate_note <- renderUI({
+    e <- pw_estimated()
+    if (is.null(e)) {
+      return(HTML(paste("Con una matriz cargada, el CV biologico y la profundidad",
+                        "se miden en lugar de suponerse.")))
+    }
+    HTML(paste0("Medidos sobre la matriz cargada: CV = ", round(e$cv, 3),
+                " (BCV de edgeR), profundidad = ", round(e$depth),
+                " conteos por gen."))
+  })
+
   output$pw_verdict <- renderUI({
     p <- pw_params()
     r <- power_for_n(p$n, cv = p$cv, effect = p$effect, depth = p$depth)

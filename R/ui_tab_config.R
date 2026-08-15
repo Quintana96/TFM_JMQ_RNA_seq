@@ -176,6 +176,15 @@ ui_tab_config <- function() {
           numericInput("pw_depth", "Profundidad media por gen", value = 20, min = 1,
                        max = 1000, step = 5)
         ),
+        # El CV y la profundidad son justo los parametros que quien usa la app no
+        # conoce, y de los que depende todo el resultado. Si hay una matriz
+        # cargada se pueden MEDIR en lugar de adivinarse.
+        tags$div(class = "d-flex align-items-center gap-2 mb-2",
+          actionButton("pw_estimate_btn",
+                       tagList(icon("wand-magic-sparkles"), " Estimar de mis datos"),
+                       class = "btn-secondary btn-sm"),
+          tags$small(class = "text-muted", uiOutput("pw_estimate_note", inline = TRUE))
+        ),
         tags$small(class = "text-muted d-block mb-2",
                    paste("CV tipico: 0,1 en lineas celulares, 0,4 en muestras",
                          "humanas. La profundidad es el numero medio de conteos por",

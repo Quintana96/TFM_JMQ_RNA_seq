@@ -23,6 +23,57 @@ POWER_REFERENCE_NOTE <- paste(
   "tipicamente entre el 20 % y el 40 % de lo detectable."
 )
 
+#' Estima los parametros de potencia A PARTIR de la matriz cargada.
+#'
+#' Pedir el coeficiente de variacion y la profundidad "a ojo" es la parte mas
+#' fragil del calculo: son justo los valores que el usuario no conoce, y de los
+#' que depende todo el resultado. Si hay una matriz de conteos cargada, ambos se
+#' pueden medir en lugar de adivinarse:
+#'
+#'   - `cv` es la raiz cuadrada de la dispersion biologica comun (BCV) que
+#'     estima edgeR, que es exactamente la definicion del coeficiente de
+#'     variacion biologico que espera RNASeqPower.
+#'   - `depth` es la mediana de conteos por gen entre los genes expresados; usar
+#'     la media la infla por unos pocos genes muy expresados.
+#'
+#' @param counts matriz de conteos
+#' @param meta samplesheet con `condition` (para el diseno del BCV)
+#' @return list(cv, depth, n_por_grupo, origen) o NULL si no se puede estimar
+estimate_power_params <- function(counts, meta = NULL) {
+  if (is.null(counts) || !nrow(counts) || ncol(counts) < 2) return(NULL)
+  cm <- round(as.matrix(counts))
+  out <- tryCatch({
+    depth <- stats::median(cm[cm > 0], na.rm = TRUE)
+    cv <- NA_real_
+    if (requireNamespace("edgeR", quietly = TRUE)) {
+      grupo <- if (!is.null(meta) && "condition" %in% names(meta) &&
+                   length(unique(stats::na.omit(meta$condition))) > 1) {
+        as.factor(as.character(meta$condition))
+      } else NULL
+      y <- edgeR::DGEList(counts = cm, group = grupo)
+      keep <- edgeR::filterByExpr(y, group = grupo)
+      # El metodo `[` de DGEList no admite `drop`.
+      if (sum(keep) > 50) y <- y[keep, ]
+      y <- norm_lib_sizes(y)
+      design <- if (!is.null(grupo)) {
+        stats::model.matrix(~ grupo)
+      } else {
+        matrix(1, ncol(y), 1)
+      }
+      y <- edgeR::estimateDisp(y, design, robust = TRUE)
+      # BCV = sqrt(dispersion comun); es el CV biologico.
+      cv <- sqrt(y$common.dispersion %||% NA_real_)
+    }
+    n_grp <- if (!is.null(meta) && "condition" %in% names(meta)) {
+      tb <- table(as.character(meta$condition))
+      if (length(tb)) min(tb) else NA_integer_
+    } else NA_integer_
+    list(cv = cv, depth = depth, n_por_grupo = n_grp,
+         origen = "estimados de la matriz cargada")
+  }, error = function(e) NULL)
+  out
+}
+
 #' Potencia para un tamano muestral dado, via RNASeqPower.
 #'
 #' @param n replicas por grupo

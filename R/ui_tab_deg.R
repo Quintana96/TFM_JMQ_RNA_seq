@@ -192,6 +192,18 @@ ui_tab_deg <- function() {
                            "muchos tests para poder formar bins: con pocos genes se",
                            "reduce a BH."))
         ) else NULL,
+        selectInput("deg_outliers", "Outliers de Cook",
+                    choices = c(
+                      "Excluirlos del test (por defecto)" = "na",
+                      "Sustituir el valor atipico y volver a testear" = "refit",
+                      "Ignorar el filtro: tratarlos como biologia real" = "keep"),
+                    selected = "na", width = "100%"),
+        tags$small(class = "text-muted d-block mb-2",
+                   paste("Solo DESeq2. Un gen con un valor extremo en una muestra",
+                         "queda sin p-valor ajustado. Sustituirlo lo devuelve al",
+                         "test; ignorar el filtro es lo apropiado cuando el valor",
+                         "extremo ES el hallazgo (un gen que solo se expresa en una",
+                         "muestra tratada) y no un artefacto.")),
         actionButton("run_deg_btn",
                      tagList(icon("flask"), " Lanzar DEG"),
                      class = "btn-success btn-lg"),

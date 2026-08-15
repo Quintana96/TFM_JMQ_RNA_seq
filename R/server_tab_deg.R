@@ -486,7 +486,8 @@ server_tab_deg <- function(input, output, session, state) {
         run_deg(cm_f, meta_aln, method = method, ref_level = ref, batch = batch,
                 fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink,
                 contrast_num = num, use_ihw = isTRUE(input$deg_use_ihw),
-                design_formula = dsg_formula, test_coef = test_coef),
+                design_formula = dsg_formula, test_coef = test_coef,
+                outliers = input$deg_outliers %||% "na"),
         error = function(e) list(table = NULL, error = conditionMessage(e), method = method)
       )
       }

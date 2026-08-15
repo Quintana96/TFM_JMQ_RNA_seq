@@ -326,7 +326,8 @@ deseq_dispersion_data <- function(dds) {
 run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
                            fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                            contrast_num = NULL, use_ihw = FALSE,
-                           design_formula = NULL, test_coef = NULL) {
+                           design_formula = NULL, test_coef = NULL,
+                           outliers = c("na", "refit", "keep")) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
     return(list(table = NULL, error = "DESeq2 no esta instalado."))
   }
@@ -338,7 +339,21 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
       colData = d$meta,
       design = d$formula
     )
-    dds <- DESeq2::DESeq(dds, quiet = TRUE)
+    # Tratamiento de los outliers de Cook. DESeq2 pone padj = NA a los genes con
+    # un valor extremo en alguna muestra, y solo sustituye ese valor cuando hay
+    # al menos `minReplicatesForReplace` replicas. Los tres modos:
+    #   "na"     comportamiento por defecto: el gen se marca y sale de la lista.
+    #   "refit"  se rebaja el minimo de replicas para que DESeq2 sustituya el
+    #            valor atipico y el gen vuelva a ser testeable.
+    #   "keep"   se desactiva el filtro: util cuando el "outlier" es biologia
+    #            real (un gen que solo se expresa en una muestra tratada) y no
+    #            un artefacto.
+    outliers <- match.arg(outliers, c("na", "refit", "keep"))
+    dds <- if (identical(outliers, "refit")) {
+      DESeq2::DESeq(dds, quiet = TRUE, minReplicatesForReplace = 3)
+    } else {
+      DESeq2::DESeq(dds, quiet = TRUE)
+    }
     coef_name <- resolve_test_coef(DESeq2::resultsNames(dds), test_coef,
                                    contrast_num, d$ref)
 
@@ -349,6 +364,7 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
       lfcThreshold = if (is.finite(lfc_threshold)) lfc_threshold else 0,
       altHypothesis = "greaterAbs"
     )
+    if (identical(outliers, "keep")) res_args$cooksCutoff <- FALSE
     if (!is.null(filter_fun)) res_args$filterFun <- filter_fun
     res <- do.call(DESeq2::results, res_args)
     df <- as.data.frame(res)
@@ -762,8 +778,10 @@ run_deg <- function(counts, meta,
                     ref_level = NULL, batch = NULL,
                     fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                     contrast_num = NULL, use_ihw = FALSE,
-                    design_formula = NULL, test_coef = NULL) {
+                    design_formula = NULL, test_coef = NULL,
+                    outliers = c("na", "refit", "keep")) {
   method <- match.arg(method)
+  outliers <- match.arg(outliers)
   lvls <- unique(as.character(meta$condition[!is.na(meta$condition) &
                                                nzchar(as.character(meta$condition))]))
   if (!is.null(contrast_num) && length(contrast_num) && nzchar(contrast_num)) {
@@ -789,7 +807,8 @@ run_deg <- function(counts, meta,
   }
   res <- switch(method,
     "DESeq2"     = run_deg_deseq2(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                  shrink, contrast_num, use_ihw, design_formula, test_coef),
+                                  shrink, contrast_num, use_ihw, design_formula, test_coef,
+                                  outliers),
     "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold,
                                  shrink, contrast_num, use_ihw, design_formula, test_coef),
     "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold,
