@@ -77,17 +77,29 @@ annotation_file_for_run <- function(out_dir) {
 #' Infiere parametros de una run pasada solo a partir del directorio de salida.
 #' Util cuando el usuario abre una carpeta de outputs/ sin contexto de sesion.
 infer_result_params <- function(out_dir, workflow_path) {
+  saved_params <- read_run_params_file(out_dir)
   tool <- if (dir.exists(file.path(out_dir, "03_alignments", "bowtie2"))) {
     "bowtie2"
   } else if (dir.exists(file.path(out_dir, "03_alignments", "salmon"))) {
     "salmon"
   } else if (dir.exists(file.path(out_dir, "03_alignments", "kallisto"))) {
     "kallisto"
+  } else if (isTRUE(saved_params$tool %in% c("bowtie2", "salmon", "kallisto"))) {
+    # La carpeta 03_alignments puede no estar: se borra para ahorrar espacio (los
+    # BAM son lo mas pesado de una ejecucion) o la ejecucion se copio sin ella.
+    # El workflow deja la herramienta escrita en run_params.tsv, asi que se
+    # respeta antes de darla por desconocida. Sin esto, una ejecucion con su
+    # matriz de conteos intacta no se podia cargar.
+    saved_params$tool
+  } else if (file.exists(file.path(out_dir, "04_counts", "count_matrix.tsv"))) {
+    # Ultimo recurso: hay matriz por gen pero no consta como se genero. Se lee
+    # igual que la de featureCounts, que es un TSV de genes x muestras.
+    "bowtie2"
   } else {
     "desconocida"
   }
   analysis <- if (identical(tool, "bowtie2")) "alignment" else "pseudo"
-  saved <- read_run_params_file(out_dir)
+  saved <- saved_params
   counts <- tryCatch(
     load_counts_from_workflow(out_dir, tool, annotation_file = annotation_file_for_run(out_dir)),
     error = function(e) NULL

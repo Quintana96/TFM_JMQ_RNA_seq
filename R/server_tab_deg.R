@@ -269,7 +269,38 @@ server_tab_deg <- function(input, output, session, state) {
     method <- input$deg_method %||% "DESeq2"
 
     if (is.null(cm) || !ncol(cm)) {
-      showNotification("No hay matriz de conteos cargada.", type = "error"); return()
+      # Un "no hay matriz" a secas no dice donde mirar. El fallo depende de la
+      # fuente elegida en la tarjeta 1, asi que el mensaje la nombra y explica
+      # que falta exactamente en cada caso.
+      src <- input$deg_source %||% "current"
+      detalle <- switch(src,
+        "current" = paste0(
+          "Fuente: 'Ejecucion actual', pero no hay ninguna cargada en esta ",
+          "sesion. Si has subido la matriz en la pestana 1, pulsa alli ",
+          "'Analisis a partir de matriz de conteos' para cargarla; si vienes de ",
+          "una ejecucion guardada, elige 'Ejecucion guardada' aqui."),
+        "saved" = {
+          sel <- input$selected_deg_run_dir %||% ""
+          if (!nzchar(sel)) {
+            "Fuente: 'Ejecucion guardada', pero no hay ninguna seleccionada."
+          } else if (!dir.exists(sel)) {
+            paste0("Fuente: 'Ejecucion guardada', pero el directorio ya no ",
+                   "existe: ", sel)
+          } else {
+            paste0("Fuente: 'Ejecucion guardada' (", basename(sel),
+                   "), pero no se ha podido leer su matriz de conteos. ",
+                   "Comprueba que existe 04_counts/count_matrix.tsv, o las ",
+                   "cuantificaciones en 03_alignments/.")
+          }
+        },
+        "upload" = paste0(
+          "Fuente: 'Matriz subida', pero no se ha podido leer el fichero. ",
+          "Comprueba que la subida ha terminado y que es un TSV o CSV con los ",
+          "genes en la primera columna y una muestra por columna."),
+        "No se ha podido obtener la matriz de conteos."
+      )
+      showNotification(detalle, type = "error", duration = 20)
+      return()
     }
     if (is.null(df) || !nrow(df)) {
       showNotification("Carga o crea un samplesheet.", type = "error"); return()
