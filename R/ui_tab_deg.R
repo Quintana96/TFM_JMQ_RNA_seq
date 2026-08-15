@@ -529,11 +529,14 @@ ui_tab_deg_results <- function() {
                                         if (isTRUE(HAS_FGSEA))
                                           c("GSEA (ranking completo)" = "gsea")),
                             selected = "ora", width = "215px"),
+                # GMT no es una ontologia mas: es la via para trabajar sin OrgDb
+                # (organismos no modelo) y con colecciones curadas como MSigDB.
                 selectInput("deg_ontology", NULL,
                             choices = c("GO: Procesos biologicos" = "BP",
                                         "GO: Funcion molecular" = "MF",
                                         "GO: Componente celular" = "CC",
-                                        "KEGG" = "KEGG"),
+                                        "KEGG" = "KEGG",
+                                        "Gene sets propios (GMT)" = "GMT"),
                             selected = "BP", width = "200px"),
                 conditionalPanel(
                   "input.deg_enrich_approach === 'gsea'",
@@ -547,7 +550,7 @@ ui_tab_deg_results <- function() {
                 # locus tags, no simbolos. Fijarlo a SYMBOL hacia fallar el mapeo
                 # en silencio, asi que ahora es explicito y seleccionable.
                 conditionalPanel(
-                  "input.deg_ontology !== 'KEGG'",
+                  "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
                   selectInput("deg_go_keytype", NULL,
                               choices = c("SYMBOL"), selected = "SYMBOL",
                               width = "150px")
@@ -567,26 +570,137 @@ ui_tab_deg_results <- function() {
                              tagList(icon("play"), " Calcular"),
                              class = "btn-sm"))
           )),
+
+          # Conjuntos propios en formato GMT. Con esto el enriquecimiento deja de
+          # depender de que exista un OrgDb del organismo: basta con un fichero
+          # de conjuntos cuyos identificadores coincidan con los de la matriz.
+          conditionalPanel(
+            "input.deg_ontology === 'GMT'",
+            div(class = "border rounded p-2 mb-2",
+                fileInput("deg_gmt_file", "Fichero .gmt de conjuntos de genes",
+                          accept = c(".gmt", ".txt"), width = "100%"),
+                tags$small(class = "text-muted d-block mb-1",
+                           paste("Un conjunto por linea: nombre, descripcion y genes",
+                                 "separados por tabuladores (MSigDB, regulones de",
+                                 "RegulonDB, firmas propias). Los identificadores del",
+                                 "fichero deben ser los mismos que los de la matriz de",
+                                 "conteos; el selector de keyType no se aplica aqui.")),
+                uiOutput("deg_gmt_summary"))
+          ),
+
           # simplify() solo aplica al ORA sobre GO: colapsa terminos redundantes
           # por similitud semantica, y necesita el grafo de una sola ontologia.
           conditionalPanel(
-            "input.deg_enrich_approach === 'ora' && input.deg_ontology !== 'KEGG'",
+            "input.deg_enrich_approach === 'ora' && input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
             checkboxInput("deg_go_simplify",
                           "Colapsar terminos GO redundantes (simplify, similitud de Wang > 0,7)",
                           FALSE)
           ),
-          uiOutput("deg_enrich_mapping"),
-          plotly::plotlyOutput("deg_enrich_dotplot", height = "440px"),
-          tags$hr(),
-          tags$div(
-            class = "card-title-download",
-            style = "margin-bottom:6px;",
-            tags$span("Tabla de terminos enriquecidos"),
-            downloadButton("download_enrich_table", label = NULL, icon = icon("download"),
-                           class = "btn-sm btn-outline-secondary header-download",
-                           title = "Descargar tabla de enriquecimiento")
+          conditionalPanel(
+            "input.deg_enrich_approach === 'ora'",
+            checkboxInput("deg_ora_directional",
+                          "Analizar tambien por separado los genes al alza y a la baja",
+                          FALSE),
+            tags$small(class = "text-muted d-block mb-2",
+                       paste("Mezclar las dos direcciones diluye la senal: una ruta con",
+                             "la mitad de sus genes inducidos y la otra mitad reprimidos",
+                             "da el mismo p-valor que una ruta coherentemente inducida.",
+                             "Multiplica por tres el tiempo de calculo."))
           ),
-          DTOutput("deg_enrich_table")
+          conditionalPanel(
+            "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
+            checkboxInput("deg_enrich_readable",
+                          "Mostrar simbolos de gen en lugar de los IDs de entrada",
+                          TRUE)
+          ),
+
+          # Parametros de GSEA. Estaban fijados a los valores por defecto de
+          # run_gsea() y son justamente los que cambian la lectura del resultado.
+          conditionalPanel(
+            "input.deg_enrich_approach === 'gsea'",
+            div(class = "border rounded p-2 mb-2",
+                tags$b(class = "small d-block mb-1", "Parametros de GSEA"),
+                layout_columns(
+                  col_widths = c(3, 3, 3, 3),
+                  numericInput("deg_gsea_min_size", "Tamano minimo del conjunto",
+                               value = 10, min = 2, max = 500, step = 5),
+                  numericInput("deg_gsea_max_size", "Tamano maximo",
+                               value = 500, min = 10, max = 5000, step = 50),
+                  numericInput("deg_gsea_pcutoff", "Corte de p ajustado",
+                               value = 0.05, min = 0.001, max = 1, step = 0.01),
+                  checkboxInput("deg_gsea_eps_exact", "P-valores exactos (eps = 0)",
+                                FALSE)
+                ),
+                tags$small(class = "text-muted d-block",
+                           paste("Los conjuntos muy pequenos dan NES inestables y los muy",
+                                 "grandes son inespecificos; acotar el tamano tambien",
+                                 "reduce el numero de tests y con ello el castigo del",
+                                 "ajuste multiple. El corte de p filtra la tabla que",
+                                 "devuelve clusterProfiler: ponlo a 1 para ver todos los",
+                                 "conjuntos testeados, que es la unica forma de",
+                                 "distinguir 'nada llega a 0,05' de un fallo del",
+                                 "analisis. Por defecto fgsea trunca los p-valores en",
+                                 "1e-10 y los conjuntos mas significativos empatan en ese",
+                                 "valor; con eps = 0 se estiman exactos, a costa de",
+                                 "bastante mas tiempo de calculo."))
+            )
+          ),
+
+          # Sub-pestanas: el running score y la comparacion ORA/GSEA son lecturas
+          # distintas del mismo calculo y apiladas en una sola vista no se leen.
+          navset_pill(
+            id = "deg_enrich_tabs",
+            nav_panel(
+              "Resultados",
+              uiOutput("deg_enrich_mapping"),
+              plotly::plotlyOutput("deg_enrich_dotplot", height = "440px"),
+              tags$hr(),
+              tags$div(
+                class = "card-title-download",
+                style = "margin-bottom:6px;",
+                tags$span("Tabla de terminos enriquecidos"),
+                downloadButton("download_enrich_table", label = NULL, icon = icon("download"),
+                               class = "btn-sm btn-outline-secondary header-download",
+                               title = "Descargar tabla de enriquecimiento")
+              ),
+              DTOutput("deg_enrich_table")
+            ),
+            nav_panel(
+              "Running score (GSEA)",
+              tags$p(class = "small text-muted mb-1",
+                     paste("La curva acumula el estadistico a lo largo del ranking:",
+                           "sube al encontrar un gen del conjunto y baja con cada gen",
+                           "que no lo es. El pico es el enrichment score, y los genes",
+                           "que van desde el extremo del ranking hasta el pico son el",
+                           "leading edge: el subconjunto que sostiene el resultado, no",
+                           "el conjunto entero.")),
+              div(style = "display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;",
+                  selectInput("deg_gsea_term", "Conjunto a visualizar",
+                              choices = NULL, width = "520px")),
+              plotly::plotlyOutput("deg_gsea_runscore", height = "380px"),
+              uiOutput("deg_gsea_leading")
+            ),
+            nav_panel(
+              "ORA frente a GSEA",
+              tags$p(class = "small text-muted mb-1",
+                     paste("Corre los dos enfoques sobre el mismo contraste y la misma",
+                           "ontologia y compara los terminos significativos. No compiten:",
+                           "el ORA pregunta si la lista umbralizada esta enriquecida y",
+                           "GSEA si el conjunto esta desplazado en el ranking completo.",
+                           "Los terminos que solo ve GSEA son los de senal debil pero",
+                           "coordinada que el corte de la lista deja fuera.")),
+              div(style = "display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;",
+                  actionButton("deg_run_enrich_compare_btn",
+                               tagList(icon("code-compare"), " Comparar ORA y GSEA"),
+                               class = "btn-sm"),
+                  downloadButton("download_enrich_compare", "Descargar comparacion",
+                                 icon = icon("download"),
+                                 class = "btn-sm btn-outline-secondary")),
+              uiOutput("deg_enrich_compare_summary"),
+              plotly::plotlyOutput("deg_enrich_compare_plot", height = "320px"),
+              DTOutput("deg_enrich_compare_table")
+            )
+          )
         )
       )
     )
