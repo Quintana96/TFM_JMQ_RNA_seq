@@ -10,4 +10,7 @@ server <- function(input, output, session) {
   server_tab_processing(input, output, session, state)
   server_tab_results(input, output, session, state)
   server_tab_deg(input, output, session, state)
+  # La portada va la ultima: lee `state$shared`, que server_tab_config rellena
+  # al final de su ejecucion.
+  server_tab_home(input, output, session, state)
 }
