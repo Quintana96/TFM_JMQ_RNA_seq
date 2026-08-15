@@ -56,26 +56,20 @@ read_input_checksums <- function(out_dir) {
            error = function(e) NULL)
 }
 
-#' Renderiza un badge HTML con color pastel segun el estado
+#' Renderiza un badge HTML con el estado de una ejecucion.
+#'
+#' Usa las clases `.pill` de la hoja de estilos en lugar de colores en linea:
+#' antes cada sitio que mostraba un estado lo pintaba con su propia paleta, de
+#' modo que el mismo "completado" se veia distinto en la portada, en las
+#' metricas y en la tabla de interpretacion.
 status_badge <- function(status) {
-  color <- switch(status,
-    completado = "#B8D8BA",
-    error = "#F4A6A6",
-    incompleto = "#F6D58A",
-    "#D7EEF1"
+  clase <- switch(status,
+    completado = "pill pill-ok",
+    error      = "pill pill-bad",
+    incompleto = "pill pill-warn",
+    "pill pill-neutral"
   )
-  text_color <- switch(status,
-    error = "#5A2323",
-    incompleto = "#5C4A16",
-    "#20332A"
-  )
-  tags$span(
-    style = paste0(
-      "display:inline-block;padding:3px 9px;border-radius:999px;",
-      "color:", text_color, ";background:", color, ";font-weight:700;"
-    ),
-    status
-  )
+  tags$span(class = clase, status)
 }
 
 #' Infiere si una run es Paired-end o Single-end mirando 02_trimmed_reads/.

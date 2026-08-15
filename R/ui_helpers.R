@@ -6,20 +6,74 @@
 #' deben usarse dentro de la funcion server. Se definen aqui para que esten disponibles
 #' tanto en el modulo server_tab_results como en cualquier extension futura.
 
-#' Card header con boton de descarga a la derecha (icono download)
-download_header <- function(title, output_id) {
+#' Boton de descarga compacto para la cabecera de una tarjeta.
+header_download_btn <- function(output_id, title) {
+  downloadButton(
+    output_id,
+    label = NULL,
+    icon  = icon("download"),
+    class = "btn-sm btn-outline-secondary header-download",
+    title = paste("Descargar", title)
+  )
+}
+
+#' Card header con titulo a la izquierda y controles a la derecha.
+#'
+#' Sustituye a las diez repeticiones de
+#' `card_header(tags$div(class = "card-title-download", tags$span(titulo), div(...)))`
+#' que habia esparcidas por ui_tab_deg.R y ui_tab_results.R. Cada copia
+#' separaba los controles con su propio `gap` y su propio `align-items`, asi que
+#' la misma cabecera se alineaba distinto en cada pestana. Aqui la alineacion se
+#' decide una vez.
+#'
+#' @param title Titulo de la tarjeta.
+#' @param ... Controles que van a la derecha (selectores, botones).
+#' @param download_id Si se indica, anade el boton de descarga al final.
+card_header_tools <- function(title, ..., download_id = NULL) {
+  tools <- list(...)
+  if (!is.null(download_id)) tools <- c(tools, list(header_download_btn(download_id, title)))
   card_header(
     tags$div(
       class = "card-title-download",
       tags$span(title),
-      downloadButton(
-        output_id,
-        label = NULL,
-        icon = icon("download"),
-        class = "btn-sm btn-outline-secondary header-download",
-        title = paste("Descargar", title)
-      )
+      if (length(tools)) tags$div(class = "card-header-tools", tools) else NULL
     )
+  )
+}
+
+#' Card header con unicamente el boton de descarga a la derecha.
+download_header <- function(title, output_id) {
+  card_header_tools(title, download_id = output_id)
+}
+
+#' Pildora de estado: color + texto, nunca color solo.
+#'
+#' @param label Texto visible.
+#' @param level Uno de "ok", "warn", "bad", "info", "neutral".
+#' @param aria Etiqueta accesible completa (por defecto, `label`).
+status_pill <- function(label, level = "neutral", aria = NULL) {
+  level <- match.arg(level, c("ok", "warn", "bad", "info", "neutral"))
+  tags$span(class = paste0("pill pill-", level),
+            `aria-label` = aria %||% label,
+            label)
+}
+
+#' Metrica compacta. `level` colorea el filo izquierdo segun el ESTADO, no
+#' segun la posicion de la tarjeta en la fila.
+stat_tile <- function(value, label, level = "neutral") {
+  level <- match.arg(level, c("ok", "warn", "bad", "info", "neutral"))
+  clase <- if (identical(level, "neutral")) "metric-card" else paste0("metric-card is-", level)
+  tags$div(class = clase,
+    tags$div(class = "metric-card-value", value),
+    tags$div(class = "metric-card-label", label)
+  )
+}
+
+#' Titulo de seccion dentro de una pestana (con subtitulo opcional).
+section_title <- function(title, subtitle = NULL) {
+  tagList(
+    tags$div(class = "section-title", title),
+    if (!is.null(subtitle)) tags$div(class = "section-subtitle", subtitle) else NULL
   )
 }
 

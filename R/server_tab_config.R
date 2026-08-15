@@ -165,26 +165,19 @@ server_tab_config <- function(input, output, session, state) {
 
   output$checklist_ui <- renderUI({
     items <- checklist_status()
-    tags$div(style = "border:1px solid #CFE5D4;padding:10px;border-radius:8px;background:#F8FCF9;min-width:220px;",
-      tags$ul(style = "list-style:none;margin:0;padding:0;font-size:0.95rem;width:100%;",
-        lapply(names(items), function(nm) {
-          st <- as.character(items[[nm]])
-          cfg <- CHECKLIST_STATES[[st]] %||%
-            list(color = "#60756A", simbolo = "—", etiqueta = "desconocido")
-          # El estado se transmite por texto Y por color, no solo por color: un
-          # circulo de color no lo distingue quien tiene daltonismo ni lo anuncia
-          # un lector de pantalla. El aria-label lo deja explicito.
-          tags$li(style = "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;",
-            tags$span(nm),
-            tags$span(
-              `aria-label` = paste0(nm, ": ", cfg$etiqueta),
-              style = paste0("font-size:.72rem;font-weight:700;letter-spacing:.02em;",
-                             "padding:2px 7px;border-radius:10px;white-space:nowrap;",
-                             "color:#FFFFFF;background:", cfg$color, ";"),
-              cfg$simbolo)
-          )
-        })
-      )
+    # El estado se transmite por texto Y por color, no solo por color: un
+    # circulo de color no lo distingue quien tiene daltonismo ni lo anuncia un
+    # lector de pantalla. El aria-label lo deja explicito.
+    tags$ul(class = "checklist",
+      lapply(names(items), function(nm) {
+        st  <- as.character(items[[nm]])
+        cfg <- CHECKLIST_STATES[[st]] %||%
+          list(nivel = "neutral", simbolo = "—", etiqueta = "desconocido")
+        tags$li(
+          tags$span(nm),
+          status_pill(cfg$simbolo, cfg$nivel, paste0(nm, ": ", cfg$etiqueta))
+        )
+      })
     )
   })
 
