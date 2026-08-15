@@ -66,6 +66,27 @@ ANALYSIS_SEED <- 1L
 SWISH_NPERMS <- 30L
 
 
+#' @section Paleta accesible
+#' Colores de la codificacion "significativo / no significativo" en volcano y MA.
+#'
+#' El par anterior (verde #7BBF9A sobre gris #C0C0C0) tenia luminosidades muy
+#' parecidas, de modo que con protanopia o deuteranopia —en torno al 8 % de los
+#' hombres— los dos grupos resultaban casi indistinguibles. Se usa el par
+#' azul/naranja de la paleta de Okabe-Ito, disenada para ser distinguible con
+#' las formas habituales de daltonismo y que ademas conserva contraste al
+#' imprimir en escala de grises.
+DEG_SIG_COLORS <- c("Significativo" = "#0072B2", "No significativo" = "#E69F00")
+
+#' Estados del checklist de configuracion. El color NO viaja solo: cada estado
+#' lleva tambien un simbolo y un texto, porque el color por si mismo no es un
+#' canal accesible ni lo lee un lector de pantalla.
+CHECKLIST_STATES <- list(
+  ok       = list(color = "#2E7D5B", simbolo = "OK",       etiqueta = "completo"),
+  optional = list(color = "#8A6D1C", simbolo = "OPCIONAL", etiqueta = "opcional"),
+  missing  = list(color = "#A33A3A", simbolo = "FALTA",    etiqueta = "pendiente")
+)
+
+
 #' @section Constantes FASTQ
 FASTQ_R1_SUFFIXES <- c("_1.fastq.gz", "_R1.fastq.gz", "_1.fastq", "_R1.fastq")
 FASTQ_R2_SUFFIXES <- c("_2.fastq.gz", "_R2.fastq.gz", "_2.fastq", "_R2.fastq")

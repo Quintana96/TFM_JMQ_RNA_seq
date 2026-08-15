@@ -377,7 +377,7 @@ server_tab_processing <- function(input, output, session, state) {
         prepare_uploaded_input_file(input$annotation_file_pseudo_upload, shared$output_dir_val(), prefix = "annotation", optional = TRUE)
       }
     }, error = function(e) {
-      showNotification(paste0("Error al preparar el archivo de anotación: ", conditionMessage(e)), type = "error")
+      showNotification(paste0("Error al preparar el archivo de anotacion: ", conditionMessage(e)), type = "error")
       NULL
     })
     if (is.null(annotation_path)) return()

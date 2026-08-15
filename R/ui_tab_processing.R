@@ -23,7 +23,7 @@ ui_tab_processing_content <- function(cfg, total_sz) {
               tags$dt(class = "col-6", "Fragmento:"),
               tags$dd(class = "col-6", paste0(cfg$fragment_length, " ± ", cfg$fragment_sd))
             ),
-          tags$dt(class = "col-6", "Tamaño est.:"), tags$dd(class = "col-6", total_sz),
+          tags$dt(class = "col-6", "Tamano est.:"), tags$dd(class = "col-6", total_sz),
           tags$dt(class = "col-6", "Entrada:"),
           tags$dd(class = "col-6", tags$code(class = "small", cfg$input_dir)),
           tags$dt(class = "col-6", "Salida:"),
@@ -89,7 +89,7 @@ ui_tab_processing_content <- function(cfg, total_sz) {
 ui_tab_processing_locked <- function() {
   div(class = "alert alert-info mt-4",
       icon("arrow-left-long"),
-      " Completa la pestaña 1 antes de continuar.",
+      " Completa la pestana 1 antes de continuar.",
       div(style = "margin-top:10px;",
           actionButton("btn_goto_config",
                        tagList(icon("gear"), " Ir a configuracion"),

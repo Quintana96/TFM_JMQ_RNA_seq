@@ -329,6 +329,15 @@ server_tab_deg <- function(input, output, session, state) {
       showNotification("Carga o crea un samplesheet.", type = "error"); return()
     }
 
+    # Seudonimizacion opcional de los identificadores de muestra. Se aplica ANTES
+    # de alinear y ajustar, para que los alias viajen a todo lo que se genere
+    # despues: graficos, informe, script y ficheros persistidos.
+    pseudo_map <- NULL
+    if (isTRUE(input$deg_pseudonymize)) {
+      ps <- pseudonymize_dataset(cm, df)
+      cm <- ps$counts; df <- ps$meta; pseudo_map <- ps$map
+    }
+
     # Renombrar columna de condicion a 'condition' para el motor
     cond_col <- input$deg_condition_col %||% "condition"
     if (!cond_col %in% names(df)) {
@@ -585,6 +594,7 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$test_coef      <- test_coef
     state$deg_rv$quant_tool     <- quant_tool_used
     state$deg_rv$seeds          <- seeds_used
+    state$deg_rv$pseudonym_map  <- pseudo_map
     state$deg_rv$counts_origin  <- counts_origin_info
     state$deg_rv$counts_source  <- counts_source_info
     # Directorio de la ejecucion de origen, si lo hay: da acceso a versions.tsv

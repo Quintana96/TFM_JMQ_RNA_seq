@@ -239,5 +239,39 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
     }
   )
 
+  # ── Tabla de correspondencia de la seudonimizacion ────────────────────────
+  # Se descarga APARTE del informe y de los resultados a proposito: es lo unico
+  # que permite volver a los identificadores reales, asi que exportarla tiene que
+  # ser una decision deliberada y no un efecto colateral de descargar el informe.
+  output$deg_pseudonym_ui <- renderUI({
+    m <- state$deg_rv$pseudonym_map
+    if (is.null(m) || !nrow(m)) return(NULL)
+    tagList(
+      div(class = "alert alert-secondary py-2 px-2 small mb-2",
+          icon("user-shield"),
+          tags$b(" Identificadores seudonimizados: "), nrow(m), " muestras. ",
+          "Los entregables llevan los alias. Esto es seudonimizacion, no ",
+          "anonimizacion: existe una tabla de correspondencia, asi que los datos ",
+          "siguen siendo datos personales a efectos del RGPD. Ten en cuenta ademas ",
+          "que los propios niveles de expresion permiten inferir genotipos ",
+          "(Schadt et al., Nature Genetics 2012), de modo que renombrar las ",
+          "columnas reduce la exposicion accidental pero no anonimiza la matriz."),
+      downloadButton("download_pseudonym_map",
+                     " Descargar tabla de correspondencia", class = "btn-sm")
+    )
+  })
+
+  output$download_pseudonym_map <- downloadHandler(
+    filename = function() paste0("correspondencia_muestras_",
+                                 format(Sys.time(), "%Y%m%d_%H%M%S"), ".tsv"),
+    content = function(f) {
+      m <- state$deg_rv$pseudonym_map
+      if (is.null(m)) m <- data.frame(original = character(0), alias = character(0))
+      utils::write.table(m, f, sep = "\t", quote = FALSE, row.names = FALSE)
+      append_audit_log("export_correspondencia",
+                       list(n_muestras = nrow(m)), outputs_dir = state$outputs_dir)
+    }
+  )
+
   invisible(NULL)
 }

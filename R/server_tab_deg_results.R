@@ -81,7 +81,7 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     }
     p <- plotly::plot_ly(
       df, x = ~x, y = ~minus_log10_p, color = ~color,
-      colors = c("Significativo" = "#7BBF9A", "No significativo" = "#C0C0C0"),
+      colors = DEG_SIG_COLORS,
       type = "scatter", mode = "markers",
       text = ~paste0("Gen: ", gene, "<br>", ax$label, ": ", round(x, 3),
                      "<br>padj: ", signif(padj, 3)),
@@ -121,7 +121,7 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     df$log_base <- log10(pmax(df$baseMean, 1))
     plotly::plot_ly(
       df, x = ~log_base, y = ~y, color = ~color,
-      colors = c("Significativo" = "#7BBF9A", "No significativo" = "#C0C0C0"),
+      colors = DEG_SIG_COLORS,
       type = "scatter", mode = "markers",
       text = ~paste0("Gen: ", gene, "<br>baseMean: ", signif(baseMean, 3),
                      "<br>", ax$label, ": ", round(y, 3),

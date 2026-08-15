@@ -158,8 +158,8 @@ server_tab_config <- function(input, output, session, state) {
       "Directorio FASTQ"      = if (dir_ok) "ok" else "missing",
       "Muestras detectadas"   = if (samples_ok) "ok" else "missing",
       "Genoma/transcriptoma"  = genome_ok,
-      "Anotación"             = annot_status,
-      "Validación"            = valid_ok
+      "Anotacion"             = annot_status,
+      "Validacion"            = valid_ok
     )
   })
 
@@ -168,11 +168,20 @@ server_tab_config <- function(input, output, session, state) {
     tags$div(style = "border:1px solid #CFE5D4;padding:10px;border-radius:8px;background:#F8FCF9;min-width:220px;",
       tags$ul(style = "list-style:none;margin:0;padding:0;font-size:0.95rem;width:100%;",
         lapply(names(items), function(nm) {
-          st <- items[[nm]]
-          color <- switch(as.character(st), ok = "#7BBF9A", optional = "#F6D58A", missing = "#F4A6A6", "#D7EEF1")
+          st <- as.character(items[[nm]])
+          cfg <- CHECKLIST_STATES[[st]] %||%
+            list(color = "#60756A", simbolo = "—", etiqueta = "desconocido")
+          # El estado se transmite por texto Y por color, no solo por color: un
+          # circulo de color no lo distingue quien tiene daltonismo ni lo anuncia
+          # un lector de pantalla. El aria-label lo deja explicito.
           tags$li(style = "display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;",
             tags$span(nm),
-            tags$span(style = paste0("display:inline-block;width:14px;height:14px;border-radius:50%;background:", color, ";"))
+            tags$span(
+              `aria-label` = paste0(nm, ": ", cfg$etiqueta),
+              style = paste0("font-size:.72rem;font-weight:700;letter-spacing:.02em;",
+                             "padding:2px 7px;border-radius:10px;white-space:nowrap;",
+                             "color:#FFFFFF;background:", cfg$color, ";"),
+              cfg$simbolo)
           )
         })
       )
@@ -287,7 +296,7 @@ server_tab_config <- function(input, output, session, state) {
     }
     if (is.null(counts)) {
       showNotification(
-        "No se pudo cargar la matriz de conteos. Verifica el formato o usa la pestaña Resultados para abrir ejecuciones previas.",
+        "No se pudo cargar la matriz de conteos. Verifica el formato o usa la pestana Resultados para abrir ejecuciones previas.",
         type = "error")
       return()
     }

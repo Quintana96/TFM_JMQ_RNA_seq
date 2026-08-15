@@ -48,6 +48,9 @@ summarise_result <- function(out_dir, params) {
     n_files = nrow(file_table_for_dir(out_dir)),
     n_samples = if (!is.null(counts)) ncol(counts) else params$n_samples %||% "—",
     n_features = if (!is.null(counts)) nrow(counts) else "—",
+    # Genes con al menos una lectura asignada en alguna muestra. Es distinto de
+    # n_features, que son las filas de la matriz e incluye los genes a cero.
+    n_detected = if (!is.null(counts)) sum(rowSums(counts, na.rm = TRUE) > 0) else "—",
     mean_mapped = if (length(mapped_vals)) mean(mapped_vals, na.rm = TRUE) else NA_real_,
     mean_trim_survival = if (length(trim_vals)) mean(trim_vals, na.rm = TRUE) else NA_real_,
     mean_q30 = if (length(q30_vals)) mean(q30_vals, na.rm = TRUE) else NA_real_,

@@ -1,12 +1,35 @@
 #' utils_tables.R
 #' DataTables y tablas auxiliares (FastQC, alineamiento, conteos, artefactos, log tail).
 
+#' Diccionario de DataTables en espanol.
+#'
+#' Se define en local y no por URL: la version oficial se descarga de un CDN, y
+#' una app que puede correr sin conexion no debe quedarse con los textos en
+#' ingles (o peor, sin tabla) por no alcanzarlo. Va aqui, en el unico wrapper de
+#' tablas, para que traducirlas sea un solo punto de cambio.
+DT_ES <- list(
+  processing = "Procesando...",
+  search = "Buscar:",
+  lengthMenu = "Mostrar _MENU_ filas",
+  info = "Mostrando _START_ a _END_ de _TOTAL_ filas",
+  infoEmpty = "Sin filas que mostrar",
+  infoFiltered = "(filtrado de _MAX_ filas totales)",
+  loadingRecords = "Cargando...",
+  zeroRecords = "No se han encontrado resultados",
+  emptyTable = "Sin datos disponibles en la tabla",
+  paginate = list(first = "Primera", previous = "Anterior",
+                  `next` = "Siguiente", last = "Ultima"),
+  aria = list(sortAscending = ": activar para ordenar de forma ascendente",
+              sortDescending = ": activar para ordenar de forma descendente")
+)
+
 #' Wrapper estandar de DT::datatable con scrollX y dom ftip
 dt_table <- function(data, page_length = 10, filter = "none") {
   datatable(
     data,
     filter = filter,
-    options = list(pageLength = page_length, scrollX = TRUE, dom = "ftip"),
+    options = list(pageLength = page_length, scrollX = TRUE, dom = "ftip",
+                   language = DT_ES),
     rownames = FALSE
   )
 }

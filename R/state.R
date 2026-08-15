@@ -154,6 +154,10 @@ create_app_state <- function(session) {
     counts_origin = NULL,
     counts_source = NULL,
     run_dir       = NULL,
+    # Tabla de correspondencia de la seudonimizacion, si se aplico. NO viaja al
+    # informe: se descarga aparte, para que exportar los identificadores reales
+    # sea una decision explicita.
+    pseudonym_map = NULL,
     # Ultimo enriquecimiento ejecutado: parametros y resumen del resultado.
     enrich        = NULL,
     # Nota sobre la correccion aplicada SOLO a los graficos, si la hay.

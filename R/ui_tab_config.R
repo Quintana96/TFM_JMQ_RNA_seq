@@ -13,7 +13,7 @@ ui_tab_config <- function() {
     tags$div(
       style = paste(
         "display:grid;",
-        "grid-template-columns:repeat(3, minmax(240px, 1fr));",
+        "grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));",
         "grid-auto-rows:minmax(240px, auto);",
         "gap:12px; align-items:stretch;"
       ),
@@ -25,7 +25,7 @@ ui_tab_config <- function() {
         radioButtons(
           "start_mode", label = NULL,
           choices  = c("Ejecutar workflow completo" = "workflow",
-                       "Análisis a partir de matriz de conteos" = "load"),
+                       "Analisis a partir de matriz de conteos" = "load"),
           selected = "workflow", inline = TRUE
         ),
         conditionalPanel(
@@ -43,13 +43,13 @@ ui_tab_config <- function() {
             div(
               tags$strong("Uso"),
               tags$p(class = "text-muted small",
-                     "Carga una matriz externa o usa la pestaña Resultados para revisar ejecuciones previas guardadas automaticamente en outputs/.")
+                     "Carga una matriz externa o usa la pestana Resultados para revisar ejecuciones previas guardadas automaticamente en outputs/.")
             )
           ),
           div(
             style = "text-align:right; margin-top:8px;",
             actionButton("btn_load_existing",
-                         tagList(icon("upload"), " Análisis a partir de matriz de conteos"),
+                         tagList(icon("upload"), " Analisis a partir de matriz de conteos"),
                          class = "btn-success btn-sm")
           )
         )
