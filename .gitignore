@@ -46,3 +46,8 @@ multiqc_data/
 # Entorno y credenciales
 .env
 .Renviron
+
+# Documentacion de auditoria interna (notas de trabajo, no forman parte del
+# codigo entregable ni de la memoria)
+docs/
+R/CHANGELOG_AUDIT.md
