@@ -120,6 +120,31 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       )
     }
 
+    # Se registra el enriquecimiento AUNQUE no haya dado terminos: un resultado
+    # negativo tambien forma parte del analisis, y sin sus parametros (ontologia,
+    # keyType, universo, tasa de mapeo) no es interpretable ni reproducible.
+    state$deg_rv$enrich <- list(
+      enfoque    = if (identical(approach, "gsea")) "GSEA" else "ORA (sobre-representacion)",
+      ontologia  = ont,
+      organismo_kegg = if (identical(ont, "KEGG")) org_code else NA_character_,
+      orgdb      = deg_orgdb() %||% "—",
+      keytype    = if (identical(ont, "KEGG")) input$deg_kegg_keytype %||% "kegg"
+                   else input$deg_go_keytype %||% "SYMBOL",
+      metrica    = if (identical(approach, "gsea")) input$deg_gsea_metric %||% "stat" else NA_character_,
+      exponent   = if (identical(approach, "gsea")) 0 else NA_real_,
+      simplify   = if (identical(approach, "gsea")) NA else isTRUE(input$deg_go_simplify),
+      n_lista    = if (identical(approach, "gsea")) NA_integer_
+                   else nrow(ctx$deg_significant() %||% data.frame()),
+      n_universo = length(universe %||% character(0)),
+      mapeo      = res$mapping,
+      n_terminos = if (is.null(res$table)) 0L else nrow(res$table),
+      error      = res$error %||% NA_character_,
+      # Fechas de las fuentes del OrgDb: los resultados de enriquecimiento
+      # cambian con la version de la anotacion (Wadi et al., Nat Methods 2016),
+      # asi que sin esto el resultado no es reproducible.
+      anotacion  = orgdb_source_info(deg_orgdb())
+    )
+
     if (is.null(res$table)) {
       showNotification(paste0("Enriquecimiento sin resultados: ", res$error %||% "—"),
                        type = "warning", duration = 8)

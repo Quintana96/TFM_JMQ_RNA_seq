@@ -57,7 +57,126 @@ deg_run_parameters <- function(rv) {
   )
 }
 
+#' Identificacion de la version de la aplicacion que genero el informe.
+#'
+#' Un informe que no dice con que version del software se produjo no es
+#' auditable: es el mismo requisito que la guia ACMG impone a un informe de
+#' diagnostico genomico ("pipeline y guias usadas con versiones").
+app_provenance <- function() {
+  commit <- tryCatch(
+    suppressWarnings(system2("git", c("rev-parse", "--short", "HEAD"),
+                             stdout = TRUE, stderr = FALSE)),
+    error = function(e) character(0))
+  sucio <- tryCatch(
+    length(suppressWarnings(system2("git", c("status", "--porcelain"),
+                                    stdout = TRUE, stderr = FALSE))) > 0,
+    error = function(e) FALSE)
+  list(
+    "Aplicacion" = "RNA-seq Workflow Runner",
+    "Commit de git" = if (length(commit))
+      paste0(commit[1], if (isTRUE(sucio)) " (con cambios sin commitear)" else "")
+      else "no disponible",
+    "Version de R" = as.character(getRversion()),
+    "Plataforma" = R.version$platform
+  )
+}
+
+#' Resumen del analisis en lenguaje llano.
+#'
+#' La guia ACMG exige que un informe incluya un parrafo dirigido a alguien sin
+#' formacion especializada. Aqui cumple ademas una funcion practica: obliga a
+#' que el informe diga en una frase que se comparo y que salio, sin que haya que
+#' interpretar una tabla.
+deg_plain_summary <- function(rv, sig_n, up, down) {
+  fdr <- rv$fdr %||% 0.05
+  ct <- rv$contrast %||% "las dos condiciones comparadas"
+  n_tot <- nrow(rv$results)
+  base <- paste0(
+    "Se han comparado los perfiles de expresion de ", ct,
+    " sobre ", fmt_int(n_tot), " genes analizados. ")
+  if (sig_n == 0) {
+    return(paste0(base,
+      "No se ha encontrado ningun gen con diferencias estadisticamente ",
+      "significativas al nivel exigido (FDR <= ", fdr, "). Esto NO significa ",
+      "que no existan diferencias: puede que el experimento no tenga suficientes ",
+      "muestras para detectarlas. Revisa el apartado de limitaciones."))
+  }
+  paste0(base,
+    fmt_int(sig_n), " genes muestran diferencias estadisticamente significativas ",
+    "(FDR <= ", fdr, "): ", fmt_int(up), " con mayor expresion y ", fmt_int(down),
+    " con menor expresion en el primer grupo del contraste respecto al segundo. ",
+    "La cifra de FDR indica la proporcion esperada de falsos positivos dentro de ",
+    "esa lista; con FDR = ", fdr, ", aproximadamente ",
+    fmt_int(round(sig_n * fdr)), " de los ", fmt_int(sig_n),
+    " genes podrian serlo por azar.")
+}
+
+#' Limitaciones detectadas en ESTE analisis concreto.
+#'
+#' No es un texto fijo: se deriva del estado real del ajuste. Un informe que no
+#' declara sus limitaciones invita a sobreinterpretarlo, y la guia ACMG las exige
+#' explicitamente, tambien (sobre todo) cuando el resultado es negativo.
+deg_report_limitations <- function(rv, diagnostics = NULL, sig_n = NA_integer_) {
+  lim <- character(0)
+  n_meta <- if (!is.null(rv$meta)) nrow(rv$meta) else NA_integer_
+  grupos <- if (!is.null(rv$meta) && "condition" %in% names(rv$meta))
+    table(as.character(rv$meta$condition)) else NULL
+  min_grp <- if (!is.null(grupos) && length(grupos)) min(grupos) else NA_integer_
+
+  if (!is.na(min_grp) && min_grp < 6) {
+    lim <- c(lim, paste0(
+      "El grupo mas pequeno tiene ", min_grp, " replicas. Schurch et al. (RNA 2016) ",
+      "recomiendan al menos 6 por condicion para una deteccion robusta, y 12 para ",
+      "capturar la mayoria de los genes diferenciales. Con menos replicas la ",
+      "potencia es limitada y la lista sera menos reproducible."))
+  }
+  if (!is.null(rv$counts_source) && !isTRUE(rv$counts_source$ok)) {
+    lim <- c(lim, paste0(
+      "La matriz de conteos NO se resumio a gen por la via recomendada: ",
+      rv$counts_source$detail %||% "", " Los resultados pueden estar sesgados en ",
+      "genes con varias isoformas."))
+  }
+  if (!is.null(rv$viz_note) && nzchar(rv$viz_note %||% "")) {
+    lim <- c(lim, paste0(
+      "Los graficos llevan una correccion que el test NO lleva: ", rv$viz_note,
+      " Es lo correcto (el modelo trata la variacion como covariable), pero ",
+      "significa que graficos y p-valores describen matrices distintas."))
+  }
+  e <- rv$enrich
+  if (!is.null(e) && !is.null(e$mapeo) && !is.na(e$mapeo$rate %||% NA) &&
+      e$mapeo$rate < 0.5) {
+    lim <- c(lim, paste0(
+      "En el enriquecimiento solo se mapeo el ", round(100 * e$mapeo$rate, 1),
+      " % de los genes contra la anotacion. Por debajo de la mitad, el resultado ",
+      "funcional no es interpretable."))
+  }
+  if (identical(rv$method, "Swish")) {
+    lim <- c(lim, paste0(
+      "El analisis se ha hecho a nivel de TRANSCRITO, no de gen: los ",
+      "identificadores no son comparables con los del resto de motores."))
+  }
+  if (is.null(diagnostics) || is.null(diagnostics$replicability)) {
+    lim <- c(lim, paste0(
+      "No se ha estimado la replicabilidad por remuestreo. Sin ella no hay ",
+      "medida de cuanto dependeria esta lista de las muestras concretas ",
+      "analizadas."))
+  }
+  if (!is.na(sig_n) && sig_n == 0) {
+    lim <- c(lim, paste0(
+      "Un resultado sin genes significativos no demuestra ausencia de efecto. ",
+      "Antes de concluir nada, comprueba la potencia del diseno y el histograma ",
+      "de p-valores: si es plano, o no hay senal o el modelo no la captura."))
+  }
+  lim
+}
+
 #' Informe HTML autocontenido del analisis.
+#'
+#' Estructura inspirada en el contenido minimo que la guia ACMG/AMP (Richards et
+#' al., Genetics in Medicine 2015) exige a un informe de diagnostico genomico:
+#' metricas de calidad, que se evaluo, bases de datos y pipeline CON SUS
+#' VERSIONES, hallazgos con su metodologia, fecha, resumen en lenguaje llano y
+#' limitaciones. Un informe negativo se trata igual que uno positivo.
 #'
 #' @param rv `state$deg_rv`
 #' @param diagnostics list(pi0, verdict, na_breakdown, cooks_dominant, replicability)
@@ -68,6 +187,98 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
   sig_n <- sum(!is.na(rv$results$padj) & rv$results$padj <= (rv$fdr %||% 0.05))
   up <- sum(!is.na(rv$results$padj) & rv$results$padj <= (rv$fdr %||% 0.05) &
               !is.na(rv$results$log2FC) & rv$results$log2FC > 0)
+  down <- sig_n - up
+
+  # ── Procedencia de los datos ─────────────────────────────────────────────
+  org <- rv$counts_origin
+  cs  <- rv$counts_source
+  proc <- list()
+  if (!is.null(org)) {
+    proc[["Origen de la matriz"]] <- org$tipo %||% "—"
+    proc[["Ruta / fichero"]]      <- org$ruta %||% "—"
+    if (!is.null(org$md5) && !is.na(org$md5)) proc[["md5 del fichero"]] <- org$md5
+    if (!is.null(org$detalle)) proc[["Detalle"]] <- org$detalle
+  }
+  proc[["Resumen a gen"]] <- if (is.null(cs)) "—" else
+    paste0(cs$method %||% "—", if (isTRUE(cs$ok)) "" else "  [DEGRADADO]")
+  if (!is.null(cs) && !isTRUE(cs$ok) && nzchar(cs$detail %||% ""))
+    proc[["Motivo de la degradacion"]] <- cs$detail
+  proc_html <- paste0("<h2>Procedencia de los datos</h2>", html_kv_table(proc))
+
+  # Versiones de las herramientas del pipeline y checksums de las entradas,
+  # leidos de la ejecucion de origen: cierra el ciclo entre lo que hizo el
+  # pipeline y lo que hizo el analisis estadistico.
+  rd <- rv$run_dir
+  tv <- if (!is.null(rd) && nzchar(rd %||% "") && dir.exists(rd)) read_tool_versions(rd) else NULL
+  ck <- if (!is.null(rd) && nzchar(rd %||% "") && dir.exists(rd)) read_input_checksums(rd) else NULL
+  pipeline_html <- if (!is.null(tv) && nrow(tv)) {
+    inst <- tv[!grepl("no instalado", tv$version), , drop = FALSE]
+    paste0("<h3>Herramientas del pipeline</h3>",
+           html_kv_table(stats::setNames(as.list(inst$version), inst$tool)))
+  } else ""
+  checks_html <- if (!is.null(ck) && nrow(ck)) {
+    paste0("<h3>Huella de los ficheros de entrada</h3>",
+           "<table><thead><tr><th>Fichero</th><th>Bytes</th><th>md5</th></tr></thead><tbody>",
+           paste(vapply(seq_len(nrow(ck)), function(i) paste0(
+             "<tr><td>", html_escape(basename(ck$file[i])), "</td><td>",
+             html_escape(ck$size_bytes[i]), "</td><td><code>",
+             html_escape(ck$md5[i]), "</code></td></tr>"), character(1)), collapse = ""),
+           "</tbody></table>")
+  } else ""
+
+  # ── Enriquecimiento funcional ────────────────────────────────────────────
+  e <- rv$enrich
+  enrich_html <- if (is.null(e)) "" else {
+    campos <- list(
+      "Enfoque"            = e$enfoque %||% "—",
+      "Ontologia / base"   = e$ontologia %||% "—",
+      "keyType"            = e$keytype %||% "—",
+      "Genes en la lista"  = if (is.na(e$n_lista %||% NA)) "— (GSEA usa el ranking completo)"
+                             else fmt_int(e$n_lista),
+      "Universo (fondo)"   = fmt_int(e$n_universo %||% 0),
+      "Tasa de mapeo"      = if (is.null(e$mapeo) || is.na(e$mapeo$rate %||% NA)) "—"
+                             else paste0(round(100 * e$mapeo$rate, 1), " % (",
+                                         e$mapeo$n_mapped, "/", e$mapeo$n_input, ")"),
+      "Terminos obtenidos" = fmt_int(e$n_terminos %||% 0)
+    )
+    if (!is.na(e$metrica %||% NA)) {
+      campos[["Metrica del ranking"]] <- e$metrica
+      campos[["Ponderacion (exponent)"]] <- e$exponent
+    }
+    if (!is.na(e$simplify %||% NA)) campos[["Colapsar redundantes"]] <- e$simplify
+    if (!is.na(e$organismo_kegg %||% NA)) campos[["Organismo KEGG"]] <- e$organismo_kegg
+    if (!is.na(e$error %||% NA)) campos[["Resultado"]] <- e$error
+    paste0("<h2>Enriquecimiento funcional</h2>", html_kv_table(campos),
+           "<h3>Version de la anotacion</h3>", html_kv_table(e$anotacion %||% list()),
+           "<p class=\"nota\">Los resultados de enriquecimiento dependen de la ",
+           "version de la anotacion: usar anotaciones desactualizadas altera las ",
+           "rutas que salen enriquecidas (Wadi et al., Nature Methods 2016). El ",
+           "campo KEGG de los OrgDb esta congelado desde 2011 y NO se usa: la ",
+           "anotacion KEGG se consulta en linea.</p>")
+  }
+
+  # ── Semillas y parametros estocasticos ───────────────────────────────────
+  sd <- rv$seeds %||% list()
+  seeds_html <- {
+    campos <- list()
+    if (!is.null(sd$sva))   campos[["Semilla de sva (num.sv)"]] <- sd$sva
+    if (!is.null(sd$n_sv))  campos[["Variables sustitutas estimadas"]] <- sd$n_sv
+    if (!is.null(sd$swish)) campos[["Semilla de Swish"]] <- sd$swish
+    if (!is.null(sd$swish_nperms)) campos[["Permutaciones de Swish"]] <- sd$swish_nperms
+    if (!is.null(diagnostics$replicability))
+      campos[["Semilla del bootstrap"]] <- ANALYSIS_SEED
+    if (!length(campos)) campos[["Componentes aleatorios"]] <-
+      "ninguno en este analisis (el ajuste es determinista)"
+    paste0("<h3>Semillas y componentes aleatorios</h3>", html_kv_table(campos))
+  }
+
+  # ── Limitaciones ─────────────────────────────────────────────────────────
+  lims <- deg_report_limitations(rv, diagnostics, sig_n)
+  lims_html <- paste0(
+    "<h2>Limitaciones</h2>",
+    if (!length(lims)) "<p>No se han detectado limitaciones destacables.</p>" else
+      paste0("<ul>", paste0("<li>", vapply(lims, html_escape, character(1)),
+                            "</li>", collapse = ""), "</ul>"))
 
   diag_html <- ""
   if (!is.null(diagnostics)) {
@@ -126,8 +337,14 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
   paste0(
 '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">',
 '<title>Informe de expresion diferencial</title><style>',
+# El fondo se fija EXPLICITAMENTE: sin el, un navegador en modo oscuro deja el
+# informe con texto oscuro sobre fondo negro e ilegible. Es un documento
+# descargable que se leera en cualquier parte, asi que no puede depender del
+# tema de quien lo abra.
 'body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;',
-'margin:2rem auto;padding:0 1rem;color:#20332A;line-height:1.5}',
+'margin:2rem auto;padding:0 1rem;color:#20332A;background:#FFFFFF;line-height:1.5;',
+'-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+'@media (prefers-color-scheme:dark){body{color:#20332A;background:#FFFFFF}}',
 'h1{border-bottom:3px solid #7BBF9A;padding-bottom:.3rem}',
 'h2{margin-top:2rem;color:#244B34}',
 'table{border-collapse:collapse;width:100%;margin:.5rem 0;font-size:.92rem}',
@@ -139,16 +356,29 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
 '.metric b{display:block;font-size:1.3rem;color:#244B34}',
 'pre{background:#F7F9F8;border:1px solid #E3EAE6;padding:.6rem;overflow-x:auto;',
 'font-size:.8rem}',
+'h3{margin-top:1.2rem;color:#315342;font-size:1rem}',
+'.resumen{background:#F2F7F4;border-left:4px solid #7BBF9A;padding:.8rem 1rem;',
+'margin:1rem 0;border-radius:0 6px 6px 0}',
+'.nota{font-size:.85rem;color:#60756A;margin-top:.4rem}',
+'ul li{margin-bottom:.4rem}',
+'code{font-size:.85em}',
 'footer{margin-top:2.5rem;font-size:.82rem;color:#60756A;border-top:1px solid #D9E2DC;',
 'padding-top:.6rem}</style></head><body>',
 '<h1>Informe de expresion diferencial</h1>',
+'<p class="nota">Analisis realizado el ',
+html_escape(format(rv$run_at %||% Sys.time(), "%Y-%m-%d %H:%M:%S")), '.</p>',
+'<div class="resumen"><b>Resumen</b><br>',
+html_escape(deg_plain_summary(rv, sig_n, up, down)), '</div>',
 '<p><span class="metric"><b>', fmt_int(nrow(rv$results)), '</b>genes analizados</span>',
 '<span class="metric"><b>', fmt_int(sig_n), '</b>significativos a FDR &le; ',
 html_escape(rv$fdr %||% 0.05), '</span>',
-'<span class="metric"><b>', fmt_int(up), ' / ', fmt_int(sig_n - up),
+'<span class="metric"><b>', fmt_int(up), ' / ', fmt_int(down),
 '</b>up / down</span></p>',
 '<h2>Parametros del analisis</h2>', html_kv_table(params),
+proc_html, pipeline_html, checks_html,
 diag_html,
+enrich_html,
+lims_html,
 '<h2>Metadatos de las muestras</h2>',
 if (!is.null(rv$meta)) paste0(
   '<table><thead><tr>',
@@ -158,12 +388,19 @@ if (!is.null(rv$meta)) paste0(
     paste0('<td>', vapply(rv$meta[i, ], function(v) html_escape(as.character(v)), character(1)),
            '</td>', collapse = ''), '</tr>'), character(1)), collapse = ''),
   '</tbody></table>') else '<p>Sin metadatos.</p>',
-'<h2>Top 25 genes por p-valor ajustado</h2>',
+if (sig_n > 0) '<h2>Top 25 genes por p-valor ajustado</h2>' else
+  paste0('<h2>Genes con menor p-valor ajustado</h2>',
+         '<p class="nota">Ninguno alcanza el umbral de significacion; se listan ',
+         'igualmente los de menor p-valor ajustado, porque un informe negativo ',
+         'debe documentar que se evaluo y con que resultado.</p>'),
 '<table><thead><tr>',
 paste0('<th>', vapply(cols, html_escape, character(1)), '</th>', collapse = ''),
 '</tr></thead><tbody>', top_rows, '</tbody></table>',
-'<h2>Versiones de los paquetes</h2>', html_kv_table(pkg_versions),
-'<h2>sessionInfo()</h2><pre>', html_escape(paste(si, collapse = "\n")), '</pre>',
+'<h2>Reproducibilidad</h2>',
+html_kv_table(app_provenance()),
+seeds_html,
+'<h3>Versiones de los paquetes</h3>', html_kv_table(pkg_versions),
+'<h3>sessionInfo()</h3><pre>', html_escape(paste(si, collapse = "\n")), '</pre>',
 '<footer>Generado por RNA-seq Workflow Runner el ',
 html_escape(format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
 '. Este informe recoge los parametros con los que se ejecuto el analisis; ',

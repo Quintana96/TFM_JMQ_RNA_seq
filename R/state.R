@@ -147,6 +147,15 @@ create_app_state <- function(session) {
     # Semillas y parametros estocasticos, para poder declararlos en el informe
     # y reproducir el resultado exactamente.
     seeds         = NULL,
+    # Procedencia de la matriz: de donde salio (con md5 si es un fichero) y como
+    # se resumio a gen (tximport con offsets de longitud, o el respaldo de
+    # est_counts redondeados). Lo segundo es una degradacion que el informe debe
+    # declarar, porque cambia la validez de los resultados.
+    counts_origin = NULL,
+    counts_source = NULL,
+    run_dir       = NULL,
+    # Ultimo enriquecimiento ejecutado: parametros y resumen del resultado.
+    enrich        = NULL,
     # Nota sobre la correccion aplicada SOLO a los graficos, si la hay.
     viz_note      = NULL
   )

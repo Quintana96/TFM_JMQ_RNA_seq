@@ -25,6 +25,39 @@ orgdb_keytypes <- function(OrgDb) {
   tryCatch(AnnotationDbi::keytypes(OrgDb), error = function(e) character(0))
 }
 
+#' Version y fechas de las fuentes de un OrgDb.
+#'
+#' Los resultados de enriquecimiento cambian con la version de la anotacion:
+#' Wadi et al. (Nature Methods 2016) mostraron que usar anotaciones
+#' desactualizadas altera sustancialmente las rutas que salen enriquecidas. Por
+#' eso el informe declara con que version se ejecuto, igual que declara la
+#' version de los paquetes.
+#'
+#' Nota practica: el campo KEGG de los OrgDb esta congelado desde 2011, asi que
+#' su fecha NO describe la anotacion KEGG que usa la app (que consulta la API en
+#' linea); se muestra igualmente para que quede claro que no se usa esa via.
+#'
+#' @param OrgDb nombre del paquete OrgDb, o NULL
+#' @return lista clave-valor con la version y las fechas disponibles
+orgdb_source_info <- function(OrgDb) {
+  if (is.null(OrgDb) || !nzchar(OrgDb %||% "") ||
+      !requireNamespace(OrgDb, quietly = TRUE)) {
+    return(list("OrgDb" = "no disponible"))
+  }
+  out <- list("OrgDb" = paste0(OrgDb, " ", as.character(utils::packageVersion(OrgDb))))
+  md <- tryCatch({
+    obj <- getFromNamespace(OrgDb, OrgDb)
+    AnnotationDbi::metadata(obj)
+  }, error = function(e) NULL)
+  if (is.data.frame(md) && all(c("name", "value") %in% names(md))) {
+    interes <- c("GOSOURCEDATE", "GOEGSOURCEDATE", "EGSOURCEDATE", "ENSOURCEDATE",
+                 "KEGGSOURCEDATE", "GOSOURCEVERSION", "DBSCHEMAVERSION")
+    hit <- md[md$name %in% interes, , drop = FALSE]
+    for (i in seq_len(nrow(hit))) out[[hit$name[i]]] <- hit$value[i]
+  }
+  out
+}
+
 #' Tasa de mapeo de una lista de genes contra un OrgDb y un keyType.
 #'
 #' Un enriquecimiento con mapeo bajo no es interpretable. Los IDs que salen de

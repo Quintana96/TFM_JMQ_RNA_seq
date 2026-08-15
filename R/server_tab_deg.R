@@ -72,7 +72,14 @@ server_tab_deg <- function(input, output, session, state) {
     src <- input$deg_source %||% "current"
     if (identical(src, "current")) {
       cm <- state$data_rv$count_matrix
-      if (!is.null(cm) && length(cm)) return(as.matrix(cm))
+      if (!is.null(cm) && length(cm)) {
+        m <- as.matrix(cm)
+        attr(m, "counts_origin") <- list(
+          tipo = "Ejecucion actual de la sesion",
+          ruta = state$run_params_rv()$output_dir %||% "—",
+          detalle = paste0("Fuente: ", state$data_rv$source %||% "—"))
+        return(m)
+      }
       # Fallback: intentamos cargar desde la run actual
       p <- state$run_params_rv()
       if (length(p) && nzchar(p$output_dir %||% "") && nzchar(p$tool %||% "")) {
@@ -88,15 +95,26 @@ server_tab_deg <- function(input, output, session, state) {
       sel <- input$selected_deg_run_dir %||% ""
       if (!nzchar(sel) || !dir.exists(sel)) return(NULL)
       p <- infer_result_params(sel, state$workflow_path)
-      return(tryCatch(load_counts_from_workflow(
-                        sel, p$tool %||% "",
-                        annotation_file = annotation_file_for_run(sel)),
-                      error = function(e) NULL))
+      cm <- tryCatch(load_counts_from_workflow(
+                       sel, p$tool %||% "",
+                       annotation_file = annotation_file_for_run(sel)),
+                     error = function(e) NULL)
+      if (!is.null(cm)) attr(cm, "counts_origin") <- list(
+        tipo = "Ejecucion guardada", ruta = sel,
+        detalle = paste0("Cuantificador: ", p$tool %||% "—"))
+      return(cm)
     }
     if (identical(src, "upload")) {
       up <- input$deg_counts_upload
       if (is.null(up) || !nrow(up)) return(NULL)
-      return(read_uploaded_counts(up$datapath))
+      cm <- read_uploaded_counts(up$datapath)
+      # El md5 del fichero subido es lo unico que permite despues demostrar que
+      # dos analisis partieron de la misma matriz.
+      if (!is.null(cm)) attr(cm, "counts_origin") <- list(
+        tipo = "Matriz subida", ruta = up$name,
+        md5 = unname(tryCatch(tools::md5sum(up$datapath), error = function(e) NA_character_)),
+        detalle = paste0(fmt_bytes(up$size %||% NA_real_)))
+      return(cm)
     }
     NULL
   })
@@ -267,6 +285,11 @@ server_tab_deg <- function(input, output, session, state) {
     cm <- deg_counts_source()
     df <- meta_rv()
     method <- input$deg_method %||% "DESeq2"
+    # La procedencia y el metodo de resumen a gen se leen AQUI: los atributos se
+    # pierden al alinear y prefiltrar, y el informe los necesita para declarar
+    # de donde salio la matriz y si se uso tximport o el respaldo.
+    counts_origin_info <- attr(cm, "counts_origin")
+    counts_source_info <- attr(cm, "counts_source")
 
     if (is.null(cm) || !ncol(cm)) {
       # Un "no hay matriz" a secas no dice donde mirar. El fallo depende de la
@@ -561,6 +584,13 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$test_coef      <- test_coef
     state$deg_rv$quant_tool     <- quant_tool_used
     state$deg_rv$seeds          <- seeds_used
+    state$deg_rv$counts_origin  <- counts_origin_info
+    state$deg_rv$counts_source  <- counts_source_info
+    # Directorio de la ejecucion de origen, si lo hay: da acceso a versions.tsv
+    # y checksums.tsv del pipeline para cerrar el ciclo de trazabilidad.
+    state$deg_rv$run_dir <- if (identical(input$deg_source %||% "current", "saved")) {
+      input$selected_deg_run_dir %||% NULL
+    } else state$run_params_rv()$output_dir %||% NULL
 
     if (do_shrink && identical(method, "DESeq2") &&
         identical(state$deg_rv$shrink, "ninguno")) {
