@@ -48,6 +48,24 @@ HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 
+#' @section Determinismo
+#' Semilla unica de todo lo estocastico del analisis: el numero de variables
+#' sustitutas de `sva::num.sv` (metodo "be", por permutacion), las permutaciones
+#' de `fishpond::swish`, el remuestreo del panel de replicabilidad y las
+#' miniaturas simuladas de los diagnosticos.
+#'
+#' Se centraliza para que el informe pueda declararla: una semilla fija que no
+#' se registra no sirve de nada, porque quien reproduzca el analisis no sabe
+#' cual era. Todos los usos van por `withr::with_seed()`, que restaura el estado
+#' del RNG al salir y evita que fijar la semilla en un sitio altere la
+#' aleatoriedad de cualquier otro.
+ANALYSIS_SEED <- 1L
+
+#' Replicas inferenciales que permuta Swish. Es un parametro del resultado, no
+#' un detalle interno, asi que viaja al informe junto a la semilla.
+SWISH_NPERMS <- 30L
+
+
 #' @section Constantes FASTQ
 FASTQ_R1_SUFFIXES <- c("_1.fastq.gz", "_R1.fastq.gz", "_1.fastq", "_R1.fastq")
 FASTQ_R2_SUFFIXES <- c("_2.fastq.gz", "_R2.fastq.gz", "_2.fastq", "_R2.fastq")

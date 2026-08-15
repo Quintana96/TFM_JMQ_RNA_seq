@@ -105,6 +105,19 @@ create_app_state <- function(session) {
     design        = "~ condition",
     coef          = NULL,
     coef_available = character(0),
+    # Contraste y diseno CONGELADOS en el momento del ajuste. Los selectores de
+    # la interfaz siguen vivos despues de ajustar, asi que leerlos mas tarde
+    # (informe, bootstrap, comparacion de metodos) puede describir un analisis
+    # distinto del que se ejecuto. Todo lo que reproduzca o evalue el ajuste
+    # debe consumir estos campos y NO `input$...`.
+    ref_level      = NULL,   # denominador del contraste
+    contrast_num   = NULL,   # numerador del contraste
+    batch          = NULL,   # columna de batch incluida en el diseno, si la hay
+    design_formula = NULL,   # formula libre usada (incluye las SV), o NULL
+    test_coef      = NULL,   # coeficiente elegido en el modo avanzado, o NULL
+    # Semillas y parametros estocasticos, para poder declararlos en el informe
+    # y reproducir el resultado exactamente.
+    seeds         = NULL,
     # Nota sobre la correccion aplicada SOLO a los graficos, si la hay.
     viz_note      = NULL
   )

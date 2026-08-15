@@ -348,6 +348,11 @@ server_tab_deg <- function(input, output, session, state) {
       if (nzchar(tc)) tc else NULL
     } else NULL
 
+    # Semillas usadas en este ajuste. Se registran para poder declararlas en el
+    # informe y reproducir el resultado: sin esto, un analisis con sva o con
+    # Swish no es reproducible aunque el resto de parametros coincida.
+    seeds_used <- list()
+
     # Variables sustitutas: se anaden al DISENO (no se corrigen los conteos),
     # que es la forma correcta de tratarlas para testear.
     if (isTRUE(input$deg_use_sva)) {
@@ -357,22 +362,35 @@ server_tab_deg <- function(input, output, session, state) {
       n_req <- input$deg_n_sv %||% 0
       svres <- estimate_surrogate_vars(
         cm_f, meta_aln, base_f,
-        n_sv = if (is.finite(n_req) && n_req >= 1) n_req else NULL)
-      if (is.null(svres$sv)) {
+        n_sv = if (is.finite(n_req) && n_req >= 1) n_req else NULL,
+        seed = ANALYSIS_SEED)
+      seeds_used$sva <- ANALYSIS_SEED
+      if (!is.null(svres$error)) {
         showNotification(paste0("No se han podido estimar variables sustitutas: ",
-                                svres$error %||% "—"),
+                                svres$error),
                          type = "error", duration = 14)
         return()
       }
-      meta_aln <- cbind(meta_aln, as.data.frame(svres$sv))
-      dsg_formula <- paste(deparse1(base_f), "+",
-                           paste(colnames(svres$sv), collapse = " + "))
-      msg <- paste0(svres$n_sv, " variable(s) sustituta(s) anadidas al diseno")
-      if (!is.na(svres$n_sv_estimated %||% NA) && svres$n_sv_estimated > svres$n_sv) {
-        msg <- paste0(msg, " (sva propuso ", svres$n_sv_estimated,
-                      ", recortadas para conservar grados de libertad)")
+      # `num.sv` puede estimar 0: no hay estructura latente que modelar. Antes se
+      # forzaba a 1 y se metia una covariable espuria que gastaba un grado de
+      # libertad y podia absorber senal de la condicion. Ahora se sigue sin SV.
+      if (is.null(svres$sv) || !svres$n_sv) {
+        showNotification(paste0("sva no ha encontrado variacion latente que ",
+                                "modelar (0 variables sustitutas): el analisis ",
+                                "continua con el diseno sin SV."),
+                         type = "message", duration = 12)
+      } else {
+        meta_aln <- cbind(meta_aln, as.data.frame(svres$sv))
+        dsg_formula <- paste(deparse1(base_f), "+",
+                             paste(colnames(svres$sv), collapse = " + "))
+        seeds_used$n_sv <- svres$n_sv
+        msg <- paste0(svres$n_sv, " variable(s) sustituta(s) anadidas al diseno")
+        if (!is.na(svres$n_sv_estimated %||% NA) && svres$n_sv_estimated > svres$n_sv) {
+          msg <- paste0(msg, " (sva propuso ", svres$n_sv_estimated,
+                        ", recortadas para conservar grados de libertad)")
+        }
+        showNotification(paste0(msg, "."), type = "message", duration = 10)
       }
-      showNotification(paste0(msg, "."), type = "message", duration = 10)
     }
 
     # Barra de progreso en lugar de un aviso que desaparece a los 4 segundos: el
@@ -405,7 +423,7 @@ server_tab_deg <- function(input, output, session, state) {
           run_deg_swish(meta_aln, run_info$dir, run_info$tool,
                         annotation_file = annotation_file_for_run(run_info$dir),
                         ref_level = ref, contrast_num = num, batch = batch,
-                        fdr = fdr_target),
+                        fdr = fdr_target, seed = ANALYSIS_SEED),
           error = function(e) list(table = NULL, error = conditionMessage(e),
                                    method = method))
       }
@@ -421,7 +439,13 @@ server_tab_deg <- function(input, output, session, state) {
       setProgress(value = 0.85, detail = "preparando visualizaciones")
       out
     })
-    if (identical(method, "Swish")) res$method <- method
+    if (identical(method, "Swish")) {
+      res$method <- method
+      # Swish permuta etiquetas: sin semilla, el mismo input da q-valores
+      # distintos en cada ejecucion.
+      seeds_used$swish <- ANALYSIS_SEED
+      seeds_used$swish_nperms <- res$n_perms %||% SWISH_NPERMS
+    }
 
     if (is.null(res$table)) {
       showNotification(paste0("Error en ", method, ": ", res$error %||% "fallo desconocido"),
@@ -493,6 +517,16 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$coef          <- res$coef
     state$deg_rv$coef_available <- res$coef_available %||% character(0)
     state$deg_rv$viz_note      <- viz_note
+    # Contraste y diseno con los que se ha ajustado REALMENTE. Los selectores de
+    # la interfaz pueden cambiar despues sin relanzar el analisis, asi que el
+    # informe, el script exportado, el bootstrap y la comparacion de metodos
+    # leen de aqui y no de `input$...`.
+    state$deg_rv$ref_level      <- ref
+    state$deg_rv$contrast_num   <- num
+    state$deg_rv$batch          <- batch
+    state$deg_rv$design_formula <- dsg_formula
+    state$deg_rv$test_coef      <- test_coef
+    state$deg_rv$seeds          <- seeds_used
 
     if (do_shrink && identical(method, "DESeq2") &&
         identical(state$deg_rv$shrink, "ninguno")) {

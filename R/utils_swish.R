@@ -53,12 +53,16 @@ has_inferential_replicates <- function(output_dir, tool) {
 #' @param tool "salmon" o "kallisto"
 #' @param annotation_file GFF/GTF para resumir a gen (opcional: sin el, el
 #'   analisis queda a nivel de transcrito)
+#' @param seed semilla para `fishpond::swish`, que permuta etiquetas de muestra.
+#'   Sin ella el mismo input devuelve p-valores y q-valores distintos en cada
+#'   ejecucion, de modo que el analisis no seria reproducible.
 run_deg_swish <- function(meta, output_dir, tool, annotation_file = NULL,
                           ref_level = NULL, contrast_num = NULL, batch = NULL,
-                          fdr = 0.05, n_perms = 30L) {
+                          fdr = 0.05, n_perms = SWISH_NPERMS, seed = 1L) {
   info <- list(contrast = NA_character_, coef = NA_character_,
                n_levels = NA_integer_, shrink = "ninguno", padj_method = "qvalue",
-               disp_data = NULL, cooks = NULL, coef_available = character(0))
+               disp_data = NULL, cooks = NULL, coef_available = character(0),
+               n_perms = n_perms, seed = seed)
   fail <- function(msg) c(list(table = NULL, error = msg), info)
 
   if (!requireNamespace("fishpond", quietly = TRUE)) {
@@ -107,13 +111,18 @@ run_deg_swish <- function(meta, output_dir, tool, annotation_file = NULL,
     SummarizedExperiment::colData(se)$condition <-
       factor(as.character(m$condition), levels = c(den, num))
 
-    y <- fishpond::scaleInfReps(se)
-    y <- fishpond::labelKeep(y)
-    y <- y[SummarizedExperiment::mcols(y)$keep, ]
-    y <- fishpond::swish(y, x = "condition",
-                         cov = if (!is.null(batch) && nzchar(batch %||% "") &&
-                                   batch %in% names(m)) batch else NULL,
-                         nperms = n_perms)
+    # `scaleInfReps` tambien remuestrea, asi que la semilla envuelve todo el
+    # bloque estocastico y no solo a swish. `with_seed` restaura el estado del
+    # RNG al salir, para no alterar el resto de la sesion.
+    y <- withr::with_seed(seed, {
+      y0 <- fishpond::scaleInfReps(se)
+      y0 <- fishpond::labelKeep(y0)
+      y0 <- y0[SummarizedExperiment::mcols(y0)$keep, ]
+      fishpond::swish(y0, x = "condition",
+                      cov = if (!is.null(batch) && nzchar(batch %||% "") &&
+                                batch %in% names(m)) batch else NULL,
+                      nperms = n_perms)
+    })
     mc <- as.data.frame(SummarizedExperiment::mcols(y))
     # Acceso por [[ ]] y con longitud explicita: swish no garantiza los nombres
     # de sus columnas entre versiones, y `mc$x` sobre una columna ausente

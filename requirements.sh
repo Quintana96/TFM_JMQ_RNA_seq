@@ -62,7 +62,8 @@ required_cran <- c(
   "pheatmap",
   "ggrepel",
   "RColorBrewer",
-  "processx"
+  "processx",
+  "withr"
 )
 required_bioc <- c(
   "DESeq2",

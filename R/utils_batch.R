@@ -32,9 +32,17 @@
 #'   muestras llego a proponer 9, que sumadas a la condicion dejan 1 g.l.
 #'   residual. Se usa el metodo "be" (por permutacion, mas conservador) y se
 #'   recorta ademas para respetar este minimo.
-#' @return list(sv = matriz muestras x n_sv, n_sv, n_sv_estimated, error)
+#' @param seed semilla para `num.sv`. El metodo "be" estima el numero de
+#'   variables por PERMUTACION, asi que sin semilla el mismo input puede dar un
+#'   numero distinto entre ejecuciones y arrastrar con el todo el resultado del
+#'   analisis diferencial. `svaseq` en si es determinista dado `n.sv`.
+#' @return list(sv = matriz muestras x n_sv, n_sv, n_sv_estimated, error).
+#'   `n_sv = 0` con `sv = NULL` y `error = NULL` es un resultado VALIDO: sva no
+#'   ha encontrado estructura latente. Quien llame debe continuar sin variables
+#'   sustitutas, no forzar una.
 estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
-                                    n_sv = NULL, min_residual_df = 3L) {
+                                    n_sv = NULL, min_residual_df = 3L,
+                                    seed = 1L) {
   if (!requireNamespace("sva", quietly = TRUE)) {
     return(list(sv = NULL, n_sv = 0L, error = "sva no esta instalado."))
   }
@@ -48,7 +56,11 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
     mod  <- stats::model.matrix(full_formula, data = meta)
     mod0 <- stats::model.matrix(~ 1, data = meta)
     n_est <- if (is.null(n_sv) || !is.finite(n_sv) || n_sv < 1) {
-      tryCatch(sva::num.sv(cm, mod, method = "be"), error = function(e) 1L)
+      # `seed` se aplica de forma local: with_seed restaura el estado del RNG al
+      # salir, para no alterar cualquier otra aleatoriedad de la sesion.
+      tryCatch(
+        withr::with_seed(seed, sva::num.sv(cm, mod, method = "be")),
+        error = function(e) 0L)
     } else as.integer(n_sv)
     # Tope: no dejar el diseno sin grados de libertad residuales.
     n_max <- ncol(cm) - ncol(mod) - as.integer(min_residual_df)
@@ -56,12 +68,23 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
       stop(paste0("Con ", ncol(cm), " muestras y ", ncol(mod), " coeficientes no ",
                   "hay margen para variables sustitutas."))
     }
-    n <- max(1L, min(as.integer(n_est), n_max))
-    sv <- sva::svaseq(cm, mod, mod0, n.sv = n)$sv
-    sv <- as.matrix(sv)
-    colnames(sv) <- paste0("SV", seq_len(ncol(sv)))
-    rownames(sv) <- colnames(counts)
-    list(sv = sv, n_sv = ncol(sv), n_sv_estimated = as.integer(n_est), error = NULL)
+    # Si sva estima 0, se devuelven 0. Forzar un minimo de 1 (lo que se hacia
+    # antes) introduce una covariable espuria: consume un grado de libertad y
+    # puede absorber senal real de la condicion.
+    #
+    # Nota: nada de `return()` dentro de este `tryCatch`, porque retornaria de la
+    # funcion entera y no del bloque; el valor del bloque es el de la ultima
+    # expresion evaluada.
+    n <- min(as.integer(n_est), n_max)
+    if (n < 1) {
+      list(sv = NULL, n_sv = 0L, n_sv_estimated = as.integer(n_est), error = NULL)
+    } else {
+      sv <- sva::svaseq(cm, mod, mod0, n.sv = n)$sv
+      sv <- as.matrix(sv)
+      colnames(sv) <- paste0("SV", seq_len(ncol(sv)))
+      rownames(sv) <- colnames(counts)
+      list(sv = sv, n_sv = ncol(sv), n_sv_estimated = as.integer(n_est), error = NULL)
+    }
   }, error = function(e) {
     msg <- conditionMessage(e)
     # sva falla con errores de algebra lineal cuando hay pocas muestras. El
