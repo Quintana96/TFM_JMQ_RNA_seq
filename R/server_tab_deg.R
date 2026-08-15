@@ -618,9 +618,26 @@ server_tab_deg <- function(input, output, session, state) {
       )
     }
 
-    showNotification(paste0("DEG completado (", method, "): ",
-                            nrow(res$table), " filas."),
-                     type = "default", duration = 6)
+    # Persistencia del analisis. Hasta ahora el informe y el script solo
+    # existian si el usuario los descargaba, de modo que una ejecucion del
+    # pipeline dejaba rastro en disco pero los analisis hechos sobre ella no:
+    # no habia forma de saber cuantos se lanzaron ni con que parametros.
+    dest <- persist_deg_analysis(state$deg_rv, base_dir = state$deg_rv$run_dir,
+                                 outputs_dir = state$outputs_dir)
+    append_audit_log("deg_run", list(
+      motor = method, contraste = res$contrast, fdr = fdr_target,
+      lfc_umbral = lfc_thr, diseno = state$deg_rv$design,
+      genes = nrow(res$table),
+      significativos = sum(!is.na(res$table$padj) & res$table$padj <= fdr_target),
+      origen = counts_origin_info$tipo %||% "—",
+      guardado_en = dest %||% "no guardado"
+    ), outputs_dir = state$outputs_dir)
+
+    showNotification(
+      paste0("DEG completado (", method, "): ", nrow(res$table), " filas.",
+             if (!is.null(dest)) paste0(" Guardado en ", basename(dirname(dest)),
+                                        "/", basename(dest), ".") else ""),
+      type = "default", duration = 8)
   })
 
   # ── Banner del contraste testeado ──────────────────────────────────────────

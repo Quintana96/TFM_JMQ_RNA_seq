@@ -97,8 +97,11 @@ infer_read_type_from_dir <- function(out_dir) {
 #' Lee el run_params.tsv que deja workflow.sh en el directorio de salida.
 #' Devuelve una lista con lo que haya, o list() si el fichero no existe (las
 #' ejecuciones anteriores a su introduccion no lo tienen).
-read_run_params_file <- function(out_dir) {
-  f <- file.path(out_dir, "run_params.tsv")
+#' @param filename fichero clave-valor a leer. El mismo formato lo usan
+#'   `run_params.tsv` (parametros del pipeline) y `deg_params.tsv` (parametros
+#'   de un analisis diferencial persistido), asi que comparten lector.
+read_run_params_file <- function(out_dir, filename = "run_params.tsv") {
+  f <- file.path(out_dir, filename)
   if (!file.exists(f)) return(list())
   df <- tryCatch(
     utils::read.delim(f, header = FALSE, col.names = c("key", "value"),
