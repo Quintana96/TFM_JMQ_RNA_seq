@@ -298,12 +298,22 @@ interpret_length_bias <- function(rho, p_value, odds_ratio) {
 #' genes el grafico no necesita los puntos. Una muestra bien normalizada tiene la
 #' mediana cerca de 0 y un IQR estrecho; una mediana desplazada indica fallo de
 #' normalizacion o un problema con esa muestra.
-rle_summary <- function(counts) {
+#' @param normalized si TRUE (por defecto) el RLE se calcula sobre conteos
+#'   normalizados por COMPOSICION (TMM). El RLE es un diagnostico de la
+#'   normalizacion aplicada: calcularlo sobre CPM por tamano de libreria crudo
+#'   puede marcar como desviada una muestra que TMM o la mediana de ratios
+#'   corrigen perfectamente, y al reves. Se deja el modo crudo disponible para
+#'   poder comparar el antes y el despues.
+rle_summary <- function(counts, normalized = TRUE) {
   if (is.null(counts) || !nrow(counts) || !ncol(counts)) return(NULL)
   cm <- as.matrix(counts)
-  libs <- colSums(cm, na.rm = TRUE)
-  libs[libs == 0 | is.na(libs)] <- 1
-  lcpm <- log2(t(t(cm) / libs) * 1e6 + 1)
+  lcpm <- if (isTRUE(normalized)) {
+    log2(normalized_cpm(cm) + 1)
+  } else {
+    libs <- colSums(cm, na.rm = TRUE)
+    libs[libs == 0 | is.na(libs)] <- 1
+    log2(t(t(cm) / libs) * 1e6 + 1)
+  }
   med <- apply(lcpm, 1, stats::median, na.rm = TRUE)
   rle <- lcpm - med
   qs <- apply(rle, 2, stats::quantile, probs = c(0.05, 0.25, 0.5, 0.75, 0.95),

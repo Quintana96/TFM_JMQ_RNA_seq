@@ -572,6 +572,31 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
 #' grupo) merece la pena comparar. Por eso este motor existe pero no se sugiere
 #' hasta que el tamano muestral lo justifica.
 #'
+#' CPM normalizados por composicion (TMM cuando edgeR esta disponible).
+#'
+#' Los motores robustos usaban CPM por tamano de libreria crudo. El benchmark
+#' que motiva el motor de Wilcoxon (Li et al., Genome Biology 2022) normaliza
+#' con TMM, y sin corregir por composicion una diferencia de composicion entre
+#' grupos se convierte en falsos positivos — justo en el regimen de n grande en
+#' el que la app recomienda estos motores.
+#'
+#' @param counts matriz de conteos
+#' @return matriz de CPM
+normalized_cpm <- function(counts) {
+  cm <- as.matrix(counts)
+  if (requireNamespace("edgeR", quietly = TRUE)) {
+    out <- tryCatch({
+      y <- edgeR::DGEList(counts = cm)
+      y <- norm_lib_sizes(y)
+      edgeR::cpm(y, normalized.lib.sizes = TRUE)
+    }, error = function(e) NULL)
+    if (!is.null(out)) return(out)
+  }
+  # Respaldo sin edgeR: CPM por tamano de libreria, peor pero utilizable.
+  libs <- colSums(cm); libs[libs == 0] <- 1
+  t(t(cm) / libs) * 1e6
+}
+
 #' Solo admite dos grupos: es un test de dos muestras, no un modelo, asi que no
 #' puede ajustar por batch ni por covariables.
 run_deg_wilcoxon <- function(counts, meta, ref_level = NULL, batch = NULL,
@@ -592,9 +617,7 @@ run_deg_wilcoxon <- function(counts, meta, ref_level = NULL, batch = NULL,
     if (length(i_num) < 2 || length(i_den) < 2) {
       stop("Wilcoxon necesita al menos 2 muestras en cada grupo del contraste.")
     }
-    cm <- as.matrix(counts)
-    libs <- colSums(cm); libs[libs == 0] <- 1
-    cpm <- t(t(cm) / libs) * 1e6
+    cpm <- normalized_cpm(counts)
     a <- cpm[, i_num, drop = FALSE]; b <- cpm[, i_den, drop = FALSE]
     pv <- vapply(seq_len(nrow(cpm)), function(i) {
       tryCatch(stats::wilcox.test(a[i, ], b[i, ], exact = FALSE)$p.value,
@@ -656,8 +679,7 @@ run_deg_dearseq <- function(counts, meta, ref_level = NULL, batch = NULL,
     rt <- res$pvals
     pv <- as.numeric(rt[["rawPval"]])
     names(pv) <- rownames(rt)
-    libs <- colSums(cm); libs[libs == 0] <- 1
-    cpm <- t(t(cm) / libs) * 1e6
+    cpm <- normalized_cpm(cm)
     i_num <- which(as.character(m$condition) == num)
     i_den <- which(as.character(m$condition) == den)
     lfc <- log2((rowMeans(cpm[, i_num, drop = FALSE]) + 1) /
@@ -782,9 +804,30 @@ run_deg <- function(counts, meta,
   res$lfc_threshold <- lfc_threshold
   # IC del log2FC donde el motor haya dado error estandar (DESeq2 y limma).
   if (!is.null(res$table)) res$table <- add_lfc_confidence_interval(res$table)
-  res$design        <- if (!is.null(design_formula)) deparse1(design_formula)
-                       else if (!is.null(batch) && nzchar(batch %||% "")) paste0("~ ", batch, " + condition")
-                       else "~ condition"
+  # El diseno REPORTADO tiene que ser el que el motor ajusto de verdad. Wilcoxon
+  # y dearseq no consumen `design_formula`: Wilcoxon es un test de dos muestras
+  # sin modelo, y dearseq recibe la condicion y, como mucho, el batch. Declarar
+  # la formula libre en esos casos hacia que el banner y el informe describieran
+  # un ajuste que no habia ocurrido.
+  res$design <- if (identical(method, "Wilcoxon")) {
+    "sin modelo (test de dos muestras sobre CPM normalizados)"
+  } else if (identical(method, "dearseq")) {
+    if (!is.null(batch) && nzchar(batch %||% "")) paste0("~ ", batch, " + condition")
+    else "~ condition"
+  } else if (!is.null(design_formula)) {
+    deparse1(design_formula)
+  } else if (!is.null(batch) && nzchar(batch %||% "")) {
+    paste0("~ ", batch, " + condition")
+  } else "~ condition"
+
+  # Y si se pidio una formula libre a un motor que no la usa, se dice: callarlo
+  # deja al usuario creyendo que su diseno pareado se ha tenido en cuenta.
+  if (!is.null(design_formula) && method %in% DEG_METHODS_ROBUST) {
+    res$design_warning <- paste0(
+      "El motor ", method, " no admite formulas de diseno arbitrarias: se ha ",
+      "ajustado ", res$design, ". Si necesitas el diseno completo, usa DESeq2, ",
+      "edgeR o limma-voom.")
+  }
   res
 }
 

@@ -599,6 +599,9 @@ server_tab_deg <- function(input, output, session, state) {
         type = "warning", duration = 8
       )
     }
+    if (!is.null(res$design_warning)) {
+      showNotification(res$design_warning, type = "warning", duration = 16)
+    }
     if (isTRUE(input$deg_use_ihw) && identical(method, "DESeq2") &&
         !identical(state$deg_rv$padj_method, "IHW")) {
       showNotification(

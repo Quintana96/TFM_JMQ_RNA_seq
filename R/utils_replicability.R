@@ -26,21 +26,48 @@ REPLICABILITY_LOW  <- 0.8
 #' todas las muestras puede dejar un grupo vacio y hacer imposible el contraste.
 #' Se exige que cada nivel conserve al menos 2 muestras distintas, porque con
 #' una sola replica no hay dispersion dentro del grupo que estimar.
-bootstrap_sample_indices <- function(meta, min_per_group = 2L) {
+#' @param batch nombre de la columna de batch si esta en el modelo. Cuando la
+#'   hay, la estratificacion es por condicion x batch: si solo se estratifica
+#'   por condicion, un remuestreo puede dejar un batch con una sola muestra o
+#'   colineal con la condicion, y ese remuestreo falla. Como los fallos solo se
+#'   cuentan, la estimacion acaba apoyada en los remuestreos "faciles" y sale
+#'   optimista.
+bootstrap_sample_indices <- function(meta, min_per_group = 2L, batch = NULL) {
   if (is.null(meta) || !nrow(meta) || !"condition" %in% names(meta)) return(NULL)
-  g <- as.character(meta$condition)
+  usar_batch <- !is.null(batch) && nzchar(batch %||% "") && batch %in% names(meta)
+  estrato <- if (usar_batch) {
+    paste(as.character(meta$condition), as.character(meta[[batch]]), sep = "\r")
+  } else {
+    as.character(meta$condition)
+  }
+  # Con estratos muy pequenos (frecuente en condicion x batch) exigir 2 muestras
+  # distintas por estrato es imposible; el minimo se aplica entonces por
+  # CONDICION, que es lo que el contraste necesita de verdad.
+  min_estrato <- if (usar_batch) 1L else min_per_group
   idx <- integer(0)
-  for (lv in unique(g)) {
-    pos <- which(g == lv)
-    if (length(pos) < min_per_group) return(NULL)
+  for (lv in unique(estrato)) {
+    pos <- which(estrato == lv)
+    if (length(pos) < min_estrato) return(NULL)
+    s <- pos
     for (attempt in 1:20) {
-      s <- sample(pos, length(pos), replace = TRUE)
-      if (length(unique(s)) >= min_per_group) break
+      # sample.int y no sample(pos, ...): con un estrato de un solo elemento,
+      # sample(pos, 1) interpreta `pos` como 1:pos y devuelve un indice
+      # cualquiera en ese rango en lugar de esa muestra. Los estratos de tamano
+      # 1 son frecuentes al cruzar condicion x batch.
+      s <- pos[sample.int(length(pos), length(pos), replace = TRUE)]
+      if (length(unique(s)) >= min(min_estrato, length(pos))) break
     }
-    if (length(unique(s)) < min_per_group) return(NULL)
     idx <- c(idx, s)
   }
-  idx
+  if (usar_batch) {
+    # Comprobacion final a nivel de condicion: cada grupo del contraste tiene
+    # que conservar al menos dos muestras distintas.
+    g <- as.character(meta$condition)[idx]
+    for (lv in unique(as.character(meta$condition))) {
+      if (length(unique(idx[g == lv])) < min_per_group) return(NULL)
+    }
+  }
+  sort(idx)
 }
 
 #' Concordancia entre dos tablas DEG del mismo experimento.
@@ -170,7 +197,8 @@ bootstrap_replicability <- function(counts, meta, method = "DESeq2",
   set.seed(seed)
   # Los indices se generan de una vez para que el resultado sea reproducible
   # incluso si la ejecucion se paraleliza.
-  idx_list <- lapply(seq_len(n_boot), function(i) bootstrap_sample_indices(meta))
+  idx_list <- lapply(seq_len(n_boot), function(i)
+    bootstrap_sample_indices(meta, batch = batch))
   valid <- !vapply(idx_list, is.null, logical(1))
   if (!any(valid)) {
     return(fail(paste0("No se pueden generar remuestreos con al menos 2 muestras ",
