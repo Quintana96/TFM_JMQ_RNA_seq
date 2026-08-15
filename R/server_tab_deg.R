@@ -587,15 +587,22 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$vst_mat       <- vst_mat
     state$deg_rv$run_at        <- Sys.time()
     state$deg_rv$fdr           <- fdr_target
-    state$deg_rv$lfc_threshold <- lfc_thr
+    # Swish no recibe lfc_threshold ni la matriz prefiltrada: declararlos seria
+    # atribuirle un test que no hizo.
+    state$deg_rv$lfc_threshold <- if (identical(method, "Swish")) NA_real_ else lfc_thr
     state$deg_rv$contrast      <- res$contrast
     state$deg_rv$n_levels      <- res$n_levels %||% NA_integer_
     state$deg_rv$shrink        <- res$shrink %||% "ninguno"
-    state$deg_rv$prefilter     <- pf_info
+    state$deg_rv$prefilter     <- if (identical(method, "Swish")) NULL else pf_info
     state$deg_rv$padj_method   <- res$padj_method %||% "BH"
     state$deg_rv$disp_data     <- res$disp_data
     state$deg_rv$cooks         <- res$cooks
     state$deg_rv$design        <- res$design %||% "~ condition"
+    state$deg_rv$design_code   <- res$design_code
+    # El modo de outliers de Cook CAMBIA el conjunto de genes con padj, asi que
+    # tiene que viajar al informe, al script y al registro: sin el, dos analisis
+    # con resultados distintos son indistinguibles en sus artefactos.
+    state$deg_rv$outliers      <- input$deg_outliers %||% "na" 
     state$deg_rv$coef          <- res$coef
     state$deg_rv$coef_available <- res$coef_available %||% character(0)
     state$deg_rv$viz_note      <- viz_note
@@ -652,6 +659,9 @@ server_tab_deg <- function(input, output, session, state) {
     # existian si el usuario los descargaba, de modo que una ejecucion del
     # pipeline dejaba rastro en disco pero los analisis hechos sobre ella no:
     # no habia forma de saber cuantos se lanzaron ni con que parametros.
+    # Sin diagnosticos a proposito: se persiste en el momento del ajuste, cuando
+    # todavia no se ha corrido ningun bootstrap. El informe archivado refleja el
+    # estado en ese instante; el descargable desde la interfaz si los incluye.
     dest <- persist_deg_analysis(state$deg_rv, base_dir = state$deg_rv$run_dir,
                                  outputs_dir = state$outputs_dir)
     append_audit_log("deg_run", list(

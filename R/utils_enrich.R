@@ -468,10 +468,21 @@ deg_ranking_metric <- function(deg_df, metric = c("stat", "log2FC", "signed_p"))
 #'   estima el p-valor exacto a costa de mas tiempo de calculo.
 #' @param term2gene Data frame (term, gene) para `ont = "GMT"`: enriquecimiento
 #'   contra conjuntos propios, sin pasar por el OrgDb.
+#' @param seed semilla del remuestreo de fgsea.
+#'
+#'   `seed = TRUE` de clusterProfiler NO basta: DOSE lo implementa como
+#'   `set.seed(.Random.seed)`, y `.Random.seed[1]` es el CODIGO DEL TIPO de
+#'   generador (10403 por defecto), no una semilla. El resultado es determinista
+#'   solo por accidente —mientras nadie cambie `RNGkind()`— y en una sesion sin
+#'   aleatoriedad previa `.Random.seed` ni siquiera existe, lo que convierte un
+#'   GSEA perfectamente valido en un "fallo" incomprensible. Se fija aqui de
+#'   forma explicita con `withr::with_seed`, que ademas restaura el estado al
+#'   salir.
 run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
                      keyType = "SYMBOL", exponent = 0,
                      pvalueCutoff = 0.05, minGSSize = 10, maxGSSize = 500,
-                     eps = 1e-10, term2gene = NULL, readable = FALSE) {
+                     eps = 1e-10, term2gene = NULL, readable = FALSE,
+                     seed = 1L) {
   fail <- function(msg) list(table = NULL, error = msg, mapping = NULL)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
     return(fail("clusterProfiler no esta instalado."))
@@ -488,15 +499,15 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
       return(fail("Carga un fichero GMT con los conjuntos de genes."))
     }
     mapping <- mapping_against_sets(names(ranked), term2gene)
-    out <- tryCatch({
+    out <- withr::with_seed(seed, tryCatch({
       gs <- clusterProfiler::GSEA(
         geneList = ranked, TERM2GENE = term2gene, exponent = exponent,
         minGSSize = minGSSize, maxGSSize = maxGSSize, eps = eps,
-        pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE
+        pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE  # ver nota de `seed`
       )
       df <- if (is.null(gs)) NULL else as.data.frame(gs)
       if (is.null(df) || !nrow(df)) NULL else df
-    }, error = function(e) e)
+    }, error = function(e) e))
     if (inherits(out, "error")) {
       return(list(table = NULL, error = conditionMessage(out), mapping = mapping))
     }
@@ -521,25 +532,25 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
   }
   mapping <- if (!is_kegg) gene_mapping_rate(names(ranked), OrgDb, keyType) else NULL
 
-  out <- tryCatch({
+  out <- withr::with_seed(seed, tryCatch({
     gs <- if (is_kegg) {
       clusterProfiler::gseKEGG(
         geneList = ranked, organism = organism, keyType = keyType,
         exponent = exponent, minGSSize = minGSSize, maxGSSize = maxGSSize,
-        eps = eps, pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE
+        eps = eps, pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE  # ver nota de `seed`
       )
     } else {
       clusterProfiler::gseGO(
         geneList = ranked, ont = ont, OrgDb = OrgDb, keyType = keyType,
         exponent = exponent, minGSSize = minGSSize, maxGSSize = maxGSSize,
-        eps = eps, pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE
+        eps = eps, pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE  # ver nota de `seed`
       )
     }
     # Aplica a core_enrichment, que es la columna que se lee gen a gen.
     if (isTRUE(readable) && !is_kegg) gs <- enrich_set_readable(gs, OrgDb, keyType)
     df <- if (is.null(gs)) NULL else as.data.frame(gs)
     if (is.null(df) || !nrow(df)) NULL else df
-  }, error = function(e) e)
+  }, error = function(e) e))
 
   if (inherits(out, "error")) return(list(table = NULL, error = conditionMessage(out),
                                           mapping = mapping))

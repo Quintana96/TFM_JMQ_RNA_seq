@@ -12,9 +12,8 @@
 #'
 #' Ninguna de las apps Shiny comparables ofrece esto.
 #'
-#' El coste computacional es el obstaculo real: son N reajustes del modelo. Se
-#' mitiga con `BiocParallel` cuando esta disponible y con un numero de
-#' remuestreos configurable.
+#' El coste computacional es el obstaculo real: son N reajustes del modelo, por
+#' lo que el numero de remuestreos es configurable.
 
 #' Umbrales de interpretacion del estudio de cohortes pequenas.
 REPLICABILITY_HIGH <- 0.9
@@ -194,11 +193,12 @@ bootstrap_replicability <- function(counts, meta, method = "DESeq2",
                        ref$error %||% "error desconocido")))
   }
 
-  set.seed(seed)
+  # with_seed y no set.seed a secas: fijar la semilla sin restaurarla altera el
+  # RNG del resto de la sesion, que es justo lo que global.R declara que NO pasa.
   # Los indices se generan de una vez para que el resultado sea reproducible
   # incluso si la ejecucion se paraleliza.
-  idx_list <- lapply(seq_len(n_boot), function(i)
-    bootstrap_sample_indices(meta, batch = batch))
+  idx_list <- withr::with_seed(seed, lapply(seq_len(n_boot), function(i)
+    bootstrap_sample_indices(meta, batch = batch)))
   valid <- !vapply(idx_list, is.null, logical(1))
   if (!any(valid)) {
     return(fail(paste0("No se pueden generar remuestreos con al menos 2 muestras ",

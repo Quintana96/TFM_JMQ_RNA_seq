@@ -828,6 +828,10 @@ run_deg <- function(counts, meta,
   # sin modelo, y dearseq recibe la condicion y, como mucho, el batch. Declarar
   # la formula libre en esos casos hacia que el banner y el informe describieran
   # un ajuste que no habia ocurrido.
+  # `design` es la etiqueta LEGIBLE (banner, informe) y `design_code` la formula
+  # como CODIGO. Separarlas es necesario: para Wilcoxon la etiqueta es prosa, y
+  # el generador del script la interpolaba dentro de model.matrix(), produciendo
+  # un fichero que no parsea. Un motor sin modelo tiene design_code = NULL.
   res$design <- if (identical(method, "Wilcoxon")) {
     "sin modelo (test de dos muestras sobre CPM normalizados)"
   } else if (identical(method, "dearseq")) {
@@ -838,6 +842,8 @@ run_deg <- function(counts, meta,
   } else if (!is.null(batch) && nzchar(batch %||% "")) {
     paste0("~ ", batch, " + condition")
   } else "~ condition"
+
+  res$design_code <- if (identical(method, "Wilcoxon")) NULL else res$design
 
   # Y si se pidio una formula libre a un motor que no la usa, se dice: callarlo
   # deja al usuario creyendo que su diseno pareado se ha tenido en cuenta.

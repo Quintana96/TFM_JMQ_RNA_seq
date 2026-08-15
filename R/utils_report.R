@@ -49,6 +49,13 @@ deg_run_parameters <- function(rv) {
     "Correccion multiple"      = rv$padj_method %||% "BH",
     "Umbral |log2FC| del test" = rv$lfc_threshold %||% 0,
     "Encogido de log2FC"       = rv$shrink %||% "ninguno",
+    # El modo de outliers cambia que genes tienen padj, asi que es un parametro
+    # del test y no una preferencia de visualizacion.
+    "Outliers de Cook"         = switch(rv$outliers %||% "na",
+      na = "excluidos del test (por defecto)",
+      refit = "valor atipico sustituido y regenado al test",
+      keep = "filtro desactivado (se tratan como biologia real)",
+      rv$outliers %||% "—"),
     "Prefiltrado"              = if (is.null(pf)) "—" else
       paste0(pf$mode, ": ", pf$n_before, " -> ", pf$n_after, " genes"),
     "Muestras"                 = if (!is.null(rv$meta)) nrow(rv$meta) else NA,
@@ -278,8 +285,17 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
     if (!is.null(sd$swish_nperms)) campos[["Permutaciones de Swish"]] <- sd$swish_nperms
     if (!is.null(diagnostics$replicability))
       campos[["Semilla del bootstrap"]] <- ANALYSIS_SEED
-    if (!length(campos)) campos[["Componentes aleatorios"]] <-
-      "ninguno en este analisis (el ajuste es determinista)"
+    # No se afirma que el analisis sea determinista si no se ha registrado nada:
+    # DESeq2 con IHW y el enriquecimiento GSEA tienen componentes estocasticos
+    # que no siempre quedan anotados aqui, y declarar determinismo sin haberlo
+    # comprobado es peor que no decir nada.
+    if (!is.null(rv$enrich)) campos[["Semilla de GSEA"]] <- ANALYSIS_SEED
+    if (identical(rv$padj_method %||% "BH", "IHW"))
+      campos[["Semilla de IHW"]] <- "1 (valor por defecto de IHW::ihw)"
+    if (!length(campos)) campos[["Componentes aleatorios registrados"]] <-
+      paste("ninguno. El ajuste de este motor es determinista, pero esta linea",
+            "solo cubre lo que la aplicacion registra: revisa las versiones de",
+            "los paquetes si necesitas reproducir el resultado bit a bit.")
     paste0("<h3>Semillas y componentes aleatorios</h3>", html_kv_table(campos))
   }
 
@@ -338,8 +354,8 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
   }, character(1)), collapse = "") else ""
 
   si <- utils::capture.output(utils::sessionInfo())
-  pkgs <- c("DESeq2", "edgeR", "limma", "apeglm", "IHW", "sva", "clusterProfiler",
-            "fgsea", "tximport", "dearseq")
+  pkgs <- c("DESeq2", "edgeR", "limma", "apeglm", "ashr", "IHW", "sva",
+            "clusterProfiler", "fgsea", "tximport", "dearseq", "fishpond")
   pkg_versions <- stats::setNames(lapply(pkgs, function(p) {
     if (requireNamespace(p, quietly = TRUE)) as.character(utils::packageVersion(p))
     else "no instalado"
@@ -428,6 +444,11 @@ build_deg_r_script <- function(rv) {
   if (is.null(rv) || is.null(rv$results)) return(NULL)
   method <- rv$method %||% "DESeq2"
   design <- rv$design %||% "~ condition"
+  # La formula como CODIGO. Para Wilcoxon la etiqueta legible es prosa ("sin
+  # modelo..."), y interpolarla dentro de model.matrix() producia un script que
+  # no parseaba. Cuando no hay modelo, el prefiltrado usa la via `group=`.
+  design_code <- rv$design_code %||%
+    (if (identical(rv$method %||% "", "Wilcoxon")) NULL else design)
   fdr <- rv$fdr %||% 0.05
   lfc <- rv$lfc_threshold %||% 0
   coef <- rv$coef %||% ""
@@ -470,7 +491,11 @@ build_deg_r_script <- function(rv) {
     if (identical(method, "Swish")) character(0) else
       'counts <- as.matrix(read.delim("counts.tsv", row.names = 1, check.names = FALSE))',
     'meta   <- read.delim("meta.tsv", stringsAsFactors = FALSE)',
-    'meta   <- meta[match(colnames(counts), meta$sample_id), , drop = FALSE]',
+    # Con Swish no hay objeto `counts`: el orden se fija por sample_id y las
+    # cuantificaciones se reordenan despues contra el.
+    if (identical(method, "Swish"))
+      'meta   <- meta[order(meta$sample_id), , drop = FALSE]'
+    else 'meta   <- meta[match(colnames(counts), meta$sample_id), , drop = FALSE]',
     paste0('# El denominador del contraste es el nivel de referencia del factor.'),
     paste0('meta$condition <- relevel(factor(meta$condition), ref = "', ref, '")'),
     ""
@@ -482,7 +507,7 @@ build_deg_r_script <- function(rv) {
   sva_block <- if (!is.null(seeds$n_sv) && seeds$n_sv > 0) c(
     "# El diseno incluye variables sustitutas estimadas con sva. Para reproducir",
     "# el ajuste hay que volver a estimarlas: no viajan en el samplesheet.",
-    "mod  <- model.matrix(~ condition, data = meta)",
+    paste0("mod  <- model.matrix(", rv$design_base %||% "~ condition", ", data = meta)"),
     "mod0 <- model.matrix(~ 1, data = meta)",
     "cm_sv <- as.matrix(counts)[rowMeans(as.matrix(counts)) > 1, , drop = FALSE]",
     paste0("sv <- sva::svaseq(cm_sv, mod, mod0, n.sv = ", seeds$n_sv, ")$sv"),
@@ -496,9 +521,11 @@ build_deg_r_script <- function(rv) {
   prefilter <- if (identical(method, "Swish")) character(0) else
     if (!is.null(pf) && identical(pf$mode, "filterByExpr")) c(
     "# Prefiltrado: filterByExpr usa el tamano del grupo mas pequeno",
-    paste0("design <- model.matrix(", design, ", data = meta)"),
+    if (!is.null(design_code))
+      paste0("design <- model.matrix(", design_code, ", data = meta)") else character(0),
     "y <- edgeR::DGEList(counts = round(counts), group = meta$condition)",
-    "keep <- edgeR::filterByExpr(y, design = design)",
+    if (!is.null(design_code)) "keep <- edgeR::filterByExpr(y, design = design)"
+    else "keep <- edgeR::filterByExpr(y, group = meta$condition)",
     "counts <- counts[keep, , drop = FALSE]",
     ""
   ) else if (!is.null(pf)) c(
@@ -518,13 +545,17 @@ build_deg_r_script <- function(rv) {
       if (identical(rv$padj_method, "IHW"))
         "library(IHW); library(S4Vectors)  # IHW necesita S4Vectors atachado"
       else character(0),
-      paste0("dds <- DESeqDataSetFromMatrix(round(counts), meta, ", design, ")"),
-      "dds <- DESeq(dds)",
+      paste0("dds <- DESeqDataSetFromMatrix(round(counts), meta, ", design_code, ")"),
+      if (identical(rv$outliers %||% "na", "refit"))
+        "dds <- DESeq(dds, minReplicatesForReplace = 3)  # outliers: sustituir"
+      else "dds <- DESeq(dds)",
       paste0("# alpha = FDR objetivo: calibra el filtrado independiente"),
       paste0("res <- results(dds, name = \"", coef, "\", alpha = ", fdr,
              if (lfc > 0) paste0(", lfcThreshold = ", lfc,
                                  ", altHypothesis = \"greaterAbs\"") else "",
              if (identical(rv$padj_method, "IHW")) ", filterFun = IHW::ihw" else "",
+             # cooksCutoff = FALSE trata los valores extremos como biologia real
+             if (identical(rv$outliers %||% "na", "keep")) ", cooksCutoff = FALSE" else "",
              ")"),
       if (!identical(rv$shrink %||% "ninguno", "ninguno")) c(
         "# El encogido cambia el log2FC pero no los p-valores",
@@ -534,7 +565,7 @@ build_deg_r_script <- function(rv) {
     ),
     "edgeR" = c(
       "library(edgeR)",
-      paste0("design <- model.matrix(", design, ", data = meta)"),
+      paste0("design <- model.matrix(", design_code, ", data = meta)"),
       "y <- DGEList(counts = round(counts), group = meta$condition)",
       "y <- normLibSizes(y)                 # edgeR v4; antes calcNormFactors",
       "fit <- glmQLFit(y, design)           # v4 estima las dispersiones aqui",
@@ -545,7 +576,7 @@ build_deg_r_script <- function(rv) {
     ),
     "limma-voom" = c(
       "library(limma); library(edgeR)",
-      paste0("design <- model.matrix(", design, ", data = meta)"),
+      paste0("design <- model.matrix(", design_code, ", data = meta)"),
       "y <- normLibSizes(DGEList(counts = round(counts), group = meta$condition))",
       "v <- voomWithQualityWeights(y, design)",
       "fit <- lmFit(v, design)",
@@ -557,8 +588,12 @@ build_deg_r_script <- function(rv) {
         paste0("res <- topTable(fit, coef = \"", coef, "\", number = Inf, sort.by = \"none\")"))
     ),
     "Wilcoxon" = c(
-      "# Wilcoxon rank-sum sobre CPM: sin modelo, no ajusta covariables",
-      "libs <- colSums(counts); cpm <- t(t(counts) / libs) * 1e6",
+      "# Wilcoxon rank-sum sobre CPM: sin modelo, no ajusta covariables.",
+      "# La normalizacion es TMM y no CPM por tamano de libreria: sin corregir",
+      "# por composicion, una diferencia de composicion entre grupos se",
+      "# convierte en falsos positivos (Li et al., Genome Biology 2022).",
+      "y <- edgeR::normLibSizes(edgeR::DGEList(counts = round(counts)))",
+      "cpm <- edgeR::cpm(y, normalized.lib.sizes = TRUE)",
       "g <- as.character(meta$condition)",
       paste0("num <- \"", sub(" vs .*$", "", rv$contrast %||% ""), "\"; ",
              "den <- \"", sub("^.* vs ", "", rv$contrast %||% ""), "\""),
@@ -568,8 +603,16 @@ build_deg_r_script <- function(rv) {
     ),
     "dearseq" = c(
       "library(dearseq)",
-      "v2t <- model.matrix(~ condition, data = meta)[, -1, drop = FALSE]",
-      "res <- dear_seq(exprmat = round(counts), variables2test = v2t,",
+      "# El motor subsetea a los dos niveles del contraste y pasa el batch como",
+      "# covariable; reproducirlo sin eso daria otro resultado.",
+      paste0("keep_s <- as.character(meta$condition) %in% c(\"", num, "\", \"", ref, "\")"),
+      "m <- droplevels(meta[keep_s, , drop = FALSE])",
+      "cm <- round(counts)[, keep_s, drop = FALSE]",
+      "v2t <- model.matrix(~ condition, data = m)[, -1, drop = FALSE]",
+      if (!is.null(rv$batch) && nzchar(rv$batch %||% ""))
+        paste0("cov <- model.matrix(~ ", rv$batch, ", data = m)[, -1, drop = FALSE]")
+      else "cov <- NULL",
+      "res <- dear_seq(exprmat = cm, variables2test = v2t, covariates = cov,",
       "                which_test = \"asymptotic\", preprocessed = FALSE)$pvals"
     ),
     "Swish" = c(
@@ -610,5 +653,5 @@ build_deg_r_script <- function(rv) {
     "",
     "sessionInfo()"
   )
-  paste(c(header, sva_block, prefilter, body, footer), collapse = "\n")
+  paste(c(header, prefilter, sva_block, body, footer), collapse = "\n")
 }
