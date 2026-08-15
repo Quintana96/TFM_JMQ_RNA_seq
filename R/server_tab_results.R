@@ -323,7 +323,9 @@ server_tab_results <- function(input, output, session, state) {
       return(ui_tab_results_empty())
     p <- selected_result_params()
     if (!length(p)) return(NULL)
-    ui_tab_results_content(selected_result_summary())
+    # `p` viaja a la UI para que solo se monte la pestana de QC del metodo que
+    # realmente se uso: antes se montaban las dos y una salia siempre vacia.
+    ui_tab_results_content(selected_result_summary(), p)
   })
 
   # ── Tablas DT ─────────────────────────────────────────────────────────────
