@@ -94,6 +94,10 @@ fi
 # Number of threads to accelerate analysis
 THREADS=8
 
+# Directorio del propio script, para localizar scripts/ auxiliares con
+# independencia de desde donde se invoque el workflow.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 log() {
     printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"
 }
@@ -437,44 +441,43 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
         | sed '1s|.bam||g; 1s|.*/||g' \
         > "${COUNTS}/count_matrix.tsv"
 
-elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
-    log "Generating count matrix from Salmon quantifications..."
-    # Extract TPM and counts from Salmon outputs
-    {
-        # Create header with sample names
-        echo -n "gene_id"
-        for dir in "$ALIGNMENTS"/*; do
-            sample=$(basename "$dir")
-            echo -n -e "\t${sample}_TPM\t${sample}_Counts"
-        done
-        echo
-        
-        # Extract counts from quant.sf files
-        # This assumes Salmon produced quantifications
-        # For proper count matrix, you might need custom R script
-    } > "${COUNTS}/count_matrix.tsv"
-    
-    # Copy individual Salmon outputs for reference
-    cp -r "$ALIGNMENTS"/*/*.sf "${COUNTS}/" 2>/dev/null || true
+elif [[ "$ALIGNMENT_TYPE" == "salmon" || "$ALIGNMENT_TYPE" == "kallisto" ]]; then
+    # Resumen de transcritos a genes con tximport, reutilizando la misma funcion
+    # que usa la aplicacion (scripts/build_count_matrix.R). Antes se escribia un
+    # fichero con SOLO la cabecera y un comentario diciendo que hacia falta un
+    # script de R: quien se llevaba la carpeta de resultados obtenia una matriz
+    # vacia presentada como el entregable principal.
+    log "Resumiendo transcritos a genes con tximport (${ALIGNMENT_TYPE})..."
+    matrix_script="${SCRIPT_DIR}/scripts/build_count_matrix.R"
+    if [[ ! -f "$matrix_script" ]]; then
+        log "! No se encuentra ${matrix_script}: no se genera la matriz por gen."
+    elif Rscript "$matrix_script" "$OUTPUT" "$ALIGNMENT_TYPE" \
+            "${COUNTS}/count_matrix.tsv" "$ANNOTATION_FILE"; then
+        log "+ Matriz de conteos por gen: ${COUNTS}/count_matrix.tsv"
+    else
+        # Sin anotacion utilizable no hay resumen a gen posible. Se avisa y NO se
+        # deja un fichero a medias: es preferible que falte el artefacto a que
+        # exista uno que parece valido y no lo es.
+        rm -f "${COUNTS}/count_matrix.tsv"
+        log "! No se ha podido construir la matriz por gen (revisa la anotacion)."
+        log "  Las cuantificaciones por muestra quedan en ${COUNTS}/ y la app"
+        log "  puede resumirlas al cargar la ejecucion."
+    fi
 
-elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
-    log "Generating count matrix from kallisto abundances..."
-    # Extract counts from kallisto outputs
-    {
-        # Create header with sample names
-        echo -n "gene_id"
-        for dir in "$ALIGNMENTS"/*; do
-            sample=$(basename "$dir")
-            echo -n -e "\t${sample}_TPM\t${sample}_Counts"
-        done
-        echo
-        
-        # Extract abundance data from abundance.tsv files
-        # For proper count matrix, you might need custom R script
-    } > "${COUNTS}/count_matrix.tsv"
-    
-    # Copy individual kallisto outputs for reference
-    cp -r "$ALIGNMENTS"/*/abundance.tsv "${COUNTS}/" 2>/dev/null || true
+    # Copia de las cuantificaciones por muestra, con el nombre de la muestra en
+    # el fichero. Antes se copiaban con `cp "$ALIGNMENTS"/*/*.sf "${COUNTS}/"`:
+    # todas se llaman quant.sf (o abundance.tsv), asi que cada copia sobrescribia
+    # la anterior y solo sobrevivia la ultima muestra, en silencio por el
+    # `|| true`.
+    if [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then quant_name="quant.sf"
+    else quant_name="abundance.tsv"; fi
+    for dir in "$ALIGNMENTS"/*/; do
+        [[ -d "$dir" ]] || continue
+        sample=$(basename "$dir")
+        if [[ -f "${dir}${quant_name}" ]]; then
+            cp "${dir}${quant_name}" "${COUNTS}/${sample}_${quant_name}"
+        fi
+    done
 
 fi
 
