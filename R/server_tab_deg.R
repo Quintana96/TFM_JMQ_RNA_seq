@@ -432,12 +432,21 @@ server_tab_deg <- function(input, output, session, state) {
     # Swish no es reproducible aunque el resto de parametros coincida.
     seeds_used <- list()
 
+    # Diseno ANTES de anadir las variables sustitutas. Hay que registrarlo
+    # aparte de `design_formula`, que acaba incluyendo las SV: el script
+    # exportado necesita el modelo base para reestimarlas (`sva::svaseq(cm, mod,
+    # mod0)`), y usar el diseno con SV ahi seria circular. Sin este campo, el
+    # script las reestimaba siempre con `~ condition` aunque el ajuste hubiera
+    # llevado un batch o una formula libre, de modo que no reproducia nada.
+    design_base <- NULL
+
     # Variables sustitutas: se anaden al DISENO (no se corrigen los conteos),
     # que es la forma correcta de tratarlas para testear.
     if (isTRUE(input$deg_use_sva)) {
       base_f <- stats::as.formula(dsg_formula %||%
         if (!is.null(batch) && nzchar(batch)) paste0("~ ", batch, " + condition")
         else "~ condition")
+      design_base <- deparse1(base_f)
       n_req <- input$deg_n_sv %||% 0
       svres <- estimate_surrogate_vars(
         cm_f, meta_aln, base_f,
@@ -599,6 +608,7 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$cooks         <- res$cooks
     state$deg_rv$design        <- res$design %||% "~ condition"
     state$deg_rv$design_code   <- res$design_code
+    state$deg_rv$design_base   <- design_base
     # El modo de outliers de Cook CAMBIA el conjunto de genes con padj, asi que
     # tiene que viajar al informe, al script y al registro: sin el, dos analisis
     # con resultados distintos son indistinguibles en sus artefactos.
@@ -686,7 +696,7 @@ server_tab_deg <- function(input, output, session, state) {
     ct <- state$deg_rv$contrast
     nl <- state$deg_rv$n_levels
     lfc_thr <- state$deg_rv$lfc_threshold %||% 0
-    test_txt <- if (is.finite(lfc_thr) && lfc_thr > 0) {
+    test_txt <- if (has_lfc_threshold(lfc_thr)) {
       paste0("H0: |log2FC| <= ", lfc_thr, " (umbral dentro del test)")
     } else {
       "H0: log2FC = 0"
@@ -740,7 +750,8 @@ server_tab_deg <- function(input, output, session, state) {
       "Motor: ", state$deg_rv$method, "\n",
       "Contraste: ", state$deg_rv$contrast %||% "no determinado", "\n",
       pf_txt,
-      "Test: ", if (lfc_thr > 0) paste0("|log2FC| > ", lfc_thr, " dentro del modelo")
+      "Test: ", if (has_lfc_threshold(lfc_thr))
+                  paste0("|log2FC| > ", lfc_thr, " dentro del modelo")
                 else "log2FC != 0", "\n",
       "Encogido log2FC: ", state$deg_rv$shrink %||% "ninguno", "\n",
       "Significativos a FDR <= ", fdr_thr, ": ",

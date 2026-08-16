@@ -130,7 +130,22 @@ create_app_state <- function(session) {
     cooks         = NULL,
     # Diseno efectivamente ajustado, coeficiente testeado y coeficientes
     # disponibles (para el selector del modo avanzado).
+    #
+    # Hay TRES formas del diseno y no son intercambiables:
+    #   `design`       etiqueta legible (banner, informe). Para Wilcoxon es prosa.
+    #   `design_code`  la misma formula como CODIGO, o NULL si el motor no ajusta
+    #                  modelo. La consume el script exportado.
+    #   `design_base`  el diseno ANTES de anadir las variables sustitutas, o NULL
+    #                  si no se uso sva. Es el modelo con el que hay que
+    #                  reestimarlas para reproducir el ajuste; usar `design_code`
+    #                  (que ya las incluye) seria circular.
     design        = "~ condition",
+    design_code   = NULL,
+    design_base   = NULL,
+    # Tratamiento de los outliers de Cook con el que se ajusto ("na" | "refit" |
+    # "keep"). Cambia que genes tienen padj, asi que es un parametro del test y
+    # tiene que viajar al informe y al script.
+    outliers      = "na",
     coef          = NULL,
     coef_available = character(0),
     # Contraste y diseno CONGELADOS en el momento del ajuste. Los selectores de

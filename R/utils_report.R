@@ -452,6 +452,17 @@ build_deg_r_script <- function(rv) {
   # no parseaba. Cuando no hay modelo, el prefiltrado usa la via `group=`.
   design_code <- rv$design_code %||%
     (if (identical(rv$method %||% "", "Wilcoxon")) NULL else design)
+  # Diseno con el que se PREFILTRO, que no es `design_code`. La app construye la
+  # matriz de `filterByExpr` con `build_design(meta, ref, batch)`, es decir sin
+  # formula libre y —sobre todo— sin las variables sustitutas, porque estas se
+  # estiman DESPUES, sobre la matriz ya prefiltrada. Emitir `design_code` aqui
+  # producia un `model.matrix(~ ... + SV1)` colocado ANTES del bloque que crea
+  # SV1, de modo que el script fallaba con "object 'SV1' not found" en cuanto el
+  # analisis usaba sva con el prefiltrado automatico (el modo por defecto).
+  prefilter_design_code <- if (identical(method, "Wilcoxon")) NULL
+    else if (!is.null(rv$batch) && nzchar(rv$batch %||% ""))
+      paste0("~ ", rv$batch, " + condition")
+    else "~ condition"
   fdr <- rv$fdr %||% 0.05
   lfc <- rv$lfc_threshold %||% 0
   coef <- rv$coef %||% ""
@@ -507,6 +518,12 @@ build_deg_r_script <- function(rv) {
   # Variables sustitutas: la formula del diseno las menciona (SV1, SV2...) pero
   # no estan en meta.tsv, asi que hay que volver a estimarlas o el script no
   # correria. Se reproducen con la misma semilla y el mismo numero.
+  #
+  # El modelo de interes que se pasa a svaseq es `design_base`, el diseno SIN las
+  # SV: pasarle `design_code`, que ya las incluye, seria circular. El respaldo a
+  # "~ condition" solo cubre estados guardados antes de que se registrara ese
+  # campo; usarlo cuando el ajuste llevaba batch o formula libre estimaba las SV
+  # con otro modelo y el script no reproducia el resultado.
   sva_block <- if (!is.null(seeds$n_sv) && seeds$n_sv > 0) c(
     "# El diseno incluye variables sustitutas estimadas con sva. Para reproducir",
     "# el ajuste hay que volver a estimarlas: no viajan en el samplesheet.",
@@ -524,10 +541,11 @@ build_deg_r_script <- function(rv) {
   prefilter <- if (identical(method, "Swish")) character(0) else
     if (!is.null(pf) && identical(pf$mode, "filterByExpr")) c(
     "# Prefiltrado: filterByExpr usa el tamano del grupo mas pequeno",
-    if (!is.null(design_code))
-      paste0("design <- model.matrix(", design_code, ", data = meta)") else character(0),
+    if (!is.null(prefilter_design_code))
+      paste0("design <- model.matrix(", prefilter_design_code, ", data = meta)")
+    else character(0),
     "y <- edgeR::DGEList(counts = round(counts), group = meta$condition)",
-    if (!is.null(design_code)) "keep <- edgeR::filterByExpr(y, design = design)"
+    if (!is.null(prefilter_design_code)) "keep <- edgeR::filterByExpr(y, design = design)"
     else "keep <- edgeR::filterByExpr(y, group = meta$condition)",
     "counts <- counts[keep, , drop = FALSE]",
     ""

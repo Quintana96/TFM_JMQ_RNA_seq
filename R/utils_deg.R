@@ -856,6 +856,20 @@ run_deg <- function(counts, meta,
   res
 }
 
+#' TRUE si el ajuste llevaba un umbral de |log2FC| DENTRO del test.
+#'
+#' Existe para que nadie vuelva a ramificar con `if (lfc_thr > 0)` a pelo. El
+#' umbral no es siempre un numero: Swish no lo recibe (trabaja sobre replicas
+#' inferenciales, no sobre la matriz prefiltrada), asi que su ajuste lo registra
+#' como `NA_real_` para no atribuirle un test que no hizo. `%||%` no captura ese
+#' NA —solo NULL y length 0—, de modo que `if (NA > 0)` aborta el render con
+#' "valor ausente donde TRUE/FALSE es necesario". Rompia el panel de estado y el
+#' volcano en cuanto se ajustaba con Swish.
+has_lfc_threshold <- function(lfc_thr) {
+  if (is.null(lfc_thr) || !length(lfc_thr)) return(FALSE)
+  isTRUE(is.finite(lfc_thr[1]) && lfc_thr[1] > 0)
+}
+
 #' Anade intervalo de confianza de Wald al log2FC, donde haya error estandar.
 #'
 #' Cierra A9 (docs/REVISION_ESTADISTICA.md): la interfaz declaraba una columna

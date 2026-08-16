@@ -71,7 +71,7 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
            y0 = fdr_y, y1 = fdr_y,
            line = list(dash = "dot", color = "#A8DADC"))
     )
-    if (is.finite(lfc_thr) && lfc_thr > 0) {
+    if (has_lfc_threshold(lfc_thr)) {
       shapes <- c(shapes, list(
         list(type = "line", x0 = -lfc_thr, x1 = -lfc_thr, yref = "paper",
              y0 = 0, y1 = 1, line = list(dash = "dot", color = "#F4A6A6")),
@@ -90,7 +90,8 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     ) |>
       plotly::layout(
         title = list(text = plot_title(contrast,
-                       if (lfc_thr > 0) paste0("umbral del test |log2FC| > ", lfc_thr)),
+                       if (has_lfc_threshold(lfc_thr))
+                         paste0("umbral del test |log2FC| > ", lfc_thr)),
                      font = list(size = 12)),
         xaxis = list(title = ax$label),
         yaxis = list(title = "-log10(pvalue)"),
