@@ -144,10 +144,10 @@ server_tab_home <- function(input, output, session, state) {
   nav_to("home_go_results", "tab_results")
   nav_to("home_go_deg",     "tab_deg")
 
-  # Enlace de vuelta a la portada desde cualquier pestana.
-  observeEvent(input$btn_home, {
-    updateNavbarPage(session, "main_nav", selected = "tab_home")
-  }, ignoreInit = TRUE)
+  # No hay observer de vuelta a la portada: la navbar ya tiene su pestana
+  # "Inicio", asi que un boton adicional seria una segunda via para lo mismo.
+  # Antes existia un `observeEvent(input$btn_home, ...)` que ningun control
+  # disparaba (el `btn_home` no se declaraba en ninguna parte de la interfaz).
 
   invisible(NULL)
 }
