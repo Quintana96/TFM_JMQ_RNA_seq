@@ -17,7 +17,8 @@ Una aplicación web interactiva desarrollada con R Shiny para el análisis integ
 7. [Estructura del proyecto](#estructura-del-proyecto)
 8. [Pipeline bioinformático](#pipeline-bioinformático)
 9. [Arquitectura de la aplicación](#arquitectura-de-la-aplicación)
-10. [Notas técnicas](#notas-técnicas)
+10. [Despliegue con Docker](#despliegue-con-docker)
+11. [Notas técnicas](#notas-técnicas)
 
 ---
 
@@ -72,13 +73,16 @@ La aplicación puede operar en dos modos:
 - Tres motores estadísticos seleccionables: **DESeq2**, **edgeR** y **limma-voom**.
 - Fuente de datos flexible: ejecución actual, ejecución guardada o matriz subida manualmente.
 - Editor de metadatos (samplesheet) con soporte para carga de CSV/TSV o edición directa.
-- Filtros interactivos: log2 fold-change mínimo, p-valor ajustado máximo, counts mínimos por gen.
+- **Controles en vivo**: el FDR objetivo y el umbral |log2FC| del test se recalculan sobre el ajuste ya hecho, sin relanzar el análisis. No es un recorte de la lista ya calculada: se vuelve a extraer la tabla del modelo, de modo que el filtrado independiente y la hipótesis nula se recalculan como corresponde. Cuesta un 4 % de lo que costó ajustar (0,20 s frente a 5,05 s sobre 20.000 genes × 8 muestras).
+- Aviso explícito cuando se cambia un parámetro que sí exige reajustar (motor, diseño, batch, variables sustitutas, prefiltrado o encogido).
+- Filtros de visualización independientes: log2 fold-change mínimo, counts mínimos por gen.
 - Visualizaciones:
   - Volcano plot interactivo (Plotly).
   - Heatmap de genes diferencialmente expresados (pheatmap).
   - PCA de muestras.
   - MA plot.
-- Análisis de enriquecimiento funcional GO (requiere OrgDb de Bioconductor).
+- Distribución de la expresión por muestra (densidad y diagrama de cajas), en escala normalizada por composición o sin normalizar, coloreada por condición.
+- Análisis de enriquecimiento funcional sobre **GO**, **KEGG**, **Reactome** y conjuntos de genes propios en formato GMT, con ORA y GSEA (GO y Reactome requieren un OrgDb de Bioconductor).
 - Descarga de resultados en CSV.
 - Los parámetros viven en una barra lateral plegable (acordeón de seis secciones) y los resultados ocupan el área principal, agrupados en seis pestañas: Genes, Muestras, Diagnósticos, Robustez, Enriquecimiento y Reproducibilidad.
 
@@ -112,12 +116,16 @@ shiny, bslib, shinyjs, DT, ggplot2, plotly, pheatmap, ggrepel, RColorBrewer, pro
 
 **Bioconductor:**
 ```
-DESeq2, edgeR, limma, tximport, clusterProfiler, enrichplot
+DESeq2, edgeR, limma, tximport, clusterProfiler, enrichplot, apeglm, fgsea
 ```
 
 **Bioconductor (opcional):**
 ```
-org.EcK12.eg.db  # Para enriquecimiento GO en E. coli
+org.EcK12.eg.db   # Anotación GO/KEGG de E. coli
+org.Hs.eg.db      # Anotación humana
+ReactomePA        # Enriquecimiento sobre rutas de Reactome
+reactome.db       # Conjuntos de Reactome (necesario para el running score)
+sva, IHW, qvalue, ashr, rtracklayer, dearseq, fishpond, RNASeqPower
 ```
 
 ---
@@ -226,6 +234,14 @@ rnaseq_app/
 ├── server.R                 # Server principal: instancia state y delega en módulos
 ├── workflow.sh              # Pipeline Bash (QC → trimming → índice → alineamiento → conteos)
 ├── requirements.sh          # Comprueba e instala todas las dependencias
+├── Dockerfile               # Imagen de ejecucion autocontenida (dos etapas)
+├── compose.yaml             # Despliegue local: puertos, volumenes y limites
+├── docker/                  # Todo lo relativo al contenedor
+│   ├── environment.yml      #   Herramientas del pipeline, con version fijada
+│   ├── install_r_packages.R #   Paquetes de R + registro de versiones
+│   ├── entrypoint.sh        #   Comprueba el entorno y arranca la app
+│   ├── verify.sh            #   Verifica la imagen (tests dentro del contenedor)
+│   └── README.md            #   Construccion, montajes y limitaciones
 ├── BRCA_exp_matrix-1.tsv    # Matriz de ejemplo (datos TCGA-BRCA)
 ├── clinical_info_TCGA-BRCA.tsv # Metadatos clínicos de ejemplo
 └── R/                       # Módulos auto-sourced por Shiny
@@ -240,7 +256,8 @@ rnaseq_app/
     ├── utils_tables.R       # Tablas DT: FASTQ, alineamiento, conteos, artefactos
     ├── utils_qc.R           # Métricas QC, alertas, gráficos Plotly de calidad
     ├── utils_deg.R          # Análisis DEG: DESeq2 / edgeR / limma-voom
-    ├── utils_enrich.R       # Enriquecimiento funcional GO (clusterProfiler)
+    ├── utils_enrich.R       # Enriquecimiento GO / KEGG / Reactome / GMT (ORA y GSEA)
+    ├── utils_diag.R         # Diagnosticos post-ajuste y distribucion de la expresion
     │
     ├── ui_helpers.R         # Helpers UI: botones de descarga, headers con CSV/Plotly
     ├── ui_tab_home.R        # UI del Tab 0 (portada: pasos y estado de la sesión)
@@ -330,6 +347,17 @@ La aplicación sigue una arquitectura modular multi-archivo estándar de Shiny:
 - **`state` se crea en `create_app_state(session)`** (`R/state.R`) y expone rutas del sistema de archivos, reactivos de configuración validada, resultados cargados y el slot `state$shared` con los reactivos derivados del Tab 1 que necesitan los demás tabs.
 - **`R/` se sourcea automáticamente**: Shiny carga todos los archivos `*.R` del directorio antes de `ui.R` y `server.R`. No hay llamadas `source()` manuales (excepto en el modo `Rscript app.R`).
 
+**Separación entre ajustar y extraer:**
+
+Los motores devuelven, además de la tabla, el objeto ajustado (`dds`, `glmQLFit`
+o `lmFit` según el motor). `deg_reextract()` vuelve a extraer la tabla de ese
+objeto con otro FDR o umbral, en lugar de repetir el ajuste. Es lo que permite
+que esos dos controles sean reactivos sin caer en el filtro *post hoc* que
+invalidaría la FDR declarada. `lfcShrink()` —más caro que el propio ajuste— se
+calcula una vez y se reutiliza, porque depende del coeficiente y no del nivel de
+significación. La batería de tests comprueba que reextraer da un resultado
+**idéntico** a reajustar.
+
 **Optimizaciones de rendimiento:**
 - `debounce` de 600 ms sobre el input del directorio FASTQ para evitar reactivaciones en cascada mientras el usuario escribe.
 - `bindCache` en los reactivos pesados de Tab 3 (clave `dir|timestamp`), con fallback automático para versiones de Shiny < 1.6.
@@ -347,10 +375,38 @@ La aplicación sigue una arquitectura modular multi-archivo estándar de Shiny:
 
 ---
 
+## Despliegue con Docker
+
+La instalación nativa (`requirements.sh` + conda) instala **las versiones vigentes
+el día de la instalación**, no aquellas con las que la aplicación fue validada:
+permite auditar un análisis a posteriori, pero no reconstruir su entorno. La
+imagen de Docker cierra esa brecha fijando R, la release de Bioconductor, una
+instantánea fechada de CRAN y las versiones exactas de las ocho herramientas del
+pipeline.
+
+```bash
+docker compose up
+```
+
+La aplicación queda en `http://localhost:3838`, con `data/` montado en solo
+lectura y `outputs/` fuera de la imagen. Para verificar que la imagen se comporta
+como el entorno de desarrollo —herramientas en el PATH, paquetes de R cargables y
+**la batería de tests completa dentro del contenedor**:
+
+```bash
+docker run --rm rnaseq-app:1.0 verify
+```
+
+Detalles de construcción, montajes, límites de recursos y limitaciones conocidas
+en [`docker/README.md`](docker/README.md).
+
+---
+
 ## Notas técnicas
 
 - **Shiny >= 1.6** recomendado para aprovechar `bindCache`. La app funciona con versiones anteriores sin caché (sin pérdida de funcionalidad, solo de rendimiento).
 - **Tamaño máximo de upload**: 10 GB por defecto (`options(shiny.maxRequestSize)`). Ajustable en `global.R`.
 - **`org.EcK12.eg.db`** es opcional. Si no está instalado, el análisis de enriquecimiento GO no estará disponible, pero el resto de la app funciona con normalidad.
+- **Reactome** requiere `ReactomePA` **y** `reactome.db`; si falta alguno, la colección no aparece en el selector en lugar de aparecer y fallar. Reactome cubre un catálogo cerrado de eucariotas y **no incluye procariotas**: con datos de *E. coli* hay que usar KEGG o un fichero GMT propio. Trabaja en `ENTREZID`, así que los identificadores se traducen internamente y la tasa de mapeo se muestra junto al resultado.
 - El pipeline está optimizado por defecto para **8 threads** (`THREADS=8` en `workflow.sh`). Ajustar según los recursos disponibles.
 - Los datos de ejemplo incluidos (`BRCA_exp_matrix-1.tsv`, `clinical_info_TCGA-BRCA.tsv`) corresponden al dataset TCGA-BRCA y pueden usarse para probar el flujo de análisis desde matriz de conteos.
