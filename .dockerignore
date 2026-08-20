@@ -1,0 +1,34 @@
+# Lo que NO debe entrar en la imagen.
+#
+# Criterio: los datos no viven dentro de la imagen, se montan. Un FASTQ o una
+# matriz de expresion pesan mas que todo el software junto (data/ son 187 MB,
+# casi todo la matriz TCGA-BRCA de ejemplo), cambian con cada estudio y no
+# forman parte de lo que se distribuye.
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+._*
+
+# Datos de entrada y resultados: van montados como volumenes.
+data/
+outputs/
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bam
+*.sam
+*.bai
+*.tsv
+*.csv
+
+# Entorno local de R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+renv/library/
+
+# Notas de trabajo
+.claude/

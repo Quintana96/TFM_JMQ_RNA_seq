@@ -1,0 +1,28 @@
+# Herramientas de linea de comandos del pipeline, con version fijada.
+#
+# Por que existe este fichero: `requirements.sh` instala "lo que haya hoy" en
+# bioconda. Sirve para trabajar, pero significa que dos instalaciones separadas
+# por unos meses no ejecutan el mismo software, y por tanto que un resultado no
+# se puede reproducir mas alla del entorno donde se calculo. Aqui las versiones
+# son parte del codigo.
+#
+# El registro autoritativo de lo realmente instalado no es este fichero sino
+# `/opt/env/versions.txt`, que se escribe DENTRO de la imagen durante la
+# construccion: si el resolutor sustituye una version, queda constancia.
+name: rnaseq-app
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  # Control de calidad y limpieza
+  - fastqc=0.12.1
+  - fastp=0.23.4
+  - multiqc=1.21
+  # Alineamiento clasico
+  - bowtie2=2.5.4
+  - samtools=1.21
+  - subread=2.0.6          # aporta featureCounts
+  # Pseudoalineamiento
+  - salmon=1.10.3
+  - kallisto=0.51.1

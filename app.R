@@ -50,6 +50,15 @@ app <- shiny::shinyApp(ui, server)
 is_direct_rscript <- length(file_arg) > 0L
 
 if (is_direct_rscript) {
+  # Host y puerto configurables por entorno. Fuera de un contenedor no cambia
+  # nada (se mantienen los valores por defecto de Shiny); dentro son
+  # imprescindibles: con 127.0.0.1 el servidor arranca y queda inalcanzable
+  # desde fuera del contenedor, y con un puerto aleatorio no hay nada que
+  # publicar. Un puerto mal escrito se ignora en lugar de tumbar el arranque.
+  host <- Sys.getenv("SHINY_HOST", "")
+  port <- suppressWarnings(as.integer(Sys.getenv("SHINY_PORT", "")))
+  if (nzchar(host)) options(shiny.host = host)
+  if (!is.na(port) && port > 0) options(shiny.port = port)
   shiny::runApp(app, launch.browser = interactive())
 } else {
   app
