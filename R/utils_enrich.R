@@ -519,6 +519,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
 
   is_kegg <- identical(ont, "KEGG")
   is_gmt  <- identical(ont, "GMT")
+  is_reactome <- identical(ont, "REACTOME")
   if (is_gmt) {
     if (is.null(term2gene) || !is.data.frame(term2gene) || !nrow(term2gene)) {
       return(fail("Carga un fichero GMT con los conjuntos de genes."))
@@ -543,6 +544,47 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
     keep <- intersect(c("ID", "Description", "setSize", "enrichmentScore", "NES",
                         "pvalue", "p.adjust", "qvalue", "core_enrichment"), names(out))
     return(list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping))
+  }
+  if (is_reactome) {
+    if (!requireNamespace("ReactomePA", quietly = TRUE)) {
+      return(fail("ReactomePA no esta instalado."))
+    }
+    if (!organism %in% REACTOME_ORGANISMOS) {
+      return(fail(paste0("Reactome no cubre el organismo '", organism, "'.")))
+    }
+    # El ranking viaja traducido a ENTREZID, y es el traducido el que hay que
+    # devolver: el running score se dibuja sobre el mismo espacio de IDs en el
+    # que se calculo el NES, no sobre el original.
+    tr <- translate_ranking_to_entrez(ranked, OrgDb, keyType)
+    if (is.null(tr$ranked)) {
+      return(list(table = NULL, error = tr$error, mapping = tr$mapping))
+    }
+    args <- list(geneList = tr$ranked, organism = organism, exponent = exponent,
+                 minGSSize = minGSSize, maxGSSize = maxGSSize,
+                 pvalueCutoff = pvalueCutoff, verbose = FALSE,
+                 seed = TRUE)  # ver nota de `seed`
+    out <- withr::with_seed(seed, tryCatch({
+      # `eps` llego a gsePathway despues que a gseGO: si esta version no lo
+      # acepta se repite la llamada sin el, en lugar de perder la coleccion
+      # entera por un argumento opcional.
+      gs <- tryCatch(do.call(ReactomePA::gsePathway, c(args, list(eps = eps))),
+                     error = function(e) do.call(ReactomePA::gsePathway, args))
+      if (isTRUE(readable)) gs <- enrich_set_readable(gs, as_orgdb_object(OrgDb), "ENTREZID")
+      df <- if (is.null(gs)) NULL else as.data.frame(gs)
+      if (is.null(df) || !nrow(df)) NULL else df
+    }, error = function(e) e))
+    if (inherits(out, "error")) {
+      return(list(table = NULL, error = conditionMessage(out), mapping = tr$mapping,
+                  ranked_used = tr$ranked))
+    }
+    if (is.null(out)) {
+      return(list(table = NULL, error = "Sin rutas de Reactome enriquecidas.",
+                  mapping = tr$mapping, ranked_used = tr$ranked))
+    }
+    keep <- intersect(c("ID", "Description", "setSize", "enrichmentScore", "NES",
+                        "pvalue", "p.adjust", "qvalue", "core_enrichment"), names(out))
+    return(list(table = out[, keep, drop = FALSE], error = NULL,
+                mapping = tr$mapping, ranked_used = tr$ranked))
   }
   if (!is_kegg) {
     if (is.null(OrgDb) || (is.character(OrgDb) && !nzchar(OrgDb))) {
@@ -621,6 +663,32 @@ gsea_term_genes <- function(term_id, ont = "BP", OrgDb = NULL, keyType = "SYMBOL
   if (identical(ont, "GMT")) {
     if (is.null(term2gene) || !nrow(term2gene)) return(out(character(0), "Sin GMT cargado."))
     return(out(term2gene$gene[term2gene$term == term_id]))
+  }
+
+  if (identical(ont, "REACTOME")) {
+    # Los genes de la ruta salen de reactome.db, que es local: a diferencia de
+    # KEGG no hay consulta en linea y la curva se puede dibujar sin red. Vienen
+    # en ENTREZID, que es el espacio en el que se corrio el GSEA.
+    if (!requireNamespace("reactome.db", quietly = TRUE)) {
+      return(out(character(0), "reactome.db no esta instalado."))
+    }
+    if (!requireNamespace("AnnotationDbi", quietly = TRUE)) {
+      return(out(character(0), "AnnotationDbi no esta instalado."))
+    }
+    # `ifnotfound` solo admite NA en el mget de AnnotationDbi: pasarle list(NULL)
+    # —que es la forma habitual en el mget de base— lanza un error, y envuelto en
+    # un tryCatch se convierte en "la ruta no tiene genes". El sintoma no es una
+    # excepcion sino una curva vacia sobre un conjunto que si existe.
+    g <- tryCatch({
+      v <- AnnotationDbi::mget(term_id, reactome.db::reactomePATHID2EXTID,
+                               ifnotfound = NA)[[1]]
+      if (length(v) == 1L && is.na(v[1])) NULL else as.character(v)
+    }, error = function(e) NULL)
+    if (is.null(g) || !length(g)) {
+      return(out(character(0),
+                 paste0("La ruta '", term_id, "' no esta en reactome.db.")))
+    }
+    return(out(g))
   }
 
   if (identical(ont, "KEGG")) {
@@ -820,4 +888,210 @@ enrichment_dotplot_data <- function(enrich_df, top_n = 15) {
                                function(p) if (length(p) == 2L) suppressWarnings(as.numeric(p[1]) / as.numeric(p[2])) else NA_real_)
   }
   out
+}
+
+# ── Reactome ────────────────────────────────────────────────────────────────
+#
+# Por que existe: GO describe funciones y KEGG mapas metabolicos, pero las rutas
+# de senalizacion, el ciclo celular o la respuesta inmune estan mucho mejor
+# representadas en Reactome, que es una base curada manualmente y revisada por
+# pares (Milacic et al., NAR 2024). Es la tercera coleccion de referencia y la
+# que cierra el hueco entre las otras dos.
+#
+# Dos limites que la interfaz tiene que decir, no esconder:
+#
+#   1. Reactome NO cubre procariotas. Sus organismos son un catalogo cerrado de
+#      eucariotas modelo. Con datos de E. coli la respuesta correcta es "esta
+#      coleccion no aplica", no una tabla vacia que parece un fallo.
+#   2. Reactome trabaja en ENTREZID. Los identificadores de la matriz casi nunca
+#      lo son (simbolos, ENSEMBL, locus tags), asi que hay una TRADUCCION por
+#      medio, y toda traduccion pierde genes. Esa perdida se mide y se muestra
+#      con el mismo criterio que el resto del modulo: la tasa de mapeo viaja
+#      siempre en el resultado.
+
+#' Etiqueta legible de la coleccion de enriquecimiento, para informe y auditoria.
+#'
+#' El codigo interno ("BP", "REACTOME", "GMT") no dice lo mismo a quien lee el
+#' informe seis meses despues que a quien escribio la interfaz.
+enrich_collection_label <- function(ont) {
+  etiquetas <- c(BP = "GO: procesos biologicos", MF = "GO: funcion molecular",
+                 CC = "GO: componente celular", KEGG = "KEGG",
+                 REACTOME = "Reactome", GMT = "Gene sets propios (GMT)")
+  v <- unname(etiquetas[ont %||% ""])
+  if (is.na(v)) ont %||% "—" else v
+}
+
+#' Organismos que cubre Reactome, con el nombre que espera ReactomePA.
+REACTOME_ORGANISMOS <- c(
+  "Homo sapiens"             = "human",
+  "Mus musculus"             = "mouse",
+  "Rattus norvegicus"        = "rat",
+  "Danio rerio"              = "zebrafish",
+  "Drosophila melanogaster"  = "fly",
+  "Caenorhabditis elegans"   = "celegans",
+  "Saccharomyces cerevisiae" = "yeast",
+  "Sus scrofa"               = "pig",
+  "Bos taurus"               = "cow",
+  "Canis familiaris"         = "dog",
+  "Gallus gallus"            = "chicken",
+  "Xenopus tropicalis"       = "xenopus"
+)
+
+#' Organismo de Reactome que corresponde a un OrgDb, o NULL si no hay ninguno.
+#'
+#' Sirve para preseleccionar el organismo a partir del OrgDb ya elegido, en vez
+#' de obligar a declararlo dos veces y arriesgar que no coincidan.
+reactome_organism_for_orgdb <- function(pkg) {
+  if (is.null(pkg) || !length(pkg) || !nzchar(pkg[1] %||% "")) return(NULL)
+  mapa <- c(org.Hs.eg.db = "human", org.Mm.eg.db = "mouse", org.Rn.eg.db = "rat",
+            org.Dr.eg.db = "zebrafish", org.Dm.eg.db = "fly",
+            org.Ce.eg.db = "celegans", org.Sc.sgd.db = "yeast",
+            org.Ss.eg.db = "pig", org.Bt.eg.db = "cow", org.Cf.eg.db = "dog",
+            org.Gg.eg.db = "chicken", org.Xl.eg.db = "xenopus")
+  v <- unname(mapa[pkg[1]])
+  if (is.na(v)) NULL else v
+}
+
+#' Traduce identificadores de gen a ENTREZID a traves de un OrgDb.
+#'
+#' `multiVals = "first"` cuando un identificador de entrada mapea a varios
+#' ENTREZID: es el comportamiento de clusterProfiler::bitr y el unico
+#' determinista sin criterio biologico adicional.
+#'
+#' @return list(ids, back, mapping, error) donde `ids` son los ENTREZID unicos y
+#'   `back` es un vector con nombres ENTREZID y valores el identificador
+#'   original, para poder deshacer la traduccion al mostrar resultados.
+translate_to_entrez <- function(genes, OrgDb, keyType = "SYMBOL") {
+  genes <- unique(as.character(genes %||% character(0)))
+  genes <- genes[!is.na(genes) & nzchar(genes)]
+  vacio <- function(msg) list(
+    ids = character(0), back = character(0), error = msg,
+    mapping = list(n_input = length(genes), n_mapped = 0L, rate = 0,
+                   keytype = keyType, source = "ENTREZID"))
+
+  if (!length(genes)) return(vacio("Lista de genes vacia."))
+  # Ya estan en el espacio de destino: no hay traduccion que hacer ni que medir.
+  if (identical(keyType, "ENTREZID")) {
+    return(list(ids = genes, back = stats::setNames(genes, genes), error = NULL,
+                mapping = list(n_input = length(genes), n_mapped = length(genes),
+                               rate = 1, keytype = "ENTREZID", source = "ENTREZID")))
+  }
+  db <- as_orgdb_object(OrgDb)
+  if (is.null(db)) return(vacio("Sin OrgDb con el que traducir a ENTREZID."))
+  if (!requireNamespace("AnnotationDbi", quietly = TRUE)) {
+    return(vacio("AnnotationDbi no esta instalado."))
+  }
+  m <- tryCatch(
+    suppressMessages(AnnotationDbi::mapIds(db, keys = genes, column = "ENTREZID",
+                                           keytype = keyType, multiVals = "first")),
+    error = function(e) e)
+  if (inherits(m, "error")) return(vacio(conditionMessage(m)))
+
+  ok <- !is.na(m) & nzchar(as.character(m))
+  entrez <- as.character(m[ok])
+  originales <- genes[ok]
+  # Varios identificadores de entrada pueden compartir ENTREZID (sinonimos): se
+  # queda el primero, y el conteo de mapeados es el de ENTREZID distintos.
+  dup <- duplicated(entrez)
+  entrez <- entrez[!dup]; originales <- originales[!dup]
+  list(ids = entrez, back = stats::setNames(originales, entrez), error = NULL,
+       mapping = list(n_input = length(genes), n_mapped = length(entrez),
+                      rate = if (length(genes)) length(entrez) / length(genes) else NA_real_,
+                      keytype = keyType, source = "ENTREZID"))
+}
+
+#' Traduce un ranking con nombres a ENTREZID conservando el orden por valor.
+#'
+#' Cuando dos identificadores caen en el mismo ENTREZID se conserva el de MAYOR
+#' valor absoluto. Quedarse con el primero haria depender el resultado del orden
+#' de las filas de la matriz, que es arbitrario; quedarse con el mas extremo es
+#' reproducible y conserva la senal que GSEA va a leer.
+translate_ranking_to_entrez <- function(ranked, OrgDb, keyType = "SYMBOL") {
+  if (is.null(ranked) || !length(ranked) || is.null(names(ranked))) {
+    return(list(ranked = NULL, error = "Ranking de genes vacio.", mapping = NULL))
+  }
+  tr <- translate_to_entrez(names(ranked), OrgDb, keyType)
+  if (!length(tr$ids)) {
+    return(list(ranked = NULL, mapping = tr$mapping,
+                error = tr$error %||% "Ningun gen del ranking se pudo traducir a ENTREZID."))
+  }
+  # La traduccion se rehace sobre el ranking completo (no sobre `tr$ids`, que ya
+  # esta deduplicado) para poder elegir por magnitud.
+  db <- as_orgdb_object(OrgDb)
+  m <- if (identical(keyType, "ENTREZID")) {
+    stats::setNames(names(ranked), names(ranked))
+  } else {
+    tryCatch(suppressMessages(AnnotationDbi::mapIds(
+      db, keys = names(ranked), column = "ENTREZID", keytype = keyType,
+      multiVals = "first")), error = function(e) NULL)
+  }
+  if (is.null(m)) {
+    return(list(ranked = NULL, mapping = tr$mapping,
+                error = "No se pudo traducir el ranking a ENTREZID."))
+  }
+  ent <- as.character(m)
+  ok <- !is.na(ent) & nzchar(ent)
+  v <- ranked[ok]; ent <- ent[ok]
+  ord <- order(abs(v), decreasing = TRUE)
+  v <- v[ord]; ent <- ent[ord]
+  keep <- !duplicated(ent)
+  v <- v[keep]; names(v) <- ent[keep]
+  v <- sort(v, decreasing = TRUE)
+  list(ranked = v, mapping = tr$mapping, error = NULL)
+}
+
+#' ORA sobre rutas de Reactome, via ReactomePA::enrichPathway().
+#'
+#' El universo se traduce con la MISMA funcion que la lista: si se tradujera solo
+#' la lista, el fondo dejaria de ser el conjunto de genes testeados y volveriamos
+#' al error que Wijesooriya et al. (2022) encontraron en el 95 % de los ORA
+#' publicados.
+run_enrichment_reactome <- function(genes, universe = NULL, OrgDb = NULL,
+                                    keyType = "SYMBOL", organism = "human",
+                                    pvalueCutoff = 0.05, qvalueCutoff = 0.2,
+                                    minGSSize = 10, maxGSSize = 500,
+                                    readable = FALSE) {
+  fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
+  if (!requireNamespace("ReactomePA", quietly = TRUE)) {
+    return(fail("ReactomePA no esta instalado."))
+  }
+  if (!organism %in% REACTOME_ORGANISMOS) {
+    return(fail(paste0("Reactome no cubre el organismo '", organism,
+                       "'. Organismos disponibles: ",
+                       paste(sort(unname(REACTOME_ORGANISMOS)), collapse = ", "), ".")))
+  }
+  if (!length(genes)) return(fail("Lista de genes vacia."))
+
+  tr <- translate_to_entrez(genes, OrgDb, keyType)
+  if (!length(tr$ids)) {
+    return(fail(tr$error %||% paste0(
+      "Ningun gen se pudo traducir a ENTREZID desde keyType = ", keyType,
+      ". Reactome trabaja en ENTREZID; revisa el tipo de identificador."),
+      tr$mapping))
+  }
+  uni <- if (length(universe)) translate_to_entrez(universe, OrgDb, keyType)$ids else NULL
+
+  out <- tryCatch({
+    ep <- ReactomePA::enrichPathway(
+      gene          = tr$ids,
+      universe      = if (length(uni)) uni else NULL,
+      organism      = organism,
+      pvalueCutoff  = pvalueCutoff,
+      qvalueCutoff  = qvalueCutoff,
+      minGSSize     = minGSSize,
+      maxGSSize     = maxGSSize,
+      readable      = FALSE
+    )
+    # setReadable con keytype ENTREZID: los IDs del resultado ya estan en ese
+    # espacio, no en el de entrada.
+    if (isTRUE(readable)) ep <- enrich_set_readable(ep, as_orgdb_object(OrgDb), "ENTREZID")
+    df <- if (is.null(ep)) NULL else as.data.frame(ep)
+    if (is.null(df) || !nrow(df)) NULL else df
+  }, error = function(e) e)
+
+  if (inherits(out, "error")) return(fail(conditionMessage(out), tr$mapping))
+  if (is.null(out)) return(fail("Sin rutas de Reactome enriquecidas.", tr$mapping))
+  keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
+                      "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
+  list(table = out[, keep, drop = FALSE], error = NULL, mapping = tr$mapping)
 }

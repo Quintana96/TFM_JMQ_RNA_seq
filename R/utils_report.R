@@ -265,6 +265,8 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
     if (!is.null(e$simbolos)) campos[["IDs a simbolos"]] <- e$simbolos
     if (!is.na(e$simplify %||% NA)) campos[["Colapsar redundantes"]] <- e$simplify
     if (!is.na(e$organismo_kegg %||% NA)) campos[["Organismo KEGG"]] <- e$organismo_kegg
+    if (!is.na(e$organismo_reactome %||% NA))
+      campos[["Organismo Reactome"]] <- e$organismo_reactome
     if (!is.na(e$error %||% NA)) campos[["Resultado"]] <- e$error
     paste0("<h2>Enriquecimiento funcional</h2>", html_kv_table(campos),
            "<h3>Version de la anotacion</h3>", html_kv_table(e$anotacion %||% list()),

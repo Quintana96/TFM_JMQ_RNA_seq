@@ -58,6 +58,11 @@ HAS_ASHR            <- pkg_ok("ashr")
 # Fase 2: GSEA, ponderacion de hipotesis y segunda estimacion de pi0. La interfaz
 # oculta las opciones cuyo paquete falta, en lugar de ofrecerlas y fallar.
 HAS_FGSEA           <- pkg_ok("fgsea")
+# Reactome como tercera coleccion de enriquecimiento. Necesita los DOS paquetes:
+# ReactomePA corre el test y reactome.db aporta los conjuntos (y es el que
+# permite dibujar el running score sin salir a la red). Sin alguno de ellos, la
+# coleccion no se ofrece en el selector en lugar de ofrecerse y fallar.
+HAS_REACTOMEPA      <- pkg_ok("ReactomePA") && pkg_ok("reactome.db")
 HAS_IHW             <- pkg_ok("IHW")
 HAS_QVALUE          <- pkg_ok("qvalue")
 # Fase 3: variacion no deseada y lectura de la anotacion. rtracklayer es lo que

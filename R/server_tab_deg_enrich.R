@@ -63,6 +63,16 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
         gmt_summary_text(gs))
   })
 
+  # El organismo de Reactome se deduce del OrgDb ya elegido. Declararlo dos veces
+  # es una fuente segura de incoherencia: mapear identificadores con el OrgDb de
+  # raton y pedir rutas humanas devuelve una tabla plausible y equivocada. Se
+  # preselecciona, no se impone: sigue siendo editable.
+  observeEvent(deg_orgdb(), ignoreNULL = FALSE, {
+    org <- reactome_organism_for_orgdb(deg_orgdb())
+    if (is.null(org)) return()
+    updateSelectInput(session, "deg_reactome_organism", selected = org)
+  })
+
   # ── Parametros de la interfaz ──────────────────────────────────────────────
   # Un unico punto de lectura para que el boton de calcular y el de comparar no
   # puedan divergir en los parametros que usan.
@@ -75,6 +85,13 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     ont <- input$deg_ontology %||% "BP"
     org_code <- trimws(input$deg_kegg_organism %||% "eco")
     if (!nzchar(org_code)) org_code <- "eco"
+    # Reactome tiene su propio catalogo de organismos, con nombres distintos a
+    # los codigos de tres letras de KEGG. Se resuelve aqui, en el unico punto de
+    # lectura de parametros, para que `org_code` signifique siempre "el organismo
+    # de la coleccion seleccionada" y ni el ORA ni el GSEA puedan divergir.
+    if (identical(ont, "REACTOME")) {
+      org_code <- input$deg_reactome_organism %||% "human"
+    }
     gs <- gmt_rv()
     list(
       ont         = ont,
@@ -109,6 +126,11 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       } else if (identical(p$ont, "GMT")) {
         run_enrichment_gmt(genes, universe = p$universe, term2gene = p$term2gene,
                            minGSSize = p$min_size, maxGSSize = p$max_size)
+      } else if (identical(p$ont, "REACTOME")) {
+        run_enrichment_reactome(genes, universe = p$universe, OrgDb = deg_orgdb(),
+                                keyType = p$keytype, organism = p$org_code,
+                                minGSSize = p$min_size, maxGSSize = p$max_size,
+                                readable = p$readable)
       } else {
         run_enrichment_go(genes, universe = p$universe, OrgDb = deg_orgdb(),
                           ont = p$ont, keyType = p$keytype,
@@ -214,8 +236,9 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     # keyType, universo, tasa de mapeo) no es interpretable ni reproducible.
     state$deg_rv$enrich <- list(
       enfoque    = if (identical(approach, "gsea")) "GSEA" else "ORA (sobre-representacion)",
-      ontologia  = if (identical(p$ont, "GMT")) "Gene sets propios (GMT)" else p$ont,
+      ontologia  = enrich_collection_label(p$ont),
       organismo_kegg = if (identical(p$ont, "KEGG")) p$org_code else NA_character_,
+      organismo_reactome = if (identical(p$ont, "REACTOME")) p$org_code else NA_character_,
       orgdb      = if (identical(p$ont, "GMT")) "no aplica (GMT)" else deg_orgdb() %||% "—",
       keytype    = if (identical(p$ont, "GMT")) "IDs del fichero GMT" else p$keytype,
       metrica    = if (identical(approach, "gsea")) p$metric else NA_character_,
@@ -248,7 +271,10 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     # El contexto de GSEA se guarda aunque no haya terminos: es lo que permite
     # que el running score sepa sobre que ranking se calculo todo.
     if (identical(approach, "gsea")) {
-      gsea_ctx_rv(list(ranked = res$ranking$ranked, ont = p$ont,
+      # `ranked_used` solo lo devuelven las colecciones que traducen los IDs
+      # (hoy Reactome, que trabaja en ENTREZID). El running score tiene que
+      # dibujarse sobre ese mismo ranking o las posiciones no corresponden al NES.
+      gsea_ctx_rv(list(ranked = res$ranked_used %||% res$ranking$ranked, ont = p$ont,
                        keytype = p$keytype, orgdb = deg_orgdb(),
                        organism = p$org_code, term2gene = p$term2gene,
                        exponent = 0))

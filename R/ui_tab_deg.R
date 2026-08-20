@@ -591,11 +591,13 @@ ui_tab_deg_results <- function() {
               # GMT no es una ontologia mas: es la via para trabajar sin OrgDb
               # (organismos no modelo) y con colecciones curadas como MSigDB.
               selectInput("deg_ontology", "Coleccion",
-                          choices = c("GO: Procesos biologicos" = "BP",
-                                      "GO: Funcion molecular" = "MF",
-                                      "GO: Componente celular" = "CC",
-                                      "KEGG" = "KEGG",
-                                      "Gene sets propios (GMT)" = "GMT"),
+                          choices = c(c("GO: Procesos biologicos" = "BP",
+                                        "GO: Funcion molecular" = "MF",
+                                        "GO: Componente celular" = "CC",
+                                        "KEGG" = "KEGG"),
+                                      if (isTRUE(HAS_REACTOMEPA))
+                                        c("Reactome" = "REACTOME"),
+                                      c("Gene sets propios (GMT)" = "GMT")),
                           selected = "BP"),
               conditionalPanel(
                 "input.deg_enrich_approach === 'gsea'",
@@ -638,6 +640,20 @@ ui_tab_deg_results <- function() {
                             choices = c("kegg", "ncbi-geneid", "ncbi-proteinid", "uniprot"),
                             selected = "kegg")
               )
+            ),
+            # Reactome cubre un catalogo CERRADO de eucariotas: no hay procariotas.
+            # Por eso el organismo es un desplegable y no un campo libre como el
+            # de KEGG, y por eso se preselecciona a partir del OrgDb elegido.
+            # El tipo de identificador sale del selector de arriba: Reactome
+            # trabaja en ENTREZID y la traduccion se hace dentro, midiendo lo que
+            # se pierde por el camino.
+            conditionalPanel(
+              "input.deg_ontology === 'REACTOME'",
+              selectInput("deg_reactome_organism", "Organismo (Reactome)",
+                          choices = REACTOME_ORGANISMOS, selected = "human"),
+              tags$small(class = "text-muted d-block",
+                         paste("Reactome esta curado solo para estos eucariotas. Para",
+                               "procariotas usa KEGG o un fichero GMT propio."))
             )
           ),
 
@@ -661,7 +677,8 @@ ui_tab_deg_results <- function() {
           # simplify() solo aplica al ORA sobre GO: colapsa terminos redundantes
           # por similitud semantica, y necesita el grafo de una sola ontologia.
           conditionalPanel(
-            "input.deg_enrich_approach === 'ora' && input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
+            paste("input.deg_enrich_approach === 'ora' && input.deg_ontology !== 'KEGG'",
+                  "&& input.deg_ontology !== 'GMT' && input.deg_ontology !== 'REACTOME'"),
             checkboxInput("deg_go_simplify",
                           "Colapsar terminos GO redundantes (simplify, similitud de Wang > 0,7)",
                           FALSE)
