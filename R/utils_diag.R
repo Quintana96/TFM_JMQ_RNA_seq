@@ -330,3 +330,150 @@ rle_summary <- function(counts, normalized = TRUE) {
   attr(df, "median_threshold") <- thr
   df
 }
+
+# ── Distribucion de la expresion normalizada ────────────────────────────────
+#
+# Por que existe: el RLE responde "esta bien normalizada esta muestra respecto a
+# las demas", pero no ensena la FORMA de la distribucion. Son dos preguntas
+# distintas y la segunda es la que detecta los problemas clasicos de una matriz
+# de conteos antes de modelarla: una muestra con la moda desplazada, una moda
+# secundaria que delata contaminacion o una poblacion celular distinta, y sobre
+# todo el pico de genes no expresados, que es lo que justifica el prefiltrado.
+#
+# Es tambien el diagnostico que la vinieta de limma-voom y el workflow de edgeR
+# ponen ANTES del ajuste (plotDensities, boxplot de logCPM), asi que su sitio es
+# la pestana de diagnosticos y no un adorno.
+
+#' Matriz log2(CPM + 1) sobre la que se leen las distribuciones.
+#'
+#' @param normalized si TRUE (por defecto) los CPM se calculan sobre los factores
+#'   de normalizacion por COMPOSICION (TMM). El modo crudo —CPM por tamano de
+#'   libreria— se conserva a proposito: comparar las dos vistas es la unica forma
+#'   de VER que la normalizacion ha hecho algo, que es justo lo que un usuario sin
+#'   formacion estadistica no puede dar por supuesto.
+#' @param drop_zero_rows si TRUE se descartan los genes con conteo cero en TODAS
+#'   las muestras. No aportan informacion y su masa en log2(0+1) = 0 domina la
+#'   moda de la densidad hasta esconder la distribucion de los genes expresados.
+#'   Los genes con ceros en ALGUNAS muestras se conservan: ahi el cero es un dato.
+#' @return list(mat, n_genes, n_dropped) o NULL si no hay matriz utilizable.
+expression_logcpm <- function(counts, normalized = TRUE, drop_zero_rows = TRUE) {
+  if (is.null(counts) || !nrow(counts) || !ncol(counts)) return(NULL)
+  cm <- as.matrix(counts)
+  storage.mode(cm) <- "double"
+  cm[is.na(cm)] <- 0
+  n_total <- nrow(cm)
+  n_dropped <- 0L
+  if (isTRUE(drop_zero_rows)) {
+    keep <- rowSums(cm, na.rm = TRUE) > 0
+    n_dropped <- sum(!keep)
+    if (!any(keep)) return(NULL)
+    cm <- cm[keep, , drop = FALSE]
+  }
+  lcpm <- if (isTRUE(normalized)) {
+    log2(normalized_cpm(cm) + 1)
+  } else {
+    libs <- colSums(cm, na.rm = TRUE)
+    libs[libs == 0 | is.na(libs)] <- 1
+    log2(t(t(cm) / libs) * 1e6 + 1)
+  }
+  list(mat = lcpm, n_genes = nrow(lcpm), n_dropped = as.integer(n_dropped),
+       n_total = as.integer(n_total))
+}
+
+#' Densidad y cuantiles de la expresion por muestra.
+#'
+#' Detalle que decide si el grafico es comparable o enganoso: TODAS las densidades
+#' se estiman con el MISMO ancho de banda y sobre la MISMA rejilla. `density()`
+#' elige por defecto un ancho por vector, asi que una muestra con menos dispersion
+#' sale con una curva mas picuda por construccion y no porque su distribucion lo
+#' sea. El ancho comun se calcula sobre los valores agrupados.
+#'
+#' @return list(density, box, n_genes, n_dropped, normalized, bw) donde `density`
+#'   es un data.frame largo (sample_id, x, y) y `box` trae los cuantiles por
+#'   muestra que dibuja el diagrama de cajas.
+expression_distribution <- function(counts, normalized = TRUE,
+                                    drop_zero_rows = TRUE, n_points = 256L) {
+  lc <- expression_logcpm(counts, normalized = normalized,
+                          drop_zero_rows = drop_zero_rows)
+  if (is.null(lc)) return(NULL)
+  mat <- lc$mat
+  if (nrow(mat) < 5) return(NULL)
+
+  qs <- apply(mat, 2, stats::quantile, probs = c(0.05, 0.25, 0.5, 0.75, 0.95),
+              na.rm = TRUE)
+  box <- data.frame(
+    sample_id = colnames(mat),
+    p05 = qs[1, ], q1 = qs[2, ], med = qs[3, ], q3 = qs[4, ], p95 = qs[5, ],
+    media = colMeans(mat, na.rm = TRUE),
+    stringsAsFactors = FALSE
+  )
+  box$iqr <- box$q3 - box$q1
+  rownames(box) <- NULL
+
+  # Ancho de banda comun. Sobre una submuestra si la matriz es grande: bw.nrd0
+  # solo necesita desviacion e IQR, y con cientos de miles de valores el coste
+  # deja de ser despreciable para una cifra que no cambia.
+  pooled <- as.numeric(mat)
+  pooled <- pooled[is.finite(pooled)]
+  if (length(pooled) > 2e5) {
+    pooled <- pooled[seq(1, length(pooled), length.out = 2e5)]
+  }
+  bw <- tryCatch(stats::bw.nrd0(pooled), error = function(e) NA_real_)
+  if (!is.finite(bw) || bw <= 0) bw <- max(diff(range(pooled)) / 100, 1e-3)
+
+  rango <- range(pooled, na.rm = TRUE)
+  desde <- rango[1] - 3 * bw
+  hasta <- rango[2] + 3 * bw
+
+  dens <- lapply(colnames(mat), function(s) {
+    v <- mat[, s]
+    v <- v[is.finite(v)]
+    if (length(v) < 5) return(NULL)
+    d <- tryCatch(stats::density(v, bw = bw, from = desde, to = hasta, n = n_points),
+                  error = function(e) NULL)
+    if (is.null(d)) return(NULL)
+    data.frame(sample_id = s, x = d$x, y = d$y, stringsAsFactors = FALSE)
+  })
+  dens <- do.call(rbind, dens[!vapply(dens, is.null, logical(1))])
+  if (is.null(dens) || !nrow(dens)) return(NULL)
+
+  list(density = dens, box = box, n_genes = lc$n_genes, n_dropped = lc$n_dropped,
+       n_total = lc$n_total, normalized = isTRUE(normalized), bw = bw)
+}
+
+#' Anade a un resumen de distribucion la columna de grupo tomada del samplesheet.
+#'
+#' Colorear por condicion es lo que convierte el grafico en un diagnostico: una
+#' distribucion desplazada importa poco si es una muestra suelta y mucho si son
+#' todas las de un grupo, porque entonces la diferencia entre condiciones que el
+#' modelo va a testear esta confundida con una diferencia tecnica.
+distribution_add_group <- function(df, meta = NULL, group_col = NULL) {
+  df$grupo <- "(sin grupo)"
+  if (is.null(meta) || !is.data.frame(meta) || !nrow(meta)) return(df)
+  if (!"sample_id" %in% names(meta)) return(df)
+  gc <- group_col
+  if (is.null(gc) || !nzchar(gc %||% "") || !gc %in% names(meta)) {
+    cand <- setdiff(names(meta), "sample_id")
+    if (!length(cand)) return(df)
+    gc <- cand[1]
+  }
+  idx <- match(df$sample_id, meta$sample_id)
+  g <- as.character(meta[[gc]])[idx]
+  g[is.na(g) | !nzchar(g)] <- "(sin grupo)"
+  df$grupo <- g
+  df
+}
+
+#' Frase que acompana al grafico: cuantos genes lo componen y cuantos se dejaron
+#' fuera por no tener conteo en ninguna muestra.
+distribution_caption <- function(dist) {
+  if (is.null(dist)) return(NULL)
+  escala <- if (isTRUE(dist$normalized)) "normalizados por composicion (TMM)"
+            else "sin normalizar (CPM por tamano de libreria)"
+  paste0(fmt_int(dist$n_genes), " genes, ", escala,
+         if (dist$n_dropped > 0)
+           paste0("; ", fmt_int(dist$n_dropped), " genes sin conteo en ninguna ",
+                  "muestra excluidos del grafico")
+         else "",
+         ".")
+}

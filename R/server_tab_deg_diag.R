@@ -173,6 +173,106 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
     make_rle_plot(state$deg_rv$counts, state$deg_rv$meta)
   })
 
+  # ── Distribucion de la expresion (densidad y cajas) ────────────────────────
+  # El selector de escala no es cosmetico: ver la misma matriz antes y despues de
+  # la normalizacion por composicion es lo que permite comprobar que ha hecho
+  # algo, en lugar de darlo por supuesto.
+  # Sin req(): esta reactiva tambien se lee desde los downloadHandler, y alli un
+  # req() no muestra el mensaje de "sin datos", aborta la descarga en silencio.
+  # Devolver NULL deja que las funciones de dibujo expliquen que falta.
+  expr_dist <- reactive({
+    if (is.null(state$deg_rv$counts)) return(NULL)
+    normalizada <- !identical(input$deg_diag_expr_scale %||% "norm", "raw")
+    expression_distribution(state$deg_rv$counts, normalized = normalizada)
+  })
+
+  # Paleta cualitativa para los grupos del samplesheet, en la gama de la app.
+  grupo_colores <- function(grupos) {
+    base <- c("#244B34", "#7BBF9A", "#3F7D5C", "#A8DADC", "#60756A", "#C9A227",
+              "#8E6C88", "#D9534F")
+    g <- unique(grupos)
+    stats::setNames(rep(base, length.out = length(g)), g)
+  }
+
+  make_expr_density_plot <- function(dist, meta = NULL, group_col = NULL) {
+    if (is.null(dist)) return(plotly_message("Sin conteos para la distribucion."))
+    df <- distribution_add_group(dist$density, meta, group_col)
+    cols <- grupo_colores(df$grupo)
+    p <- plotly::plot_ly()
+    for (s in unique(df$sample_id)) {
+      d <- df[df$sample_id == s, , drop = FALSE]
+      g <- d$grupo[1]
+      p <- plotly::add_lines(
+        p, data = d, x = ~x, y = ~y,
+        name = if (identical(g, "(sin grupo)")) s else paste0(s, " (", g, ")"),
+        legendgroup = g,
+        line = list(color = unname(cols[g]), width = 1.6),
+        hoverinfo = "text",
+        text = ~paste0("Muestra: ", s, "<br>grupo: ", g,
+                       "<br>log2(CPM+1): ", round(x, 2),
+                       "<br>densidad: ", signif(y, 3))
+      )
+    }
+    plotly::layout(
+      p,
+      xaxis = list(title = "log2(CPM + 1)"),
+      yaxis = list(title = "Densidad"),
+      legend = list(orientation = "h", y = -0.18)
+    )
+  }
+
+  make_expr_box_plot <- function(dist, meta = NULL, group_col = NULL) {
+    if (is.null(dist)) return(plotly_message("Sin conteos para la distribucion."))
+    # Las cajas se dibujan a partir de los cuantiles ya calculados y no de la
+    # matriz entera: con decenas de miles de genes por muestra, mandar los puntos
+    # al navegador cuelga la pestana sin anadir nada legible.
+    df <- distribution_add_group(dist$box, meta, group_col)
+    cols <- grupo_colores(df$grupo)
+    plotly::plot_ly(df, x = ~sample_id) |>
+      plotly::add_segments(y = ~p05, yend = ~p95, x = ~sample_id, xend = ~sample_id,
+                           line = list(color = "#C0C0C0", width = 1),
+                           showlegend = FALSE, hoverinfo = "skip") |>
+      plotly::add_segments(y = ~q1, yend = ~q3, x = ~sample_id, xend = ~sample_id,
+                           line = list(color = "#A8DADC", width = 11),
+                           showlegend = FALSE, hoverinfo = "skip") |>
+      plotly::add_markers(y = ~med, color = ~grupo, colors = cols,
+                          marker = list(size = 9),
+                          text = ~paste0("Muestra: ", sample_id,
+                                         "<br>grupo: ", grupo,
+                                         "<br>mediana: ", round(med, 2),
+                                         "<br>IQR: ", round(iqr, 2),
+                                         "<br>media: ", round(media, 2)),
+                          hoverinfo = "text") |>
+      plotly::layout(
+        xaxis = list(title = ""),
+        yaxis = list(title = "log2(CPM + 1)"),
+        legend = list(orientation = "h", y = -0.25)
+      )
+  }
+
+  output$deg_expr_density <- plotly::renderPlotly({
+    make_expr_density_plot(expr_dist(), state$deg_rv$meta, input$deg_condition_col)
+  })
+
+  output$deg_expr_box <- plotly::renderPlotly({
+    make_expr_box_plot(expr_dist(), state$deg_rv$meta, input$deg_condition_col)
+  })
+
+  output$deg_expr_dist_caption <- renderUI({
+    txt <- distribution_caption(expr_dist())
+    if (is.null(txt)) return(NULL)
+    div(class = "small text-muted mt-1", txt)
+  })
+
+  output$download_deg_expr_density <- plotly_download(
+    "deg_densidad_expresion",
+    function() make_expr_density_plot(expr_dist(), state$deg_rv$meta,
+                                      input$deg_condition_col))
+  output$download_deg_expr_box <- plotly_download(
+    "deg_cajas_expresion",
+    function() make_expr_box_plot(expr_dist(), state$deg_rv$meta,
+                                  input$deg_condition_col))
+
   output$deg_cooks_warning <- renderUI({
     ck <- state$deg_rv$cooks
     if (is.null(ck) || is.na(ck$dominant)) return(NULL)

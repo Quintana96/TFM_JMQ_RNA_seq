@@ -380,6 +380,38 @@ ui_tab_deg_diagnostics <- function() {
       )
     ),
     nav_panel(
+      "Distribucion",
+      card(
+        card_header_tools(
+          "Densidad de la expresion por muestra",
+          selectInput("deg_diag_expr_scale", NULL,
+                      choices = c("Normalizada por composicion (TMM)" = "norm",
+                                  "Sin normalizar (CPM crudo)" = "raw"),
+                      selected = "norm", width = "340px"),
+          download_id = "download_deg_expr_density"
+        ),
+        tags$p(class = "small text-muted mb-1",
+               paste("Todas las muestras deberian tener una forma parecida. Una moda",
+                     "desplazada senala una muestra que la normalizacion no ha",
+                     "igualado; una segunda moda sugiere una poblacion distinta o",
+                     "contaminacion. Compara las dos escalas del selector para ver",
+                     "que ha hecho la normalizacion.")),
+        plotly::plotlyOutput("deg_expr_density", height = "380px"),
+        uiOutput("deg_expr_dist_caption")
+      ),
+      card(
+        download_header("Distribucion de la expresion por muestra (cajas)",
+                        "download_deg_expr_box"),
+        tags$p(class = "small text-muted mb-1",
+               paste("La misma informacion resumida en cuantiles, que es como se lee",
+                     "de un vistazo con muchas muestras. Las cajas deberian quedar",
+                     "alineadas; una caja desplazada respecto a las de su mismo grupo",
+                     "es una muestra sospechosa, y un grupo entero desplazado respecto",
+                     "al otro confunde el efecto biologico con uno tecnico.")),
+        plotly::plotlyOutput("deg_expr_box", height = "380px")
+      )
+    ),
+    nav_panel(
       "Normalizacion (RLE)",
       card(
         download_header("Relative Log Expression por muestra", "download_deg_rle_plot"),
