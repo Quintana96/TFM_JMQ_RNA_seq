@@ -308,6 +308,166 @@ deseq_dispersion_data <- function(dds) {
   }, error = function(e) NULL)
 }
 
+# ── Extraccion de resultados, separada del ajuste ───────────────────────────
+#
+# Por que estan separadas: ajustar el modelo (estimar dispersiones, ajustar los
+# GLM) cuesta segundos y no depende del nivel de significacion; extraer la tabla
+# a un FDR o un umbral de fold-change concretos cuesta decimas y si depende de
+# ellos. Medido sobre 20.000 genes x 8 muestras: `DESeq()` 5,05 s frente a
+# `results()` 0,20 s, un 4 %.
+#
+# Mientras las dos cosas vivian en la misma funcion, cambiar el FDR obligaba a
+# repetir el ajuste entero, y por eso estaba detras de un boton. Separarlas
+# permite que el FDR y el umbral del test se comporten como lo que son —
+# parametros de LECTURA del mismo modelo— sin caer en el error contrario, que
+# seria recolorear los puntos sin recalcular: el filtrado independiente de
+# DESeq2 depende de `alpha`, de modo que cambiarlo cambia que genes son
+# evaluables (con 20.000 genes, de 20.000 a 18.061 al pasar de 0,05 a 0,01).
+#
+# Estas funciones las llaman DOS caminos: el ajuste inicial y `deg_reextract()`.
+# Esa es justamente la razon de que existan: si cada camino construyera su tabla,
+# acabarian divergiendo en una columna y nadie lo notaria hasta comparar un
+# informe con la interfaz.
+
+#' Extrae la tabla de resultados de un `dds` ya ajustado.
+#'
+#' @param lfc_shrunk Vector de log2FC encogidos ya calculado. `lfcShrink()` es
+#'   mas caro que el propio ajuste (6,4 s frente a 5,1 s en la medicion de
+#'   arriba) y NO depende de `fdr` ni de `lfc_threshold`: depende del
+#'   coeficiente. Por eso se calcula una vez y se reutiliza en cada reextraccion
+#'   en lugar de recalcularlo con cada movimiento de un deslizador.
+#' @return list(table, padj_method, lfc_shrunk, shrink)
+deseq2_extract <- function(dds, coef_name, fdr = 0.05, lfc_threshold = 0,
+                           use_ihw = FALSE, outliers = "na", shrink = TRUE,
+                           lfc_shrunk = NULL) {
+  filter_fun <- if (isTRUE(use_ihw)) ihw_filter_fun() else NULL
+  padj_method <- if (!is.null(filter_fun)) "IHW" else "BH"
+  res_args <- list(
+    dds, name = coef_name, alpha = fdr,
+    lfcThreshold = if (is.finite(lfc_threshold)) lfc_threshold else 0,
+    altHypothesis = "greaterAbs"
+  )
+  if (identical(outliers, "keep")) res_args$cooksCutoff <- FALSE
+  if (!is.null(filter_fun)) res_args$filterFun <- filter_fun
+  res <- do.call(DESeq2::results, res_args)
+  df <- as.data.frame(res)
+
+  shrink_used <- "ninguno"
+  if (!is.null(lfc_shrunk) && length(lfc_shrunk) == nrow(df)) {
+    shrink_used <- attr(lfc_shrunk, "type") %||% "reutilizado"
+  } else {
+    lfc_shrunk <- rep(NA_real_, nrow(df))
+    if (isTRUE(shrink)) {
+      type <- pick_shrink_type()
+      shr <- tryCatch(
+        DESeq2::lfcShrink(dds, coef = coef_name, type = type, quiet = TRUE),
+        error = function(e) NULL
+      )
+      # lfcShrink devuelve las mismas filas y en el mismo orden que results().
+      if (!is.null(shr) && nrow(shr) == nrow(df)) {
+        lfc_shrunk <- as.data.frame(shr)$log2FoldChange
+        shrink_used <- type
+      }
+    }
+  }
+
+  tab <- data.frame(
+    gene = rownames(df),
+    baseMean = df$baseMean,
+    log2FC = df$log2FoldChange,
+    log2FC_shrunk = as.numeric(lfc_shrunk),
+    lfcSE = df$lfcSE,
+    stat = df$stat,
+    pvalue = df$pvalue,
+    padj = df$padj,
+    stringsAsFactors = FALSE
+  )
+  attr(lfc_shrunk, "type") <- shrink_used
+  list(table = tab, padj_method = padj_method, lfc_shrunk = lfc_shrunk,
+       shrink = shrink_used)
+}
+
+#' Extrae la tabla de un `glmQLFit` de edgeR ya ajustado.
+#'
+#' `fdr` no aparece: edgeR no tiene filtrado independiente que calibrar, asi que
+#' su columna FDR es la correccion BH de todos los p-valores y no depende del
+#' nivel objetivo. Cambiar el FDR con este motor cambia donde se CORTA, no lo
+#' que se calcula, y eso ya lo resuelve la interfaz.
+edger_extract <- function(qlfit, coef_test, lfc_threshold = 0) {
+  test <- if (is.finite(lfc_threshold) && lfc_threshold > 0) {
+    edgeR::glmTreat(qlfit, coef = coef_test, lfc = lfc_threshold)
+  } else {
+    edgeR::glmQLFTest(qlfit, coef = coef_test)
+  }
+  tt <- edgeR::topTags(test, n = Inf, sort.by = "none")$table
+
+  # AveLogCPM ~ baseMean estandarizado en otra escala. Para mantener la
+  # interfaz, devolvemos baseMean = 2^AveLogCPM (CPM medio aproximado).
+  base_mean <- if (!is.null(tt[["logCPM"]])) 2 ^ tt[["logCPM"]]
+               else if (!is.null(tt[["AveLogCPM"]])) 2 ^ tt[["AveLogCPM"]]
+               else rep(NA_real_, nrow(tt))
+  # Ojo: `tt$F` haria partial matching con la columna FDR y colaria el FDR
+  # como estadistico cuando glmTreat no devuelve F. Con [[ ]] el match es
+  # exacto y devuelve NULL si la columna no existe.
+  stat_col <- tt[["F"]] %||% tt[["LR"]] %||% rep(NA_real_, nrow(tt))
+
+  data.frame(
+    gene = rownames(tt),
+    baseMean = base_mean,
+    log2FC = tt[["logFC"]],
+    log2FC_shrunk = NA_real_,
+    lfcSE = NA_real_,
+    stat = stat_col,
+    pvalue = tt[["PValue"]],
+    padj = tt[["FDR"]],
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Extrae la tabla de un `lmFit` de limma ya ajustado.
+#'
+#' Recibe el ajuste ANTES de la moderacion empirica-bayesiana, porque la eleccion
+#' entre `eBayes()` y `treat()` depende del umbral de fold-change y es
+#' precisamente lo que puede cambiar entre reextracciones. Ambas son baratas
+#' sobre un `lmFit` ya calculado; lo caro es `voom()` + `lmFit()`, que se
+#' conservan.
+limma_extract <- function(lmfit, coef_test, lfc_threshold = 0) {
+  if (is.finite(lfc_threshold) && lfc_threshold > 0) {
+    # treat() testea H0: |log2FC| <= lfc en lugar de H0: log2FC = 0.
+    fit <- limma::treat(lmfit, lfc = lfc_threshold, robust = TRUE)
+    tt <- limma::topTreat(fit, coef = coef_test, number = Inf, sort.by = "none")
+  } else {
+    fit <- limma::eBayes(lmfit, robust = TRUE)
+    tt <- limma::topTable(fit, coef = coef_test, number = Inf, sort.by = "none")
+  }
+
+  base_mean <- if (!is.null(tt[["AveExpr"]])) 2 ^ tt[["AveExpr"]]
+               else rep(NA_real_, nrow(tt))
+  # lfcSE recuperable en limma: stdev.unscaled * sqrt(s2.post) para el
+  # coeficiente testeado. El indexado es POSICIONAL a proposito: `s2.post` es
+  # un vector sin nombres, asi que indexarlo por gen devolveria NA.
+  lfc_se <- tryCatch({
+    su <- fit$stdev.unscaled
+    s2 <- fit$s2.post
+    if (!is.null(su) && !is.null(s2) && coef_test %in% colnames(su)) {
+      idx <- match(rownames(tt), rownames(su))
+      as.numeric(su[idx, coef_test] * sqrt(s2[idx]))
+    } else rep(NA_real_, nrow(tt))
+  }, error = function(e) rep(NA_real_, nrow(tt)))
+
+  data.frame(
+    gene = rownames(tt),
+    baseMean = base_mean,
+    log2FC = tt[["logFC"]],
+    log2FC_shrunk = NA_real_,
+    lfcSE = lfc_se,
+    stat = tt[["t"]] %||% rep(NA_real_, nrow(tt)),
+    pvalue = tt[["P.Value"]],
+    padj = tt[["adj.P.Val"]],
+    stringsAsFactors = FALSE
+  )
+}
+
 #' Motor DESeq2.
 #'
 #' @param fdr Nivel de FDR objetivo. Se pasa a `results(alpha = fdr)` porque el
@@ -357,51 +517,20 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
     coef_name <- resolve_test_coef(DESeq2::resultsNames(dds), test_coef,
                                    contrast_num, d$ref)
 
-    filter_fun <- if (isTRUE(use_ihw)) ihw_filter_fun() else NULL
-    padj_method <- if (!is.null(filter_fun)) "IHW" else "BH"
-    res_args <- list(
-      dds, name = coef_name, alpha = fdr,
-      lfcThreshold = if (is.finite(lfc_threshold)) lfc_threshold else 0,
-      altHypothesis = "greaterAbs"
-    )
-    if (identical(outliers, "keep")) res_args$cooksCutoff <- FALSE
-    if (!is.null(filter_fun)) res_args$filterFun <- filter_fun
-    res <- do.call(DESeq2::results, res_args)
-    df <- as.data.frame(res)
-
-    lfc_shrunk <- rep(NA_real_, nrow(df))
-    shrink_used <- "ninguno"
-    if (isTRUE(shrink)) {
-      type <- pick_shrink_type()
-      shr <- tryCatch(
-        DESeq2::lfcShrink(dds, coef = coef_name, type = type, quiet = TRUE),
-        error = function(e) NULL
-      )
-      # lfcShrink devuelve las mismas filas y en el mismo orden que results().
-      if (!is.null(shr) && nrow(shr) == nrow(df)) {
-        lfc_shrunk <- as.data.frame(shr)$log2FoldChange
-        shrink_used <- type
-      }
-    }
-
-    tab <- data.frame(
-      gene = rownames(df),
-      baseMean = df$baseMean,
-      log2FC = df$log2FoldChange,
-      log2FC_shrunk = lfc_shrunk,
-      lfcSE = df$lfcSE,
-      stat = df$stat,
-      pvalue = df$pvalue,
-      padj = df$padj,
-      stringsAsFactors = FALSE
-    )
+    ext <- deseq2_extract(dds, coef_name, fdr = fdr, lfc_threshold = lfc_threshold,
+                          use_ihw = use_ihw, outliers = outliers, shrink = shrink)
     cooks <- tryCatch({
       ck <- SummarizedExperiment::assays(dds)[["cooks"]]
       if (is.null(ck)) NULL else cooks_sample_summary(ck)
     }, error = function(e) NULL)
-    list(table = tab, coef = coef_name, shrink = shrink_used,
-         padj_method = padj_method, disp_data = deseq_dispersion_data(dds),
-         cooks = cooks, coef_available = DESeq2::resultsNames(dds))
+    list(table = ext$table, coef = coef_name, shrink = ext$shrink,
+         padj_method = ext$padj_method, disp_data = deseq_dispersion_data(dds),
+         cooks = cooks, coef_available = DESeq2::resultsNames(dds),
+         # El ajuste viaja de vuelta para poder reextraer sin repetirlo. Es el
+         # objeto pesado de la sesion: decenas de MB para un dataset humano.
+         fit = list(engine = "DESeq2", dds = dds, coef = coef_name,
+                    lfc_shrunk = ext$lfc_shrunk, shrink = ext$shrink,
+                    outliers = outliers, cooks = cooks))
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
@@ -414,6 +543,7 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
   info$disp_data      <- out$disp_data
   info$cooks          <- out$cooks
   info$coef_available <- out$coef_available %||% character(0)
+  info$fit            <- out$fit
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -452,36 +582,9 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
       edgeR::glmQLFit(edgeR::estimateDisp(y, design), design)
     }
     coef_test <- resolve_test_coef(colnames(design), test_coef, contrast_num, d$ref)
-
-    test <- if (is.finite(lfc_threshold) && lfc_threshold > 0) {
-      edgeR::glmTreat(fit, coef = coef_test, lfc = lfc_threshold)
-    } else {
-      edgeR::glmQLFTest(fit, coef = coef_test)
-    }
-    tt <- edgeR::topTags(test, n = Inf, sort.by = "none")$table
-
-    # AveLogCPM ~ baseMean estandarizado en otra escala. Para mantener la
-    # interfaz, devolvemos baseMean = 2^AveLogCPM (CPM medio aproximado).
-    base_mean <- if (!is.null(tt[["logCPM"]])) 2 ^ tt[["logCPM"]]
-                 else if (!is.null(tt[["AveLogCPM"]])) 2 ^ tt[["AveLogCPM"]]
-                 else rep(NA_real_, nrow(tt))
-    # Ojo: `tt$F` haria partial matching con la columna FDR y colaria el FDR
-    # como estadistico cuando glmTreat no devuelve F. Con [[ ]] el match es
-    # exacto y devuelve NULL si la columna no existe.
-    stat_col <- tt[["F"]] %||% tt[["LR"]] %||% rep(NA_real_, nrow(tt))
-
-    tab <- data.frame(
-      gene = rownames(tt),
-      baseMean = base_mean,
-      log2FC = tt[["logFC"]],
-      log2FC_shrunk = NA_real_,
-      lfcSE = NA_real_,
-      stat = stat_col,
-      pvalue = tt[["PValue"]],
-      padj = tt[["FDR"]],
-      stringsAsFactors = FALSE
-    )
-    list(table = tab, coef = coef_test, coef_available = colnames(design))
+    tab <- edger_extract(fit, coef_test, lfc_threshold)
+    list(table = tab, coef = coef_test, coef_available = colnames(design),
+         fit = list(engine = "edgeR", qlfit = fit, coef = coef_test))
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
@@ -490,6 +593,7 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
   info$coef           <- out$coef
   info$contrast       <- contrast_label(out$coef, d$ref)
   info$coef_available <- out$coef_available %||% character(0)
+  info$fit            <- out$fit
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -523,42 +627,12 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
                   error = function(e) limma::voom(y, design))
     fit <- limma::lmFit(v, design)
     coef_test <- resolve_test_coef(colnames(design), test_coef, contrast_num, d$ref)
-
-    if (is.finite(lfc_threshold) && lfc_threshold > 0) {
-      # treat() testea H0: |log2FC| <= lfc en lugar de H0: log2FC = 0.
-      fit <- limma::treat(fit, lfc = lfc_threshold, robust = TRUE)
-      tt <- limma::topTreat(fit, coef = coef_test, number = Inf, sort.by = "none")
-    } else {
-      fit <- limma::eBayes(fit, robust = TRUE)
-      tt <- limma::topTable(fit, coef = coef_test, number = Inf, sort.by = "none")
-    }
-
-    base_mean <- if (!is.null(tt[["AveExpr"]])) 2 ^ tt[["AveExpr"]]
-                 else rep(NA_real_, nrow(tt))
-    # lfcSE recuperable en limma: stdev.unscaled * sqrt(s2.post) para el
-    # coeficiente testeado. El indexado es POSICIONAL a proposito: `s2.post` es
-    # un vector sin nombres, asi que indexarlo por gen devolveria NA.
-    lfc_se <- tryCatch({
-      su <- fit$stdev.unscaled
-      s2 <- fit$s2.post
-      if (!is.null(su) && !is.null(s2) && coef_test %in% colnames(su)) {
-        idx <- match(rownames(tt), rownames(su))
-        as.numeric(su[idx, coef_test] * sqrt(s2[idx]))
-      } else rep(NA_real_, nrow(tt))
-    }, error = function(e) rep(NA_real_, nrow(tt)))
-
-    tab <- data.frame(
-      gene = rownames(tt),
-      baseMean = base_mean,
-      log2FC = tt[["logFC"]],
-      log2FC_shrunk = NA_real_,
-      lfcSE = lfc_se,
-      stat = tt[["t"]] %||% rep(NA_real_, nrow(tt)),
-      pvalue = tt[["P.Value"]],
-      padj = tt[["adj.P.Val"]],
-      stringsAsFactors = FALSE
-    )
-    list(table = tab, coef = coef_test, coef_available = colnames(design))
+    tab <- limma_extract(fit, coef_test, lfc_threshold)
+    list(table = tab, coef = coef_test, coef_available = colnames(design),
+         # Se guarda el lmFit SIN moderar: la eleccion entre eBayes() y treat()
+         # depende del umbral de fold-change, que es justo lo que puede cambiar
+         # entre reextracciones.
+         fit = list(engine = "limma-voom", lmfit = fit, coef = coef_test))
   }, error = function(e) e)
 
   if (inherits(out, "error")) {
@@ -567,6 +641,7 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
   info$coef           <- out$coef
   info$contrast       <- contrast_label(out$coef, d$ref)
   info$coef_available <- out$coef_available %||% character(0)
+  info$fit            <- out$fit
   c(list(table = out$table, error = NULL), info)
 }
 
@@ -820,9 +895,28 @@ run_deg <- function(counts, meta,
   )
   res$method        <- method
   res$fdr           <- fdr
-  res$lfc_threshold <- lfc_threshold
+  # El umbral de fold-change solo se declara para los motores que lo meten
+  # DENTRO del test. Wilcoxon y dearseq aceptan el argumento por uniformidad de
+  # la interfaz pero no lo usan, asi que declararlo hacia que el banner y el
+  # informe afirmasen "H0: |log2FC| <= x (umbral dentro del test)" sobre un
+  # ajuste que habia testeado H0: log2FC = 0. Se registra NA, como ya hacia
+  # Swish, para no atribuir a un motor un test que no hizo.
+  res$lfc_threshold <- if (method %in% DEG_METHODS_ROBUST) NA_real_ else lfc_threshold
   # IC del log2FC donde el motor haya dado error estandar (DESeq2 y limma).
   if (!is.null(res$table)) res$table <- add_lfc_confidence_interval(res$table)
+  # Motores sin objeto reutilizable: su tabla NO depende del nivel de
+  # significacion (padj es la correccion BH de los p-valores del test), asi que
+  # reextraer es devolver la misma tabla y dejar que cambie solo donde se corta.
+  if (is.null(res$fit) && !is.null(res$table)) {
+    res$fit <- list(engine = "estatico", table = res$table)
+  }
+  if (!is.null(res$fit)) {
+    res$fit$method  <- method
+    # Parametros con los que se extrajo esta tabla. Sirven para no reextraer
+    # cuando nada ha cambiado.
+    res$fit$extract <- list(fdr = fdr, lfc_threshold = res$lfc_threshold,
+                            use_ihw = isTRUE(use_ihw), outliers = outliers)
+  }
   # El diseno REPORTADO tiene que ser el que el motor ajusto de verdad. Wilcoxon
   # y dearseq no consumen `design_formula`: Wilcoxon es un test de dos muestras
   # sin modelo, y dearseq recibe la condicion y, como mucho, el batch. Declarar
@@ -854,6 +948,97 @@ run_deg <- function(counts, meta,
       "edgeR o limma-voom.")
   }
   res
+}
+
+#' Reextrae la tabla de un ajuste ya hecho, con otro nivel de significacion.
+#'
+#' Es lo que permite que el FDR objetivo y el umbral del test sean controles en
+#' vivo en lugar de exigir relanzar. La diferencia de coste esta medida sobre
+#' 20.000 genes x 8 muestras: reajustar 5,05 s, reextraer 0,20 s.
+#'
+#' No es un recorte cosmetico de la tabla ya calculada, que seria el error
+#' contrario y el que invalida la FDR declarada (McCarthy y Smyth, 2009): se
+#' vuelve a llamar al `results()` / `topTags()` / `topTreat()` del motor con los
+#' nuevos parametros, de modo que el filtrado independiente y la hipotesis nula
+#' se recalculan como corresponde.
+#'
+#' Lo que NO puede cambiar por esta via, porque cambia el AJUSTE y no su lectura:
+#' el motor, la formula del diseno, el batch o las variables sustitutas, el
+#' prefiltrado, el encogido y el modo de outliers "sustituir". Para todo eso la
+#' interfaz sigue exigiendo relanzar, y avisa cuando el ajuste se ha quedado
+#' desactualizado.
+#'
+#' @param fit El slot `fit` que devuelve `run_deg()`.
+#' @return list(table, padj_method, cooks, shrink, error)
+deg_reextract <- function(fit, fdr = 0.05, lfc_threshold = 0, use_ihw = FALSE,
+                          outliers = "na") {
+  fail <- function(msg) list(table = NULL, error = msg)
+  if (is.null(fit) || is.null(fit$engine)) {
+    return(fail("No hay ajuste que reutilizar: relanza el analisis."))
+  }
+  lfc_thr <- if (is.null(lfc_threshold) || !length(lfc_threshold) ||
+                 !is.finite(lfc_threshold[1])) 0 else lfc_threshold[1]
+
+  # El modo "sustituir" no es una forma de LEER el ajuste: rebaja
+  # `minReplicatesForReplace`, que es un argumento de `DESeq()`. Cambiar a ese
+  # modo, o salir de el, exige reajustar. Se comprueba fuera del tryCatch para
+  # no repetir el patron de `return()` dentro de un `tryCatch({...})`, que sale
+  # de la funcion entera y confunde a quien lee.
+  if (identical(fit$engine, "DESeq2") && !identical(outliers, fit$outliers) &&
+      (identical(outliers, "refit") || identical(fit$outliers, "refit"))) {
+    return(fail(paste0("El tratamiento de outliers 'sustituir el valor atipico' ",
+                       "cambia el ajuste, no solo su lectura: relanza el analisis.")))
+  }
+
+  out <- tryCatch(switch(
+    fit$engine,
+    "DESeq2" = {
+      ext <- deseq2_extract(fit$dds, fit$coef, fdr = fdr, lfc_threshold = lfc_thr,
+                            use_ihw = use_ihw, outliers = outliers,
+                            lfc_shrunk = fit$lfc_shrunk)
+      list(table = ext$table, padj_method = ext$padj_method,
+           shrink = fit$shrink, cooks = fit$cooks)
+    },
+    "edgeR" = list(table = edger_extract(fit$qlfit, fit$coef, lfc_thr),
+                   padj_method = "BH"),
+    "limma-voom" = list(table = limma_extract(fit$lmfit, fit$coef, lfc_thr),
+                        padj_method = "BH"),
+    "estatico" = list(table = fit$table),
+    NULL
+  ), error = function(e) e)
+
+  if (inherits(out, "error")) return(fail(conditionMessage(out)))
+  if (is.null(out)) {
+    return(fail(paste0("El motor '", fit$method %||% fit$engine,
+                       "' no permite recalcular sin reajustar.")))
+  }
+  if (is.null(out$table)) return(fail("La reextraccion no ha devuelto tabla."))
+  out$table <- add_lfc_confidence_interval(out$table)
+  out$error <- NULL
+  out
+}
+
+#' Decide si procede reextraer.
+#'
+#' Son tres guardas y ninguna es cosmetica:
+#'
+#'   - Sin ajuste guardado no hay nada que reextraer.
+#'   - Con el ajuste DESACTUALIZADO (la interfaz pide un modelo distinto del que
+#'     se ajusto) hay que abstenerse: reextraer daria una tabla que no
+#'     corresponde ni al modelo anterior ni al que se esta pidiendo, y ademas
+#'     taparia el aviso de "relanza" con un resultado de aspecto normal.
+#'   - Con los mismos parametros que la ultima vez no hay trabajo que hacer.
+#'     Sin esta guarda, cada reevaluacion del reactivo recalcularia la tabla y
+#'     anadiria una linea al registro de auditoria por nada.
+#'
+#' @param fit slot `fit` guardado, o NULL
+#' @param params parametros de extraccion pedidos ahora
+#' @param params_prev parametros con los que se extrajo la tabla actual
+#' @param stale TRUE si el ajuste ya no corresponde a la interfaz
+deg_reextract_needed <- function(fit, params, params_prev, stale = FALSE) {
+  if (is.null(fit)) return(FALSE)
+  if (isTRUE(stale)) return(FALSE)
+  !identical(params, params_prev)
 }
 
 #' TRUE si el ajuste llevaba un umbral de |log2FC| DENTRO del test.

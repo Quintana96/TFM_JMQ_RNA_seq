@@ -146,7 +146,10 @@ ui_deg_panel_analisis <- function() {
   accordion_panel(
     "4 · Test estadistico", value = "analisis", icon = icon("flask"),
     tags$small(class = "text-muted d-block mb-2",
-               "Define el test: cambiar algo de aqui exige relanzar el analisis."),
+               HTML(paste("Define el test. El <b>motor</b> y las opciones de",
+                          "prefiltrado y encogido exigen relanzar el analisis;",
+                          "el <b>FDR</b> y el <b>umbral del test</b> se",
+                          "recalculan solos sobre el mismo ajuste."))),
     selectInput(
       "deg_method", "Motor",
       choices = list(
@@ -177,15 +180,25 @@ ui_deg_panel_analisis <- function() {
       tags$small(class = "text-muted d-block mb-2",
                  "Min. muestras vacio = tamano del grupo mas pequeno.")
     ),
-    sliderInput("deg_fdr_target", "FDR objetivo (alpha)",
-                min = 0.01, max = 0.5, value = 0.05, step = 0.01),
-    numericInput("deg_lfc_threshold", "Umbral |log2FC| del test",
-                 value = 0, min = 0, max = 5, step = 0.25),
-    tags$small(class = "text-muted d-block mb-2",
-               paste("0 = test clasico (H0: log2FC = 0). Un valor > 0 testea",
-                     "H0: |log2FC| <= umbral dentro del modelo",
-                     "(lfcThreshold / glmTreat / treat), que es la forma de",
-                     "exigir un fold-change minimo sin perder el control de la FDR.")),
+    div(class = "border rounded p-2 mb-2",
+      tags$small(class = "text-muted d-block mb-1",
+                 HTML(paste("<b>En vivo.</b> Estos dos no reajustan el modelo:",
+                            "vuelven a extraer la tabla del ajuste que ya hay,",
+                            "que cuesta un 4 % de lo que costo ajustarlo. No es",
+                            "un recorte de la lista ya calculada &mdash; el",
+                            "filtrado independiente y la hipotesis nula se",
+                            "recalculan."))),
+      sliderInput("deg_fdr_target", "FDR objetivo (alpha)",
+                  min = 0.01, max = 0.5, value = 0.05, step = 0.01),
+      numericInput("deg_lfc_threshold", "Umbral |log2FC| del test",
+                   value = 0, min = 0, max = 5, step = 0.25),
+      tags$small(class = "text-muted d-block",
+                 paste("0 = test clasico (H0: log2FC = 0). Un valor > 0 testea",
+                       "H0: |log2FC| <= umbral dentro del modelo",
+                       "(lfcThreshold / glmTreat / treat), que es la forma de",
+                       "exigir un fold-change minimo sin perder el control de la",
+                       "FDR. Wilcoxon y dearseq no lo admiten y lo ignoran."))
+    ),
 
     # Las opciones que solo aplican a DESeq2 van juntas y anunciadas como tales.
     # Antes se intercalaban con las generales y cada una repetia "Solo DESeq2"
@@ -457,6 +470,10 @@ ui_tab_deg_diagnostics <- function() {
 #' tagList con el navset de resultados (tabla, plots, enriquecimiento).
 ui_tab_deg_results <- function() {
   tagList(
+    # Aviso de que el ajuste ya no corresponde a los parametros de la interfaz.
+    # Va lo primero, antes incluso del contraste: si el modelo esta
+    # desactualizado, todo lo que hay debajo describe otro analisis.
+    uiOutput("deg_stale_warning"),
     # Banner con el contraste realmente testeado. Es informacion imprescindible
     # para interpretar un volcano, y ademas es donde avisamos de que con >2
     # niveles de condition solo se esta mostrando una de las comparaciones.

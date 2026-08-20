@@ -41,6 +41,12 @@ deg_run_parameters <- function(rv) {
   pf <- rv$prefilter
   list(
     "Fecha del analisis"       = format(rv$run_at %||% Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    # El ajuste y la lectura pueden ser de momentos distintos: el FDR y el
+    # umbral del test se reextraen del mismo ajuste sin repetirlo. Cuando ha
+    # pasado, la fecha del analisis por si sola no describe la tabla que se esta
+    # informando, asi que se declaran las dos.
+    "Ultima reextraccion"      = if (is.null(rv$reextracted_at)) "—"
+                                 else format(rv$reextracted_at, "%Y-%m-%d %H:%M:%S"),
     "Motor"                    = rv$method %||% "—",
     "Diseno"                   = rv$design %||% "~ condition",
     "Contraste"                = rv$contrast %||% "—",

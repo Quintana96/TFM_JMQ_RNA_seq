@@ -296,6 +296,126 @@ server_tab_deg <- function(input, output, session, state) {
       selected = isolate(input$deg_test_coef) %||% "")
   })
 
+  # ── Ajuste y extraccion: dos operaciones, no una ───────────────────────────
+  #
+  # Los parametros de la pestana se reparten en dos grupos que se comportan de
+  # forma distinta, y la separacion no es de comodidad sino de coste medido:
+  #
+  #   AJUSTE (5,05 s en 20.000 genes x 8 muestras). Motor, diseno, batch,
+  #   variables sustitutas, prefiltrado, encogido, fuente de datos. Cambian el
+  #   modelo, asi que exigen relanzar. `deg_fit_signature()` es su huella.
+  #
+  #   EXTRACCION (0,20 s, un 4 %). FDR objetivo, umbral |log2FC| del test, IHW y
+  #   tratamiento de outliers. Cambian como se LEE el mismo modelo, asi que se
+  #   recalculan en vivo sobre el ajuste guardado.
+  #
+  # Lo que no se hace, y conviene decirlo porque es la alternativa tentadora:
+  # recortar la tabla ya calculada al nuevo umbral. Eso seria un filtro post hoc
+  # y la lista resultante no tendria la FDR que declara.
+
+  #' Huella de los parametros que definen el AJUSTE.
+  deg_fit_signature <- reactive({
+    list(
+      metodo     = input$deg_method,
+      fuente     = input$deg_source,
+      ejecucion  = input$selected_deg_run_dir,
+      condicion  = input$deg_condition_col,
+      referencia = input$deg_contrast_den,
+      numerador  = input$deg_contrast_num,
+      batch      = if (isTRUE(input$deg_use_batch)) input$deg_batch_col else NULL,
+      avanzado   = isTRUE(input$deg_advanced_design),
+      formula    = if (isTRUE(input$deg_advanced_design)) input$deg_design_formula else NULL,
+      coef       = if (isTRUE(input$deg_advanced_design)) input$deg_test_coef else NULL,
+      sva        = isTRUE(input$deg_use_sva),
+      n_sv       = if (isTRUE(input$deg_use_sva)) input$deg_n_sv else NULL,
+      prefiltro  = input$deg_prefilter_mode,
+      min_count  = input$deg_min_count,
+      min_muestras = input$deg_min_samples,
+      encogido   = isTRUE(input$deg_shrink),
+      correccion = input$deg_viz_correction,
+      seudonimo  = isTRUE(input$deg_pseudonymize)
+    )
+  })
+
+  #' Parametros de EXTRACCION, con debounce.
+  #'
+  #' El debounce es lo que hace usable un deslizador: sin el, arrastrar el FDR de
+  #' 0,05 a 0,01 dispara una reextraccion por cada valor intermedio. 300 ms es el
+  #' tiempo tras el que el usuario ha soltado y todavia no ha mirado el grafico.
+  deg_extract_inputs <- reactive({
+    lfc <- input$deg_lfc_threshold
+    list(
+      fdr = input$deg_fdr_target %||% 0.05,
+      lfc_threshold = if (is.null(lfc) || !is.finite(lfc) || lfc < 0) 0 else lfc,
+      use_ihw = isTRUE(input$deg_use_ihw),
+      outliers = input$deg_outliers %||% "na"
+    )
+  }) |> debounce(300)
+
+  #' TRUE si el ajuste guardado ya no corresponde a los parametros de la interfaz.
+  deg_fit_stale <- reactive({
+    if (is.null(state$deg_rv$results) || is.null(state$deg_rv$fit_signature)) return(FALSE)
+    !identical(state$deg_rv$fit_signature, deg_fit_signature())
+  })
+
+  # Reextraccion en vivo. Solo actua si hay un ajuste, si algo ha cambiado de
+  # verdad y si ese ajuste sigue siendo el de los parametros actuales: reextraer
+  # de un ajuste desactualizado produciria una tabla que no corresponde ni al
+  # modelo anterior ni al que pide la interfaz.
+  observeEvent(deg_extract_inputs(), ignoreInit = TRUE, {
+    fit <- state$deg_rv$fit
+    if (is.null(state$deg_rv$results)) return()
+    p <- deg_extract_inputs()
+    if (!deg_reextract_needed(fit, p, state$deg_rv$extract_params,
+                              stale = deg_fit_stale())) return()
+
+    # Los motores que no meten el umbral dentro del test no deben declararlo.
+    lfc_efectivo <- if ((state$deg_rv$method %||% "") %in% c(DEG_METHODS_ROBUST, "Swish"))
+                      NA_real_ else p$lfc_threshold
+    re <- deg_reextract(fit, fdr = p$fdr, lfc_threshold = p$lfc_threshold,
+                        use_ihw = p$use_ihw, outliers = p$outliers)
+    if (!is.null(re$error)) {
+      showNotification(paste0("No se ha podido recalcular: ", re$error),
+                       type = "warning", duration = 10)
+      return()
+    }
+
+    state$deg_rv$results        <- re$table
+    state$deg_rv$fdr            <- p$fdr
+    state$deg_rv$lfc_threshold  <- lfc_efectivo
+    state$deg_rv$outliers       <- p$outliers
+    state$deg_rv$padj_method    <- re$padj_method %||% state$deg_rv$padj_method
+    state$deg_rv$cooks          <- re$cooks %||% state$deg_rv$cooks
+    state$deg_rv$extract_params <- p
+    state$deg_rv$reextracted_at <- Sys.time()
+
+    # La reextraccion produce una lista de significativos distinta, asi que deja
+    # rastro en el registro igual que el ajuste. Sin esto, el registro diria que
+    # el analisis se hizo a FDR 0,05 cuando la figura que acabo en la memoria se
+    # leyo a 0,01, que es justo el "creo que use FDR 0,05" que el registro
+    # existe para eliminar.
+    append_audit_log("deg_reextract", list(
+      motor = state$deg_rv$method, contraste = state$deg_rv$contrast,
+      fdr = p$fdr, lfc_umbral = lfc_efectivo, ihw = p$use_ihw,
+      outliers = p$outliers,
+      significativos = sum(!is.na(re$table$padj) & re$table$padj <= p$fdr)
+    ), outputs_dir = state$outputs_dir)
+  })
+
+  # Aviso de ajuste desactualizado. Es la contrapartida necesaria de lo anterior:
+  # ahora que casi todo reacciona solo, el usuario tiene derecho a saber cuando
+  # algo NO lo ha hecho, en lugar de mover un selector y no ver ningun efecto.
+  output$deg_stale_warning <- renderUI({
+    if (!isTRUE(deg_fit_stale())) return(NULL)
+    div(class = "alert alert-warning py-2 px-3 mb-2",
+        icon("triangle-exclamation"),
+        tags$b(" Estos resultados corresponden a otro ajuste. "),
+        "Has cambiado un parametro que define el modelo (motor, diseno, batch, ",
+        "variables sustitutas, prefiltrado o encogido). El FDR y el umbral del ",
+        "test se recalculan solos; esto no. Pulsa ",
+        tags$b("Lanzar DEG"), " para actualizarlo.")
+  })
+
   # ── Lanzar DEG ─────────────────────────────────────────────────────────────
   observeEvent(input$run_deg_btn, {
     cm <- deg_counts_source()
@@ -593,12 +713,22 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$meta          <- meta_aln
     state$deg_rv$method        <- method
     state$deg_rv$results       <- res$table
+    # Ajuste reutilizable y huella de los parametros que lo definen. A partir de
+    # aqui, cambiar el FDR o el umbral del test reextrae; cambiar cualquier cosa
+    # de la huella marca el ajuste como desactualizado.
+    state$deg_rv$fit            <- res$fit
+    state$deg_rv$extract_params <- res$fit$extract
+    state$deg_rv$fit_signature  <- deg_fit_signature()
+    state$deg_rv$reextracted_at <- NULL
     state$deg_rv$vst_mat       <- vst_mat
     state$deg_rv$run_at        <- Sys.time()
     state$deg_rv$fdr           <- fdr_target
     # Swish no recibe lfc_threshold ni la matriz prefiltrada: declararlos seria
     # atribuirle un test que no hizo.
-    state$deg_rv$lfc_threshold <- if (identical(method, "Swish")) NA_real_ else lfc_thr
+    # `run_deg()` ya devuelve NA para los motores que no meten el umbral dentro
+    # del test (Wilcoxon, dearseq); Swish tampoco lo recibe.
+    state$deg_rv$lfc_threshold <- if (identical(method, "Swish")) NA_real_
+                                  else res$lfc_threshold %||% lfc_thr
     state$deg_rv$contrast      <- res$contrast
     state$deg_rv$n_levels      <- res$n_levels %||% NA_integer_
     state$deg_rv$shrink        <- res$shrink %||% "ninguno"
@@ -756,7 +886,14 @@ server_tab_deg <- function(input, output, session, state) {
       "Encogido log2FC: ", state$deg_rv$shrink %||% "ninguno", "\n",
       "Significativos a FDR <= ", fdr_thr, ": ",
       sum(sig, na.rm = TRUE), " (", n_up, " up / ", n_down, " down)\n",
-      "Ultima ejecucion: ", format(state$deg_rv$run_at, "%Y-%m-%d %H:%M:%S")
+      "Ultimo ajuste: ", format(state$deg_rv$run_at, "%Y-%m-%d %H:%M:%S"),
+      # Distinguir el ajuste de la ultima lectura importa: si alguien pregunta
+      # "cuando calculaste esto", las dos fechas son respuestas distintas y las
+      # dos son ciertas.
+      if (!is.null(state$deg_rv$reextracted_at))
+        paste0("\nRecalculado (sin reajustar): ",
+               format(state$deg_rv$reextracted_at, "%Y-%m-%d %H:%M:%S"))
+      else ""
     )
   })
 

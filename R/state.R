@@ -107,9 +107,15 @@ create_app_state <- function(session) {
 
   # Resultado de la pestana DEG (Tab 4). Reactivos para que las renders
   # cuelguen automaticamente al lanzar un nuevo run_deg().
-  # `fdr` y `lfc_threshold` guardan los parametros con los que se AJUSTO el
-  # modelo, no los de la interfaz en este instante: son los unicos validos para
-  # declarar significacion, y cambiarlos exige relanzar el analisis.
+  # `fdr` y `lfc_threshold` guardan los parametros con los que se calculo la
+  # tabla que hay ahora en `results`, no los de la interfaz en este instante:
+  # son los unicos validos para declarar significacion.
+  #
+  # Ya no exigen relanzar. Ajustar el modelo y extraer la tabla son dos
+  # operaciones separadas (ver `deg_reextract()`), y la segunda cuesta un 4 % de
+  # la primera, asi que el FDR y el umbral del test se recalculan en vivo sobre
+  # el mismo ajuste. Lo que sigue exigiendo relanzar es lo que cambia el AJUSTE:
+  # motor, diseno, batch, variables sustitutas, prefiltrado y encogido.
   state$deg_rv <- reactiveValues(
     counts        = NULL,
     meta          = NULL,
@@ -119,6 +125,19 @@ create_app_state <- function(session) {
     run_at        = NULL,
     fdr           = 0.05,
     lfc_threshold = 0,
+    # Objeto ajustado reutilizable (`dds`, `glmQLFit` o `lmFit` segun el motor).
+    # Es el estado pesado de la sesion —decenas de MB con un dataset humano— y
+    # es lo que se cambia por no repetir cinco segundos de ajuste cada vez que
+    # se mueve un deslizador.
+    fit           = NULL,
+    # Parametros con los que se extrajo `results`, para no reextraer en balde.
+    extract_params = NULL,
+    # Huella de los parametros que definen el AJUSTE. Si la interfaz deja de
+    # coincidir con ella, lo que se esta viendo corresponde a otro modelo y hay
+    # que decirlo: sin esta comparacion, mover un selector que exige reajuste no
+    # produce ningun efecto visible y se lee como que la aplicacion esta rota.
+    fit_signature  = NULL,
+    reextracted_at = NULL,
     contrast      = NULL,
     n_levels      = NA_integer_,
     shrink        = "ninguno",
