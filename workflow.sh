@@ -347,7 +347,32 @@ log "Registrando versiones de las herramientas..."
     printf 'tool\tversion\tpath\n'
     for t in fastqc fastp multiqc bowtie2 samtools featureCounts salmon kallisto; do
         if command -v "$t" >/dev/null 2>&1; then
-            v="$("$t" --version 2>&1 | head -1 | tr -d '\r' | sed 's/\t/ /g')"
+            # Dos cuidados aqui, los dos aprendidos ejecutando.
+            #
+            # Primero, NO se canaliza hacia `head`: con `set -o pipefail`, una
+            # herramienta que sigue escribiendo despues de la primera linea
+            # recibe SIGPIPE cuando head cierra, la tuberia devuelve 141 y
+            # `set -e` aborta el script. Ocurria con bowtie2, que imprime nueve
+            # lineas: la ejecucion moria al registrar versiones, antes de
+            # alinear nada.
+            #
+            # Segundo, no todas aceptan `--version`: featureCounts usa `-v` y
+            # kallisto usa `version`. Y bowtie2 antepone dos lineas de aviso a
+            # la version real. Coger la primera linea a ciegas registraba un
+            # aviso o un mensaje de error en el fichero de procedencia, que es
+            # justo el fichero que debe poder creerse.
+            case "$t" in
+                featureCounts) v_full="$("$t" -v 2>&1 || true)" ;;
+                kallisto)      v_full="$("$t" version 2>&1 || true)" ;;
+                *)             v_full="$("$t" --version 2>&1 || true)" ;;
+            esac
+            # Primera linea no vacia que no sea un aviso ni un error, en UNA
+            # sola pasada de awk. Encadenar dos filtros donde el segundo sale
+            # pronto reproduce el mismo SIGPIPE que se acaba de corregir.
+            v="$(printf '%s\n' "$v_full" \
+                 | awk 'tolower($0) !~ /^(\[warning\]|warning|error)/ && NF { print; exit }' \
+                 || true)"
+            v="$(printf '%s' "$v" | tr -d '\r' | sed 's/\t/ /g')"
             printf '%s\t%s\t%s\n' "$t" "${v:-—}" "$(command -v "$t")"
         else
             printf '%s\t(no instalado)\t—\n' "$t"
@@ -569,23 +594,57 @@ run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 # En modo "auto" se infiere de los propios datos contando un subconjunto de
 # lecturas con las tres orientaciones y quedandose con la que asigna mas.
 infer_strandedness() {
-    local bam="$1" out s0 s1 s2 best
+    local bam="$1" s0 s1 s2 best
     local tmp="${COUNTS}/.strand_check"
+    local -a pe_flags=()
+    # featureCounts ABORTA con "Paired-end reads were detected in single-end read
+    # library" si recibe un BAM pareado sin -p. La inferencia lo llamaba sin esos
+    # flags y con `|| true`, asi que el error se tragaba, el fichero de resumen no
+    # se escribia y las tres orientaciones salian 0: la funcion devolvia siempre
+    # 0 (sin orientar) creyendo haberlo medido.
+    [[ "$READ_TYPE" == "pe" ]] && pe_flags=(-p --countReadPairs)
     mkdir -p "$tmp"
     for s in 0 1 2; do
-        featureCounts -T "$THREADS" -s "$s" -t "$FEATURE_TYPE" -g "$FEATURE_ATTR" \
+        featureCounts -T "$THREADS" "${pe_flags[@]}" -s "$s" \
+            -t "$FEATURE_TYPE" -g "$FEATURE_ATTR" \
             -a "$ANNOTATION_FILE" -o "${tmp}/s${s}.txt" "$bam" >/dev/null 2>&1 || true
     done
     s0=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s0.txt.summary" 2>/dev/null || echo 0)
     s1=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s1.txt.summary" 2>/dev/null || echo 0)
     s2=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s2.txt.summary" 2>/dev/null || echo 0)
     s0=${s0:-0}; s1=${s1:-0}; s2=${s2:-0}
-    log "  asignadas por orientacion -> sin orientar: $s0 | directa: $s1 | inversa: $s2"
+    # El diagnostico va a STDERR: esta funcion se invoca con $(...) y su stdout es
+    # el valor de retorno. Escribiendolo en stdout, el mensaje acababa DENTRO de
+    # la variable y `-s` recibia una linea de log entera.
+    log "  asignadas por orientacion -> sin orientar: $s0 | directa: $s1 | inversa: $s2" >&2
+    # La comparacion NO puede ser "la que mas asigna". El modo sin orientar cuenta
+    # las lecturas en ambos sentidos, asi que su recuento es por construccion mayor
+    # o igual que el de cualquiera de los dos modos orientados: ganaria siempre, y
+    # la inferencia devolveria "sin orientar" para cualquier libreria, tambien para
+    # una dUTP perfectamente orientada.
+    #
+    # El criterio correcto es el que usan las herramientas al uso (RSeQC): mirar
+    # como se REPARTEN entre los dos sentidos las lecturas que si son asignables
+    # por hebra. Si el reparto es muy asimetrico, la libreria esta orientada en ese
+    # sentido; si esta repartido, no lo esta.
+    local total_orientado=$(( s1 + s2 ))
     best=0
-    if [[ "$s1" -gt "$s0" && "$s1" -ge "$s2" ]]; then best=1; fi
-    if [[ "$s2" -gt "$s0" && "$s2" -gt "$s1" ]]; then best=2; fi
+    if [[ "$total_orientado" -lt 1000 ]]; then
+        log "  Muy pocas lecturas asignables por hebra ($total_orientado) para decidir; se usa 0." >&2
+    else
+        local pct_inversa=$(( 100 * s2 / total_orientado ))
+        log "  Reparto entre sentidos: inversa ${pct_inversa} %, directa $(( 100 - pct_inversa )) %." >&2
+        if   [[ "$pct_inversa" -ge 80 ]]; then best=2
+        elif [[ "$pct_inversa" -le 20 ]]; then best=1
+        else best=0
+        fi
+    fi
     rm -rf "$tmp"
-    echo "$best"
+    # Guarda final: si nada se pudo medir, no se puede afirmar una orientacion.
+    if [[ "$s0" -eq 0 && "$s1" -eq 0 && "$s2" -eq 0 ]]; then
+        log "  ADVERTENCIA: no se pudo medir la orientacion; se usa 0 (sin orientar)." >&2
+    fi
+    printf '%s' "$best"
 }
 
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" && "$STRANDEDNESS" == "auto" ]]; then
@@ -636,9 +695,18 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
 
     # Create count matrix in TSV format
     log "+ Crear matriz de conteos: ${COUNTS}/count_matrix.tsv"
+    # La cabecera se limpia CAMPO A CAMPO, no con un sed sobre la linea entera.
+    # El `sed '1s|.*/||g'` que habia aqui es codicioso sobre toda la linea: con
+    # rutas absolutas colapsaba `Geneid\t/ruta/A.bam\t/ruta/B.bam` en un unico
+    # campo `B`, dejando una cabecera de 1 columna frente a N+1 de datos. El
+    # lector de la app no encontraba el patron `^Geneid\t`, read.delim abortaba y
+    # devolvia NULL, y la interfaz anunciaba "Workflow finalizado correctamente"
+    # sin matriz. Con awk cada campo se procesa por separado.
     awk 'BEGIN { FS=OFS="\t" } !/^#/ { print }' "${COUNTS}/gene_counts.txt" \
         | cut -f1,7- \
-        | sed '1s|.bam||g; 1s|.*/||g' \
+        | awk 'BEGIN { FS=OFS="\t" }
+               NR==1 { for (i=2; i<=NF; i++) { sub(/.*\//, "", $i); sub(/\.bam$/, "", $i) } }
+               { print }' \
         > "${COUNTS}/count_matrix.tsv"
 
 elif [[ "$ALIGNMENT_TYPE" == "salmon" || "$ALIGNMENT_TYPE" == "kallisto" ]]; then
