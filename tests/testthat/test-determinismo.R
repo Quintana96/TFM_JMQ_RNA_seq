@@ -59,17 +59,4 @@ test_that("estimate_surrogate_vars admite 0 variables sustitutas sin inventarse 
 test_that("la semilla del analisis esta definida y es un entero", {
   expect_true(exists("ANALYSIS_SEED"))
   expect_true(is.numeric(ANALYSIS_SEED) && length(ANALYSIS_SEED) == 1L)
-  expect_true(exists("SWISH_NPERMS"))
-  expect_true(is.numeric(SWISH_NPERMS) && SWISH_NPERMS > 0)
-})
-
-test_that("run_deg_swish declara semilla y nperms aunque falle pronto", {
-  skip_if_not(requireNamespace("fishpond", quietly = TRUE), "fishpond no instalado")
-  meta <- make_test_meta(make_test_counts(n_genes = 50, n_per_group = 3))
-  # Directorio inexistente: la funcion falla, pero el contrato de su valor de
-  # retorno debe mantenerse para que el informe pueda declarar los parametros.
-  res <- run_deg_swish(meta, tempfile(), "salmon", seed = ANALYSIS_SEED)
-  expect_false(is.null(res$error))
-  expect_identical(res$seed, ANALYSIS_SEED)
-  expect_identical(res$n_perms, SWISH_NPERMS)
 })

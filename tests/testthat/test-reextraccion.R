@@ -97,32 +97,7 @@ test_that("el umbral del test entra en el modelo, no recorta la tabla despues", 
   expect_false(isTRUE(all.equal(sin$pvalue[comunes], con$pvalue[comunes])))
 })
 
-test_that("los motores sin objeto reutilizable devuelven su tabla intacta", {
-  d <- datos_con_senal(n_genes = 400, n_de = 60)
-  ajuste <- run_deg(d$counts, d$meta, method = "Wilcoxon", ref_level = "ctrl",
-                    contrast_num = "trt", fdr = 0.05)
-  skip_if(is.null(ajuste$table))
 
-  expect_equal(ajuste$fit$engine, "estatico")
-  reex <- deg_reextract(ajuste$fit, fdr = 0.01)
-  expect_null(reex$error)
-  # Su padj es la correccion BH de los p-valores del test y no depende del nivel
-  # objetivo: cambiar el FDR cambia donde se corta, no lo que se calcula.
-  expect_equal(reex$table$padj, ajuste$table$padj)
-})
-
-test_that("Wilcoxon y dearseq no declaran un umbral de fold-change que no aplican", {
-  d <- datos_con_senal(n_genes = 400, n_de = 60)
-  ajuste <- run_deg(d$counts, d$meta, method = "Wilcoxon", ref_level = "ctrl",
-                    contrast_num = "trt", fdr = 0.05, lfc_threshold = 1)
-  skip_if(is.null(ajuste$table))
-
-  # El motor acepta el argumento por uniformidad de la interfaz pero no lo usa.
-  # Declararlo hacia que el banner y el informe afirmaran "H0: |log2FC| <= 1
-  # dentro del test" sobre un ajuste que testeo H0: log2FC = 0.
-  expect_true(is.na(ajuste$lfc_threshold))
-  expect_false(has_lfc_threshold(ajuste$lfc_threshold))
-})
 
 test_that("el modo de outliers que cambia el ajuste se rechaza con un mensaje", {
   skip_if_not_installed("DESeq2")
@@ -144,7 +119,7 @@ test_that("sin ajuste guardado la reextraccion lo dice en lugar de fallar", {
   expect_null(r$table)
   expect_true(nzchar(r$error))
 
-  r2 <- deg_reextract(list(engine = "Swish"), fdr = 0.05)
+  r2 <- deg_reextract(list(engine = "motor-inexistente"), fdr = 0.05)
   expect_null(r2$table)
   expect_true(nzchar(r2$error))
 })

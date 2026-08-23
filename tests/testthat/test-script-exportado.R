@@ -64,25 +64,6 @@ test_that("el script exportado se ejecuta y reproduce las llamadas de significac
   expect_setequal(sort(app_sig), sort(scr_sig))
 })
 
-test_that("el script declara la semilla y no deja motores sin rama", {
-  skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
-  counts <- make_test_counts()
-  meta <- make_test_meta(counts)
-  rv <- fit_rv(counts, meta, num = "trt", den = "ctrl")
-
-  expect_match(build_deg_r_script(rv), "set.seed(", fixed = TRUE)
-
-  # Swish es lanzable desde la interfaz, asi que no puede caer en el generico
-  # "# Motor no reconocido".
-  rv_swish <- rv
-  rv_swish$method <- "Swish"
-  rv_swish$quant_tool <- "salmon"
-  rv_swish$seeds <- list(swish = 1L, swish_nperms = 30L)
-  s <- build_deg_r_script(rv_swish)
-  expect_false(grepl("Motor no reconocido", s, fixed = TRUE))
-  expect_true(grepl("swish(", s, fixed = TRUE))
-  expect_true(grepl("txOut = TRUE", s, fixed = TRUE))
-})
 
 # ── Disenos con variables sustitutas ────────────────────────────────────────
 #
@@ -216,25 +197,6 @@ test_that("sin sva el prefiltrado sigue usando el diseno con batch", {
   expect_true(grepl("~ lote + condition", pref, fixed = TRUE))
 })
 
-test_that("con Wilcoxon el prefiltrado usa group= y no una formula", {
-  skip_if_not(requireNamespace("edgeR", quietly = TRUE), "edgeR no instalado")
-  counts <- make_test_counts()
-  meta <- make_test_meta(counts)
-  rv <- fit_rv(counts, meta, num = "trt", den = "ctrl", method = "Wilcoxon")
-  rv$design_code <- NULL
-  rv$prefilter <- list(mode = "filterByExpr", n_before = 400, n_after = 380)
-
-  script <- build_deg_r_script(rv)
-  # Wilcoxon no ajusta modelo: interpolar su etiqueta ("sin modelo...") dentro de
-  # model.matrix() producia un fichero que ni siquiera parsea. La etiqueta si
-  # aparece en el comentario de cabecera, que es donde tiene que estar.
-  expect_silent(parse(text = script))
-  expect_true(grepl("filterByExpr(y, group = meta$condition)", script, fixed = TRUE))
-  codigo <- grep("^\\s*#", strsplit(script, "\n", fixed = TRUE)[[1]],
-                 value = TRUE, invert = TRUE)
-  expect_false(any(grepl("sin modelo", codigo, fixed = TRUE)))
-  expect_false(any(grepl("model.matrix", codigo, fixed = TRUE)))
-})
 
 test_that("con IHW el script atacha S4Vectors", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")

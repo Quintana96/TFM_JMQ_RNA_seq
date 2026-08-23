@@ -31,8 +31,7 @@ ajusta <- function(method, prefilter_mode = "auto", batch = FALSE,
        run_at = Sys.time(), seeds = list())
 }
 
-motores <- c("DESeq2", "edgeR", "limma-voom", "Wilcoxon",
-             if (isTRUE(HAS_DEARSEQ)) "dearseq")
+motores <- DEG_METHODS_PARAMETRIC
 
 for (m in motores) {
   for (pf in c("auto", "manual", "ninguno")) {
@@ -69,34 +68,5 @@ test_that("el script parsea con los tres modos de outliers", {
   }
 })
 
-test_that("el script de Swish no referencia un objeto counts inexistente", {
-  skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
-  rv <- ajusta("DESeq2")
-  rv$method <- "Swish"; rv$quant_tool <- "salmon"
-  rv$seeds <- list(swish = 1L, swish_nperms = 30L)
-  rv$prefilter <- NULL
-  s <- build_deg_r_script(rv)
-  expect_silent(parse(text = s))
-  # Swish parte de las cuantificaciones, no de la matriz: no puede alinear el
-  # samplesheet contra colnames(counts).
-  expect_false(grepl("colnames(counts)", s, fixed = TRUE))
-})
 
-test_that("Wilcoxon normaliza con TMM tambien en el script", {
-  skip_if_not(requireNamespace("edgeR", quietly = TRUE), "edgeR no instalado")
-  rv <- ajusta("Wilcoxon")
-  skip_if(is.null(rv), "Wilcoxon no produjo tabla")
-  s <- build_deg_r_script(rv)
-  # El motor usa normalized_cpm() (TMM). Emitir CPM por tamano de libreria
-  # reintroduciria el sesgo de composicion que el propio codigo documenta.
-  expect_true(grepl("normLibSizes", s, fixed = TRUE))
-})
 
-test_that("el diseno legible y el ejecutable no se confunden", {
-  rv <- ajusta("Wilcoxon")
-  skip_if(is.null(rv), "Wilcoxon no produjo tabla")
-  # La etiqueta es prosa; el codigo, NULL. Interpolar la primera donde va el
-  # segundo es lo que rompia el script.
-  expect_match(rv$design, "sin modelo", fixed = TRUE)
-  expect_null(rv$design_code)
-})

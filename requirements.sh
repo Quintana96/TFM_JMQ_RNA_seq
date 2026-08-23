@@ -86,8 +86,6 @@ optional_bioc <- c(
   "sva",              # variables sustitutas y ComBat-seq
   "qvalue",           # segunda estimacion de pi0 en los diagnosticos
   "rtracklayer",      # lectura del GFF/GTF para tx2gene y genes de rRNA
-  "dearseq",          # motor robusto no parametrico
-  "fishpond",         # Swish: incertidumbre de la cuantificacion
   "RNASeqPower",      # calculo de potencia a priori
   "ReactomePA",       # enriquecimiento sobre rutas de Reactome
   "reactome.db"       # conjuntos de Reactome (necesario para el running score)

@@ -12,24 +12,6 @@
 
 server_tab_deg_reports <- function(input, output, session, state, ctx) {
   # ── Sugerencia de metodo segun el tamano muestral (item 21) ────────────────
-  output$deg_method_hint <- renderUI({
-    df <- ctx$meta_rv()
-    if (is.null(df) || !nrow(df)) return(NULL)
-    cc <- input$deg_condition_col %||% "condition"
-    if (!cc %in% names(df)) return(NULL)
-    d <- df; d$condition <- d[[cc]]
-    s <- suggest_robust_comparison(d)
-    m <- input$deg_method %||% "DESeq2"
-    if (m %in% DEG_METHODS_ROBUST && is.null(s)) {
-      return(div(class = "alert alert-warning py-2 px-2 small mb-2",
-                 icon("triangle-exclamation"),
-                 paste(" Con pocas replicas los metodos robustos pierden potencia:",
-                       "por debajo de 8 muestras por grupo, los parametricos son la",
-                       "eleccion correcta.")))
-    }
-    if (is.null(s)) return(NULL)
-    div(class = "alert alert-info py-2 px-2 small mb-2", icon("lightbulb"), " ", s$message)
-  })
 
   # ── Replicabilidad por bootstrap (item 20) ─────────────────────────────────
   boot_rv <- reactiveVal(NULL)
@@ -134,8 +116,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
 
   observe({
     cur <- input$deg_method %||% "DESeq2"
-    all_m <- c(DEG_METHODS_PARAMETRIC, "Wilcoxon",
-               if (isTRUE(HAS_DEARSEQ)) "dearseq")
+    all_m <- DEG_METHODS_PARAMETRIC
     updateSelectInput(session, "deg_compare_method",
                       choices = setdiff(all_m, cur),
                       selected = isolate(input$deg_compare_method))

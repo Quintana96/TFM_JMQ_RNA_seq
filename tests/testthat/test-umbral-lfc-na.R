@@ -37,29 +37,6 @@ deg_tabla_minima <- function(n = 60) {
   )
 }
 
-test_that("el volcano se renderiza con lfc_threshold = NA (ajuste Swish)", {
-  deg <- deg_tabla_minima()
-
-  srv <- function(input, output, session) {
-    state <- new.env(parent = emptyenv())
-    state$deg_rv <- shiny::reactiveValues(
-      results = deg, fdr = 0.05,
-      lfc_threshold = NA_real_,        # <- lo que guarda un ajuste con Swish
-      contrast = "trt vs ctrl", method = "Swish",
-      vst_mat = NULL, meta = NULL)
-    ctx <- new.env(parent = emptyenv())
-    ctx$deg_filtered <- shiny::reactive(deg[deg$padj <= 0.05, , drop = FALSE])
-    server_tab_deg_results(input, output, session, state, ctx)
-  }
-
-  shiny::testServer(srv, {
-    # Acceder a la salida fuerza el render: si vuelve el error de NA, esto falla.
-    p <- output$deg_volcano_plot
-    expect_true(nzchar(p))
-    # Y el MA plot, que comparte los helpers de eje y titulo.
-    expect_true(nzchar(output$deg_ma_plot))
-  })
-})
 
 test_that("el volcano sigue dibujando las lineas de umbral cuando SI lo hay", {
   deg <- deg_tabla_minima()

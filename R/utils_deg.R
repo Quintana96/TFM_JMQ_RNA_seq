@@ -645,24 +645,6 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
   c(list(table = out$table, error = NULL), info)
 }
 
-#' Motor Wilcoxon rank-sum sobre CPM normalizados.
-#'
-#' Contexto (docs/REVISION_ESTADISTICA.md, B7), que da para discusion y conviene
-#' contar completo porque la conclusion ha cambiado tres veces:
-#'   1. Li et al. (2022) reportaron que en muestras poblacionales humanas la FDR
-#'      real de DESeq2 y edgeR llega a superar el 20 % cuando el objetivo es 5 %,
-#'      y recomendaron Wilcoxon para n grande.
-#'   2. Hejblum et al. (2024) identificaron un fallo en esa simulacion: los datos
-#'      se normalizaban DESPUES de permutar, de modo que ya no cumplian la nula.
-#'      Normalizando antes, los tres metodos controlaban bien la FDR.
-#'   3. Li et al. (2024) aceptaron el sesgo senalado pero mantienen su conclusion
-#'      apoyandose en datos totalmente permutados.
-#'
-#' Lectura practica: con n pequeno los parametricos son la eleccion correcta y
-#' Wilcoxon seria un error por falta de potencia. Con n grande (>= 8-10 por
-#' grupo) merece la pena comparar. Por eso este motor existe pero no se sugiere
-#' hasta que el tamano muestral lo justifica.
-#'
 #' CPM normalizados por composicion (TMM cuando edgeR esta disponible).
 #'
 #' Los motores robustos usaban CPM por tamano de libreria crudo. El benchmark
@@ -688,138 +670,13 @@ normalized_cpm <- function(counts) {
   t(t(cm) / libs) * 1e6
 }
 
-#' Solo admite dos grupos: es un test de dos muestras, no un modelo, asi que no
-#' puede ajustar por batch ni por covariables.
-run_deg_wilcoxon <- function(counts, meta, ref_level = NULL, batch = NULL,
-                             fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
-                             contrast_num = NULL, use_ihw = FALSE,
-                             design_formula = NULL, test_coef = NULL) {
-  d <- build_design(meta, ref_level, batch)
-  info <- deg_engine_info(d)
-  num <- if (!is.null(contrast_num) && nzchar(contrast_num %||% "")) contrast_num
-         else utils::tail(d$levels, 1)
-  den <- d$ref
-  if (identical(num, den)) {
-    return(c(list(table = NULL, error = "Numerador y denominador coinciden."), info))
-  }
-  out <- tryCatch({
-    g <- as.character(d$meta$condition)
-    i_num <- which(g == num); i_den <- which(g == den)
-    if (length(i_num) < 2 || length(i_den) < 2) {
-      stop("Wilcoxon necesita al menos 2 muestras en cada grupo del contraste.")
-    }
-    cpm <- normalized_cpm(counts)
-    a <- cpm[, i_num, drop = FALSE]; b <- cpm[, i_den, drop = FALSE]
-    pv <- vapply(seq_len(nrow(cpm)), function(i) {
-      tryCatch(stats::wilcox.test(a[i, ], b[i, ], exact = FALSE)$p.value,
-               error = function(e) NA_real_)
-    }, numeric(1))
-    lfc <- log2((rowMeans(a) + 1) / (rowMeans(b) + 1))
-    tab <- data.frame(
-      gene = rownames(cpm),
-      baseMean = rowMeans(cpm),
-      log2FC = lfc,
-      log2FC_shrunk = NA_real_,
-      lfcSE = NA_real_,
-      stat = NA_real_,
-      pvalue = pv,
-      padj = stats::p.adjust(pv, method = "BH"),
-      stringsAsFactors = FALSE
-    )
-    list(table = tab, coef = paste0("condition", num))
-  }, error = function(e) e)
-  if (inherits(out, "error")) {
-    return(c(list(table = NULL, error = conditionMessage(out)), info))
-  }
-  info$coef     <- out$coef
-  info$contrast <- paste(num, "vs", den)
-  c(list(table = out$table, error = NULL), info)
-}
-
-#' Motor dearseq: test de componentes de varianza con regresion no parametrica.
+#' Motores de expresion diferencial disponibles.
 #'
-#' Controla la FDR sin asumir la distribucion de los conteos (Gauthier et al.,
-#' NAR Genomics and Bioinformatics 2020) y admite disenos longitudinales, lo que
-#' lo hace el complemento natural de los disenos arbitrarios del item 16.
-run_deg_dearseq <- function(counts, meta, ref_level = NULL, batch = NULL,
-                            fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
-                            contrast_num = NULL, use_ihw = FALSE,
-                            design_formula = NULL, test_coef = NULL) {
-  d <- build_design(meta, ref_level, batch)
-  info <- deg_engine_info(d)
-  if (!requireNamespace("dearseq", quietly = TRUE)) {
-    return(c(list(table = NULL, error = "dearseq no esta instalado."), info))
-  }
-  num <- if (!is.null(contrast_num) && nzchar(contrast_num %||% "")) contrast_num
-         else utils::tail(d$levels, 1)
-  den <- d$ref
-  out <- tryCatch({
-    keep_s <- as.character(d$meta$condition) %in% c(num, den)
-    if (sum(keep_s) < 4) stop("dearseq necesita al menos 4 muestras en el contraste.")
-    cm <- round(as.matrix(counts))[, keep_s, drop = FALSE]
-    m <- d$meta[keep_s, , drop = FALSE]
-    variables2test <- stats::model.matrix(~ condition, data = droplevels(m))[, -1, drop = FALSE]
-    covariates <- if (!is.null(batch) && nzchar(batch %||% "") && batch %in% names(m)) {
-      stats::model.matrix(stats::as.formula(paste0("~ ", batch)), data = m)[, -1, drop = FALSE]
-    } else NULL
-    res <- dearseq::dear_seq(
-      exprmat = cm, variables2test = variables2test,
-      covariates = covariates, which_test = "asymptotic",
-      preprocessed = FALSE, parallel_comp = FALSE, progressbar = FALSE
-    )
-    rt <- res$pvals
-    pv <- as.numeric(rt[["rawPval"]])
-    names(pv) <- rownames(rt)
-    cpm <- normalized_cpm(cm)
-    i_num <- which(as.character(m$condition) == num)
-    i_den <- which(as.character(m$condition) == den)
-    lfc <- log2((rowMeans(cpm[, i_num, drop = FALSE]) + 1) /
-                  (rowMeans(cpm[, i_den, drop = FALSE]) + 1))
-    genes <- rownames(rt)
-    tab <- data.frame(
-      gene = genes,
-      baseMean = rowMeans(cpm)[genes],
-      log2FC = lfc[genes],
-      log2FC_shrunk = NA_real_,
-      lfcSE = NA_real_,
-      stat = NA_real_,
-      pvalue = pv[genes],
-      padj = stats::p.adjust(pv[genes], method = "BH"),
-      stringsAsFactors = FALSE
-    )
-    list(table = tab, coef = paste0("condition", num))
-  }, error = function(e) e)
-  if (inherits(out, "error")) {
-    return(c(list(table = NULL, error = conditionMessage(out)), info))
-  }
-  info$coef     <- out$coef
-  info$contrast <- paste(num, "vs", den)
-  c(list(table = out$table, error = NULL), info)
-}
-
-#' Motores disponibles, y cuales se recomiendan para el tamano muestral dado.
-#'
-#' Con n >= 8 por grupo la controversia sobre el control de la FDR con muestras
-#' poblacionales deja de ser academica y conviene comparar con un metodo robusto.
-#' Por debajo, los parametricos son la eleccion correcta.
+#' Los tres que declara la memoria y que la Figura 3 recoge. La aplicacion
+#' llego a integrar ademas dos motores robustos y uno sobre replicas
+#' inferenciales; se retiraron para ajustar el alcance al documentado, que es
+#' el que se valida.
 DEG_METHODS_PARAMETRIC <- c("DESeq2", "edgeR", "limma-voom")
-DEG_METHODS_ROBUST     <- c("Wilcoxon", "dearseq")
-
-suggest_robust_comparison <- function(meta, min_per_group = 8L) {
-  if (is.null(meta) || !"condition" %in% names(meta)) return(NULL)
-  g <- as.character(meta$condition)
-  g <- g[!is.na(g) & nzchar(g)]
-  if (!length(g)) return(NULL)
-  sizes <- table(g)
-  if (min(sizes) < min_per_group) return(NULL)
-  list(min_group = as.integer(min(sizes)),
-       message = paste0(
-         "Hay ", min(sizes), " muestras en el grupo mas pequeno. Con n >= ",
-         min_per_group, " por grupo merece la pena comparar el resultado con un ",
-         "metodo robusto (Wilcoxon o dearseq): en muestras poblacionales grandes ",
-         "se ha reportado que la FDR real de los metodos parametricos puede ",
-         "superar el objetivo declarado."))
-}
 
 #' Solapamiento entre dos listas de significativos, para comparar metodos.
 deg_method_overlap <- function(tab_a, tab_b, fdr = 0.05,
@@ -849,7 +706,7 @@ deg_method_overlap <- function(tab_a, tab_b, fdr = 0.05,
 #' numerica frente a `results(contrast = ...)` es ruido del ajuste iterativo
 #' (del orden de 1e-6 en log2FC, sin cambios en las llamadas de significacion).
 run_deg <- function(counts, meta,
-                    method = c("DESeq2", "edgeR", "limma-voom", "Wilcoxon", "dearseq"),
+                    method = c("DESeq2", "edgeR", "limma-voom"),
                     ref_level = NULL, batch = NULL,
                     fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                     contrast_num = NULL, use_ihw = FALSE,
@@ -887,21 +744,13 @@ run_deg <- function(counts, meta,
     "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold,
                                  shrink, contrast_num, use_ihw, design_formula, test_coef),
     "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                 shrink, contrast_num, use_ihw, design_formula, test_coef),
-    "Wilcoxon"   = run_deg_wilcoxon(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                    shrink, contrast_num, use_ihw, design_formula, test_coef),
-    "dearseq"    = run_deg_dearseq(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                   shrink, contrast_num, use_ihw, design_formula, test_coef)
+                                 shrink, contrast_num, use_ihw, design_formula, test_coef)
   )
   res$method        <- method
   res$fdr           <- fdr
-  # El umbral de fold-change solo se declara para los motores que lo meten
-  # DENTRO del test. Wilcoxon y dearseq aceptan el argumento por uniformidad de
-  # la interfaz pero no lo usan, asi que declararlo hacia que el banner y el
-  # informe afirmasen "H0: |log2FC| <= x (umbral dentro del test)" sobre un
-  # ajuste que habia testeado H0: log2FC = 0. Se registra NA, como ya hacia
-  # Swish, para no atribuir a un motor un test que no hizo.
-  res$lfc_threshold <- if (method %in% DEG_METHODS_ROBUST) NA_real_ else lfc_threshold
+  # Los tres motores meten el umbral DENTRO del test (lfcThreshold, glmTreat,
+  # treat), asi que declararlo es fiel al ajuste realizado.
+  res$lfc_threshold <- lfc_threshold
   # IC del log2FC donde el motor haya dado error estandar (DESeq2 y limma).
   if (!is.null(res$table)) res$table <- add_lfc_confidence_interval(res$table)
   # Motores sin objeto reutilizable: su tabla NO depende del nivel de
@@ -917,36 +766,17 @@ run_deg <- function(counts, meta,
     res$fit$extract <- list(fdr = fdr, lfc_threshold = res$lfc_threshold,
                             use_ihw = isTRUE(use_ihw), outliers = outliers)
   }
-  # El diseno REPORTADO tiene que ser el que el motor ajusto de verdad. Wilcoxon
-  # y dearseq no consumen `design_formula`: Wilcoxon es un test de dos muestras
-  # sin modelo, y dearseq recibe la condicion y, como mucho, el batch. Declarar
-  # la formula libre en esos casos hacia que el banner y el informe describieran
-  # un ajuste que no habia ocurrido.
+  # El diseno REPORTADO tiene que ser el que el motor ajusto de verdad.
   # `design` es la etiqueta LEGIBLE (banner, informe) y `design_code` la formula
-  # como CODIGO. Separarlas es necesario: para Wilcoxon la etiqueta es prosa, y
-  # el generador del script la interpolaba dentro de model.matrix(), produciendo
-  # un fichero que no parsea. Un motor sin modelo tiene design_code = NULL.
-  res$design <- if (identical(method, "Wilcoxon")) {
-    "sin modelo (test de dos muestras sobre CPM normalizados)"
-  } else if (identical(method, "dearseq")) {
-    if (!is.null(batch) && nzchar(batch %||% "")) paste0("~ ", batch, " + condition")
-    else "~ condition"
-  } else if (!is.null(design_formula)) {
+  # como CODIGO; se mantienen separadas porque el generador del script interpola
+  # la segunda dentro de model.matrix().
+  res$design <- if (!is.null(design_formula)) {
     deparse1(design_formula)
   } else if (!is.null(batch) && nzchar(batch %||% "")) {
     paste0("~ ", batch, " + condition")
   } else "~ condition"
 
-  res$design_code <- if (identical(method, "Wilcoxon")) NULL else res$design
-
-  # Y si se pidio una formula libre a un motor que no la usa, se dice: callarlo
-  # deja al usuario creyendo que su diseno pareado se ha tenido en cuenta.
-  if (!is.null(design_formula) && method %in% DEG_METHODS_ROBUST) {
-    res$design_warning <- paste0(
-      "El motor ", method, " no admite formulas de diseno arbitrarias: se ha ",
-      "ajustado ", res$design, ". Si necesitas el diseno completo, usa DESeq2, ",
-      "edgeR o limma-voom.")
-  }
+  res$design_code <- res$design
   res
 }
 

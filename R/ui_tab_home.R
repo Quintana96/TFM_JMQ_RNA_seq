@@ -67,7 +67,7 @@ ui_tab_home_content <- function(steps, tiles, hint = NULL) {
                            "ejecucion guardada en outputs/."),
                      steps$results$pill, steps$results$cta),
       home_step_card("home_go_deg", "4", "Expresion diferencial",
-                     paste("DESeq2, edgeR, limma-voom y motores robustos, con",
+                     paste("DESeq2, edgeR y limma-voom, con",
                            "diagnosticos, enriquecimiento e informe."),
                      steps$deg$pill, steps$deg$cta)
     ),

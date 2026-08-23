@@ -370,8 +370,7 @@ server_tab_deg <- function(input, output, session, state) {
                               stale = deg_fit_stale())) return()
 
     # Los motores que no meten el umbral dentro del test no deben declararlo.
-    lfc_efectivo <- if ((state$deg_rv$method %||% "") %in% c(DEG_METHODS_ROBUST, "Swish"))
-                      NA_real_ else p$lfc_threshold
+    lfc_efectivo <- p$lfc_threshold
     re <- deg_reextract(fit, fdr = p$fdr, lfc_threshold = p$lfc_threshold,
                         use_ihw = p$use_ihw, outliers = p$outliers)
     if (!is.null(re$error)) {
@@ -548,8 +547,8 @@ server_tab_deg <- function(input, output, session, state) {
     } else NULL
 
     # Semillas usadas en este ajuste. Se registran para poder declararlas en el
-    # informe y reproducir el resultado: sin esto, un analisis con sva o con
-    # Swish no es reproducible aunque el resto de parametros coincida.
+    # informe y reproducir el resultado: sin esto, un analisis con variables
+    # sustitutas no es reproducible aunque el resto de parametros coincida.
     seeds_used <- list()
 
     # Diseno ANTES de anadir las variables sustitutas. Hay que registrarlo
@@ -607,35 +606,7 @@ server_tab_deg <- function(input, output, session, state) {
     res <- withProgress(message = paste0("Ajustando el modelo (", method, ")"),
                         value = 0.15, {
       setProgress(value = 0.25, detail = "estimando dispersiones y ajustando")
-      out <- if (identical(method, "Swish")) {
-      # Swish es el unico motor que no parte de la matriz de conteos: la
-      # incertidumbre de la cuantificacion vive en las replicas inferenciales de
-      # los ficheros de salmon/kallisto, no en la matriz ya resumida. Por eso
-      # necesita el directorio de la ejecucion y no funciona con una matriz subida.
-      run_info <- if (identical(input$deg_source %||% "current", "saved")) {
-        list(dir = input$selected_deg_run_dir %||% "",
-             tool = (infer_result_params(input$selected_deg_run_dir %||% "",
-                                         state$workflow_path))$tool %||% "")
-      } else {
-        p <- state$run_params_rv()
-        list(dir = p$output_dir %||% "", tool = p$tool %||% "")
-      }
-      if (!nzchar(run_info$dir) || !dir.exists(run_info$dir) ||
-          !run_info$tool %in% c("salmon", "kallisto")) {
-        list(table = NULL, method = method, error = paste0(
-          "Swish necesita una ejecucion de salmon o kallisto con replicas ",
-          "inferenciales. Selecciona la ejecucion actual o una guardada como ",
-          "fuente de datos (no una matriz subida)."))
-      } else {
-        tryCatch(
-          run_deg_swish(meta_aln, run_info$dir, run_info$tool,
-                        annotation_file = annotation_file_for_run(run_info$dir),
-                        ref_level = ref, contrast_num = num, batch = batch,
-                        fdr = fdr_target, seed = ANALYSIS_SEED),
-          error = function(e) list(table = NULL, error = conditionMessage(e),
-                                   method = method))
-      }
-    } else {
+      out <- {
       tryCatch(
         run_deg(cm_f, meta_aln, method = method, ref_level = ref, batch = batch,
                 fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink,
@@ -649,14 +620,6 @@ server_tab_deg <- function(input, output, session, state) {
       out
     })
     quant_tool_used <- NULL
-    if (identical(method, "Swish")) {
-      res$method <- method
-      # Swish permuta etiquetas: sin semilla, el mismo input da q-valores
-      # distintos en cada ejecucion.
-      seeds_used$swish <- ANALYSIS_SEED
-      seeds_used$swish_nperms <- res$n_perms %||% SWISH_NPERMS
-      quant_tool_used <- run_info$tool
-    }
 
     if (is.null(res$table)) {
       showNotification(paste0("Error en ", method, ": ", res$error %||% "fallo desconocido"),
@@ -723,16 +686,12 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$vst_mat       <- vst_mat
     state$deg_rv$run_at        <- Sys.time()
     state$deg_rv$fdr           <- fdr_target
-    # Swish no recibe lfc_threshold ni la matriz prefiltrada: declararlos seria
-    # atribuirle un test que no hizo.
-    # `run_deg()` ya devuelve NA para los motores que no meten el umbral dentro
-    # del test (Wilcoxon, dearseq); Swish tampoco lo recibe.
-    state$deg_rv$lfc_threshold <- if (identical(method, "Swish")) NA_real_
-                                  else res$lfc_threshold %||% lfc_thr
+
+    state$deg_rv$lfc_threshold <- res$lfc_threshold %||% lfc_thr
     state$deg_rv$contrast      <- res$contrast
     state$deg_rv$n_levels      <- res$n_levels %||% NA_integer_
     state$deg_rv$shrink        <- res$shrink %||% "ninguno"
-    state$deg_rv$prefilter     <- if (identical(method, "Swish")) NULL else pf_info
+    state$deg_rv$prefilter     <- pf_info
     state$deg_rv$padj_method   <- res$padj_method %||% "BH"
     state$deg_rv$disp_data     <- res$disp_data
     state$deg_rv$cooks         <- res$cooks

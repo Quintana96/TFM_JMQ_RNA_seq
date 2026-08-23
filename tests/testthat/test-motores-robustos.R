@@ -19,26 +19,7 @@ test_that("normalized_cpm corrige por composicion y no solo por libreria", {
   expect_lt(med_dif(tmm), med_dif(crudo))
 })
 
-test_that("Wilcoxon declara que no ajusta un modelo", {
-  counts <- make_test_counts(n_genes = 120, n_per_group = 4)
-  meta <- make_test_meta(counts)
-  res <- run_deg(counts, meta, method = "Wilcoxon", ref_level = "ctrl",
-                 contrast_num = "trt", fdr = 0.05)
-  expect_false(is.null(res$table))
-  expect_match(res$design, "sin modelo", fixed = TRUE)
-})
 
-test_that("una formula libre con motor robusto avisa en lugar de fingir", {
-  counts <- make_test_counts(n_genes = 120, n_per_group = 4)
-  meta <- make_test_meta(counts, batch = TRUE)
-  res <- run_deg(counts, meta, method = "Wilcoxon", ref_level = "ctrl",
-                 contrast_num = "trt", fdr = 0.05,
-                 design_formula = "~ lote + condition")
-  # El diseno reportado NO puede ser la formula libre, porque no se ajusto.
-  expect_false(identical(res$design, "~ lote + condition"))
-  expect_false(is.null(res$design_warning))
-  expect_match(res$design_warning, "no admite formulas", fixed = TRUE)
-})
 
 test_that("los motores parametricos siguen reportando su formula", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")

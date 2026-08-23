@@ -366,7 +366,7 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
 
   si <- utils::capture.output(utils::sessionInfo())
   pkgs <- c("DESeq2", "edgeR", "limma", "apeglm", "ashr", "IHW", "sva",
-            "clusterProfiler", "fgsea", "tximport", "dearseq", "fishpond")
+            "clusterProfiler", "fgsea", "tximport")
   pkg_versions <- stats::setNames(lapply(pkgs, function(p) {
     if (requireNamespace(p, quietly = TRUE)) as.character(utils::packageVersion(p))
     else "no instalado"

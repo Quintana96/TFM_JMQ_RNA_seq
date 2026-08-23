@@ -62,8 +62,8 @@ ui_config_extras <- function() {
                  paste("Contar como no orientada una libreria stranded suma las",
                        "lecturas antisentido y degrada la especificidad, sobre",
                        "todo en genomas densos como los procariotas. Las replicas",
-                       "inferenciales (salmon/kallisto) son las que necesita el",
-                       "motor Swish; 0 las desactiva."))
+                       "inferenciales (salmon/kallisto) cuantifican la incertidumbre",
+                       "de asignacion de lecturas; 0 las desactiva."))
     )
   )
 

@@ -70,8 +70,6 @@ HAS_QVALUE          <- pkg_ok("qvalue")
 HAS_SVA             <- pkg_ok("sva")
 HAS_RTRACKLAYER     <- pkg_ok("rtracklayer")
 # Fase 4: motores robustos, Swish y calculo de potencia.
-HAS_DEARSEQ         <- pkg_ok("dearseq")
-HAS_FISHPOND        <- pkg_ok("fishpond")
 HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
 
 #' Operador nulo-coalescente
@@ -93,7 +91,6 @@ ANALYSIS_SEED <- 1L
 
 #' Replicas inferenciales que permuta Swish. Es un parametro del resultado, no
 #' un detalle interno, asi que viaja al informe junto a la semilla.
-SWISH_NPERMS <- 30L
 
 
 #' @section Paleta accesible

@@ -152,20 +152,8 @@ ui_deg_panel_analisis <- function() {
                           "recalculan solos sobre el mismo ajuste."))),
     selectInput(
       "deg_method", "Motor",
-      choices = list(
-        "Parametricos" = as.list(stats::setNames(DEG_METHODS_PARAMETRIC,
-                                                DEG_METHODS_PARAMETRIC)),
-        # Los robustos solo tienen sentido con n grande; se ofrecen siempre
-        # pero la app los sugiere unicamente cuando el tamano lo justifica.
-        "Robustos (n grande)" = as.list(stats::setNames(
-          c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"),
-          c("Wilcoxon", if (isTRUE(HAS_DEARSEQ)) "dearseq"))),
-        "Con incertidumbre de cuantificacion" = as.list(stats::setNames(
-          if (isTRUE(HAS_FISHPOND)) "Swish" else character(0),
-          if (isTRUE(HAS_FISHPOND)) "Swish" else character(0)))
-      ),
+      choices = stats::setNames(DEG_METHODS_PARAMETRIC, DEG_METHODS_PARAMETRIC),
       selected = "DESeq2"),
-    uiOutput("deg_method_hint"),
     selectInput("deg_prefilter_mode", "Prefiltrado de genes",
                 choices = c("Automatico (filterByExpr)" = "auto",
                             "Manual (umbral explicito)" = "manual"),
@@ -601,8 +589,8 @@ ui_tab_deg_results <- function() {
           ),
           tags$p(class = "small text-muted mb-1",
                  paste("Corre un segundo motor sobre los mismos datos y compara las",
-                       "listas de significativos. Con n grande, la discrepancia entre",
-                       "parametricos y robustos es informativa: es el punto de la",
+                       "listas de significativos. La discrepancia entre motores es",
+                       "informativa: es el punto de la",
                        "controversia sobre el control real de la FDR.")),
           uiOutput("deg_compare_summary"),
           plotly::plotlyOutput("deg_compare_plot", height = "300px")
