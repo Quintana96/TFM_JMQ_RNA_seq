@@ -651,6 +651,29 @@ ui_tab_deg_results <- function() {
             # Organismo: la app tenia el OrgDb cableado a E. coli, asi que con
             # datos de cualquier otro organismo el enriquecimiento GO no podia
             # funcionar aunque su paquete estuviera instalado.
+            # ── Traduccion de identificadores ───────────────────────────
+            # El pipeline llama a `featureCounts -g locus_tag`, de modo que la
+            # matriz trae locus tags y ningun OrgDb los conoce: sin traducir,
+            # el enriquecimiento mapea el 0 %. La anotacion es lo unico que
+            # relaciona los dos, asi que la traduccion se hace con ella.
+            div(
+              class = "border rounded p-2 mb-3",
+              checkboxInput("deg_translate_ids",
+                            "Traducir los identificadores con la anotacion",
+                            value = FALSE),
+              tags$p(class = "small text-muted mb-2",
+                     paste("La matriz de conteos trae los identificadores con los",
+                           "que se contaron los genes (locus tags, si el pipeline",
+                           "se lanzo asi). Las bases de anotacion funcional no los",
+                           "conocen. Esto los traduce ANTES del test, y traduce",
+                           "tambien el universo, para que la lista y el fondo",
+                           "esten en el mismo espacio. La tabla DEG no cambia.")),
+              conditionalPanel(
+                "input.deg_translate_ids === true",
+                selectInput("deg_translate_to", "Traducir a",
+                            choices = NULL, width = "320px")),
+              uiOutput("deg_translate_estado")
+            ),
             conditionalPanel(
               "input.deg_ontology !== 'GMT'",
               layout_columns(
@@ -783,6 +806,7 @@ ui_tab_deg_results <- function() {
             id = "deg_enrich_tabs",
             nav_panel(
               "Resultados",
+              uiOutput("deg_enrich_traduccion"),
               uiOutput("deg_enrich_mapping"),
               plotly::plotlyOutput("deg_enrich_dotplot", height = "440px"),
               tags$hr(),

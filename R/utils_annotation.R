@@ -261,3 +261,178 @@ rrna_ids_from_annotation <- function(path) {
   }
   unique(c(ids, sub("^(gene|rna)-", "", ids)))
 }
+
+# ── Traduccion de identificadores entre atributos de la anotacion ───────────
+#
+# El pipeline llama a `featureCounts -g locus_tag`, de modo que la matriz de
+# conteos viene con locus tags (BW25113_RS00005). Ningun OrgDb los conoce: el
+# enriquecimiento sobre la matriz tal cual mapea el 0 %. Y no se arregla
+# pidiendole a featureCounts que agrupe por `gene`, porque ese atributo no esta
+# en todos los registros del GTF y la herramienta aborta.
+#
+# La anotacion SI relaciona los dos: es la unica fuente que sabe que
+# BW25113_RS00005 es thrL. Por eso la traduccion se hace con el GTF y no con el
+# OrgDb, y por eso vive aqui y no en utils_enrich.R.
+#
+# Se traduce en el enriquecimiento, no al cargar la matriz: la tabla DEG, los
+# informes y el script exportado conservan asi los identificadores que el
+# pipeline produjo realmente, que es lo que hace el resultado reproducible.
+
+#' Atributos del GFF/GTF que pueden identificar un gen, de mas a menos
+#' especifico. `gene_id` primero porque es el que featureCounts escribe.
+ANNOTATION_ID_ATTRS <- c("gene_id", "locus_tag", "old_locus_tag", "gene",
+                         "protein_id", "transcript_id")
+
+#' Atributos utiles como destino de una traduccion, con su etiqueta.
+ANNOTATION_TARGET_ATTRS <- c(
+  "gene"          = "Simbolo del gen (gene)",
+  "locus_tag"     = "Locus tag (locus_tag)",
+  "old_locus_tag" = "Locus tag antiguo (old_locus_tag)",
+  "protein_id"    = "Identificador de proteina (protein_id)"
+)
+
+#' Que atributos de la anotacion estan realmente poblados.
+#' Devuelve los nombres de columna con al menos un valor no vacio.
+annotation_available_attrs <- function(path, candidatos = NULL) {
+  df <- read_annotation_features(path)
+  if (is.null(df) || !nrow(df)) return(character(0))
+  cand <- candidatos %||% union(ANNOTATION_ID_ATTRS, names(ANNOTATION_TARGET_ATTRS))
+  cand <- intersect(cand, names(df))
+  cand[vapply(cand, function(n) {
+    v <- as.character(df[[n]])
+    any(!is.na(v) & nzchar(v))
+  }, logical(1))]
+}
+
+#' Deduce a que atributo de la anotacion corresponden unos identificadores.
+#'
+#' Compara la lista contra cada atributo candidato y se queda con el de mayor
+#' cobertura. Se prefiere deducirlo a preguntarlo: el usuario no tiene por que
+#' saber con que `-g` se lanzo featureCounts, y equivocarse produce una
+#' traduccion silenciosamente vacia.
+#'
+#' @return list(attr, rate, tabla) o NULL si no se pudo leer la anotacion.
+detect_annotation_keytype <- function(ids, path) {
+  df <- read_annotation_features(path)
+  if (is.null(df) || !nrow(df)) return(NULL)
+  ids <- unique(as.character(ids %||% character(0)))
+  ids <- ids[!is.na(ids) & nzchar(ids)]
+  if (!length(ids)) return(NULL)
+
+  cand <- intersect(ANNOTATION_ID_ATTRS, names(df))
+  if (!length(cand)) return(NULL)
+  tasas <- vapply(cand, function(n) {
+    v <- as.character(df[[n]])
+    mean(ids %in% v[!is.na(v) & nzchar(v)])
+  }, numeric(1))
+  mejor <- which.max(tasas)
+  list(attr = cand[mejor], rate = unname(tasas[mejor]),
+       tabla = data.frame(atributo = cand, cobertura = unname(tasas),
+                          stringsAsFactors = FALSE))
+}
+
+#' Mapa de traduccion entre dos atributos de la anotacion.
+#'
+#' Cuando un mismo valor de origen apunta a varios de destino se queda con el
+#' primero: en un GTF eso ocurre porque el gen tiene varias filas (gene, CDS,
+#' exon) que repiten el mismo par, no porque haya ambiguedad real.
+annotation_id_map <- function(path, from, to) {
+  df <- read_annotation_features(path)
+  if (is.null(df) || !nrow(df)) return(character(0))
+  if (!all(c(from, to) %in% names(df))) return(character(0))
+  o <- as.character(df[[from]]); d <- as.character(df[[to]])
+  ok <- !is.na(o) & nzchar(o) & !is.na(d) & nzchar(d)
+  if (!any(ok)) return(character(0))
+  o <- o[ok]; d <- d[ok]
+  dup <- duplicated(o)
+  stats::setNames(d[!dup], o[!dup])
+}
+
+#' Traduce identificadores con la anotacion.
+#'
+#' La forma del valor devuelto imita la de `translate_to_entrez()` para que el
+#' enriquecimiento pueda encadenar las dos traducciones sin casos especiales.
+#'
+#' @param from atributo de origen; si es NULL se deduce con detect_annotation_keytype().
+#' @return list(ids, back, mapping, error, from). `back` va del identificador
+#'   traducido al original, que es lo que permite devolver las tablas a los
+#'   identificadores que el usuario reconoce.
+translate_ids_with_annotation <- function(ids, path, from = NULL, to = "gene") {
+  ids <- unique(as.character(ids %||% character(0)))
+  ids <- ids[!is.na(ids) & nzchar(ids)]
+  vacio <- function(msg, from_used = from) list(
+    ids = character(0), back = character(0), error = msg, from = from_used,
+    mapping = list(n_input = length(ids), n_mapped = 0L, rate = 0,
+                   keytype = from_used %||% NA_character_, source = to))
+
+  if (!length(ids)) return(vacio("Lista de genes vacia."))
+  df <- read_annotation_features(path)
+  if (is.null(df)) return(vacio("No se pudo leer la anotacion."))
+  if (!to %in% names(df)) {
+    return(vacio(paste0("La anotacion no trae el atributo '", to, "'.")))
+  }
+  if (is.null(from)) {
+    det <- detect_annotation_keytype(ids, path)
+    if (is.null(det) || det$rate == 0) {
+      return(vacio(paste0("Ningun atributo de la anotacion reconoce estos ",
+                          "identificadores.")))
+    }
+    from <- det$attr
+  }
+  if (identical(from, to)) {
+    # Nada que traducir: se devuelve la identidad para que quien llame no tenga
+    # que distinguir este caso.
+    return(list(ids = ids, back = stats::setNames(ids, ids), error = NULL,
+                from = from,
+                mapping = list(n_input = length(ids), n_mapped = length(ids),
+                               rate = 1, keytype = from, source = to)))
+  }
+  mapa <- annotation_id_map(path, from, to)
+  if (!length(mapa)) return(vacio(paste0("No hay correspondencia entre '", from,
+                                         "' y '", to, "' en la anotacion."), from))
+  tr <- unname(mapa[ids])
+  ok <- !is.na(tr) & nzchar(tr)
+  if (!any(ok)) return(vacio(paste0("Ningun identificador se pudo traducir de '",
+                                    from, "' a '", to, "'."), from))
+  originales <- ids[ok]; traducidos <- tr[ok]
+  # Varios identificadores de origen pueden caer en el mismo destino (en E. coli
+  # son ~50 simbolos repartidos entre parologos y fragmentos anotados por
+  # separado). Se conserva el primero y se cuenta cuantos se perdieron, porque
+  # un enriquecimiento con genes duplicados infla el recuento de los terminos
+  # que los contienen.
+  dup <- duplicated(traducidos)
+  list(
+    ids = traducidos[!dup],
+    back = stats::setNames(originales[!dup], traducidos[!dup]),
+    error = NULL, from = from,
+    mapping = list(n_input = length(ids), n_mapped = sum(!dup),
+                   rate = sum(!dup) / length(ids), keytype = from, source = to,
+                   n_colapsados = sum(dup))
+  )
+}
+
+#' Traduce un vector con nombres (el ranking de GSEA) conservando los valores.
+#'
+#' Cuando dos identificadores de origen caen en el mismo destino se conserva el
+#' de mayor valor absoluto. Es el criterio "max" que usa el GSEA original al
+#' colapsar sondas a genes: quedarse con el primero seria arbitrario, y
+#' promediar diluye la senal que el test busca.
+translate_ranking_with_annotation <- function(ranked, path, from = NULL, to = "gene") {
+  tr <- translate_ids_with_annotation(names(ranked), path, from = from, to = to)
+  if (!length(tr$ids)) return(list(ranked = NULL, error = tr$error,
+                                   mapping = tr$mapping, from = tr$from))
+  mapa <- annotation_id_map(path, tr$from, to)
+  destino <- unname(mapa[names(ranked)])
+  ok <- !is.na(destino) & nzchar(destino)
+  v <- ranked[ok]; destino <- destino[ok]
+  orden <- order(abs(v), decreasing = TRUE)
+  v <- v[orden]; destino <- destino[orden]
+  dup <- duplicated(destino)
+  out <- stats::setNames(unname(v[!dup]), destino[!dup])
+  out <- sort(out, decreasing = TRUE)
+  list(ranked = out, error = NULL, from = tr$from,
+       mapping = list(n_input = length(ranked), n_mapped = length(out),
+                      rate = length(out) / length(ranked),
+                      keytype = tr$from, source = to,
+                      n_colapsados = sum(dup)))
+}

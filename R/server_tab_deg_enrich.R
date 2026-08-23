@@ -24,6 +24,9 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   # basta para los graficos de red: no conserva ni la pertenencia gen-termino ni
   # el ranking. Ver R/utils_enrich_plots.R.
   enrich_obj_rv <- reactiveVal(NULL)
+  # Resultado de la traduccion de identificadores del ultimo calculo, para
+  # poder decir cuantos genes se perdieron por el camino.
+  enrich_traduccion_rv <- reactiveVal(NULL)
 
   # OrgDb elegido en la interfaz. Estaba cableado a org.EcK12.eg.db, de modo que
   # con datos de otro organismo el enriquecimiento GO no podia funcionar aunque
@@ -45,6 +48,97 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     preferred <- if ("SYMBOL" %in% kt) "SYMBOL" else kt[1]
     updateSelectInput(session, "deg_go_keytype", choices = kt,
                       selected = isolate(input$deg_go_keytype) %||% preferred)
+  })
+
+  # ── Anotacion con la que traducir identificadores ──────────────────────────
+  # La matriz de conteos viene con los identificadores que el pipeline produjo
+  # (locus tags, si se lanzo con `featureCounts -g locus_tag`), y ningun OrgDb
+  # los conoce. La anotacion es lo unico que sabe a que simbolo corresponde cada
+  # uno. Se busca donde este: primero la de la ejecucion elegida, y si no la de
+  # la sesion o la que se haya subido en la pestana de configuracion.
+  deg_annotation_path <- reactive({
+    src <- input$deg_source %||% "current"
+    if (identical(src, "saved")) {
+      sel <- input$selected_deg_run_dir %||% ""
+      if (nzchar(sel) && dir.exists(sel)) {
+        af <- annotation_file_for_run(sel)
+        if (!is.null(af)) return(af)
+      }
+    }
+    # `state` es un environment, no una clase: sus campos pueden faltar. Y la
+    # anotacion es opcional por contrato —esta funcion devuelve NULL cuando no
+    # hay ninguna—, asi que un estado incompleto tiene que dar NULL y no un
+    # error que tumbe el resto de la pestana.
+    if (is.function(state$run_params_rv)) {
+      af <- state$run_params_rv()$annotation_file %||% ""
+      if (nzchar(af) && file.exists(af)) return(af)
+    }
+    up <- input$annotation_file_upload
+    if (!is.null(up) && nrow(up)) return(up$datapath[1])
+    NULL
+  })
+
+  # Atributos que la anotacion trae realmente: no tiene sentido ofrecer
+  # `protein_id` como destino si el GTF no lo lleva.
+  deg_annotation_attrs <- reactive({
+    path <- deg_annotation_path()
+    if (is.null(path)) return(character(0))
+    annotation_available_attrs(path, names(ANNOTATION_TARGET_ATTRS))
+  })
+
+  observe({
+    # Depende tambien de la casilla, y no por capricho: mientras el
+    # conditionalPanel esta oculto, updateSelectInput() llega a un elemento que
+    # el cliente aun no ha terminado de inicializar y las opciones se pierden.
+    # El sintoma es un selector vacio justo despues de marcar la casilla. Al
+    # depender de ella, las opciones se reenvian en el momento en que se muestra.
+    input$deg_translate_ids
+    attrs <- deg_annotation_attrs()
+    if (!length(attrs)) {
+      updateSelectInput(session, "deg_translate_to", choices = character(0))
+      return()
+    }
+    etiquetas <- ANNOTATION_TARGET_ATTRS[attrs]
+    ch <- stats::setNames(attrs, ifelse(is.na(etiquetas), attrs, etiquetas))
+    sel <- isolate(input$deg_translate_to)
+    updateSelectInput(session, "deg_translate_to", choices = ch,
+                      selected = if (!is.null(sel) && sel %in% attrs) sel
+                                 else if ("gene" %in% attrs) "gene" else attrs[1])
+  })
+
+  # Diagnostico ANTES de calcular: dice si la traduccion hace falta y si va a
+  # funcionar. Sin esto, el unico sintoma de unos identificadores equivocados es
+  # un enriquecimiento vacio, que no se distingue de la ausencia de senal.
+  deg_translate_diag <- reactive({
+    path <- deg_annotation_path()
+    tab <- state$deg_rv$results
+    if (is.null(path) || is.null(tab) || !"gene" %in% names(tab)) return(NULL)
+    det <- detect_annotation_keytype(tab$gene, path)
+    if (is.null(det)) return(NULL)
+    list(path = path, det = det)
+  })
+
+  output$deg_translate_estado <- renderUI({
+    path <- deg_annotation_path()
+    if (is.null(path)) {
+      return(div(class = "small text-muted",
+                 paste("Sin anotacion disponible. Se toma de la ejecucion elegida,",
+                       "o de la que subas en el paso 1.")))
+    }
+    d <- deg_translate_diag()
+    if (is.null(d)) return(div(class = "small text-muted", "Anotacion cargada."))
+    if (d$det$rate < 0.5) {
+      return(div(class = "alert alert-warning py-1 px-2 small mb-0",
+                 icon("triangle-exclamation"), " ",
+                 sprintf(paste("La anotacion no reconoce estos identificadores",
+                               "(el mejor atributo, '%s', cubre el %.0f %%).",
+                               "Comprueba que es la misma anotacion con la que se",
+                               "contaron los genes."),
+                         d$det$attr, 100 * d$det$rate)))
+    }
+    div(class = "small text-muted",
+        sprintf("Los identificadores de la matriz son '%s' (%.0f %% de cobertura en la anotacion).",
+                d$det$attr, 100 * d$det$rate))
   })
 
   # ── Gene sets propios (GMT) ────────────────────────────────────────────────
@@ -119,6 +213,12 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       # eps = 0 pide a fgsea el p-valor exacto del multilevel en lugar de
       # truncarlo en 1e-10, donde todos los conjuntos muy significativos empatan.
       eps         = if (isTRUE(input$deg_gsea_eps_exact)) 0 else 1e-10,
+      # Traduccion de identificadores con la anotacion. Va aqui, en el unico
+      # punto de lectura, para que el ORA, el GSEA y la comparacion entre ambos
+      # no puedan usar espacios de identificadores distintos.
+      traducir    = isTRUE(input$deg_translate_ids) && !is.null(deg_annotation_path()),
+      annot_path  = deg_annotation_path(),
+      translate_to = input$deg_translate_to %||% "gene",
       universe    = ctx$deg_universe(),
       term2gene   = if (is.null(gs)) NULL else gs$term2gene,
       gmt         = gs
@@ -166,6 +266,20 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                     error = paste0("No se pudo construir el ranking: ",
                                    rk$error %||% "—")))
       }
+      # El ranking se traduce entero antes de ordenar conjuntos: traducir
+      # despues obligaria a reordenar y el NES dejaria de corresponder a la
+      # curva que dibuja el running score.
+      if (isTRUE(p$traducir)) {
+        trk <- translate_ranking_with_annotation(rk$ranked, p$annot_path,
+                                                 to = p$translate_to)
+        if (is.null(trk$ranked)) {
+          return(list(table = NULL, mapping = trk$mapping, ranking = rk,
+                      error = paste0("No se pudieron traducir los identificadores: ",
+                                     trk$error %||% "—")))
+        }
+        rk$ranked <- trk$ranked
+        rk$traduccion <- trk
+      }
       res <- run_gsea(rk$ranked, ont = p$ont, OrgDb = deg_orgdb(),
                       organism = p$org_code, keyType = p$keytype, exponent = 0,
                       pvalueCutoff = p$pcut, minGSSize = p$min_size,
@@ -184,10 +298,39 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                   error = paste0("No hay genes significativos a FDR <= ",
                                  state$deg_rv$fdr %||% 0.05, ".")))
     }
+    # La lista Y el universo se traducen con las mismas reglas: un fondo en un
+    # espacio de identificadores y una lista en otro dan un enriquecimiento sin
+    # sentido, no un error.
+    traduccion <- NULL
+    if (isTRUE(p$traducir)) {
+      tr <- translate_ids_with_annotation(unique(as.character(df$gene)),
+                                          p$annot_path, to = p$translate_to)
+      if (!length(tr$ids)) {
+        return(list(table = NULL, mapping = tr$mapping,
+                    error = paste0("No se pudieron traducir los identificadores: ",
+                                   tr$error %||% "—")))
+      }
+      traduccion <- tr
+      tu <- translate_ids_with_annotation(p$universe, p$annot_path,
+                                          from = tr$from, to = p$translate_to)
+      p$universe <- if (length(tu$ids)) tu$ids else NULL
+      # El ORA direccional parte la tabla en tres, asi que la traduccion tiene
+      # que ir en la columna, no en el vector: se reetiqueta df$gene.
+      mapa <- annotation_id_map(p$annot_path, tr$from, p$translate_to)
+      nuevos <- unname(mapa[as.character(df$gene)])
+      df <- df[!is.na(nuevos) & nzchar(nuevos), , drop = FALSE]
+      nuevos <- nuevos[!is.na(nuevos) & nzchar(nuevos)]
+      df$gene <- nuevos
+      df <- df[!duplicated(df$gene), , drop = FALSE]
+    }
+
     runner <- ora_runner(p)
     res <- if (isTRUE(p$directional)) run_ora_directional(df, runner)
            else runner(unique(as.character(df$gene)))
     res$n_lista <- nrow(df)
+    # La tasa que importa comunicar es la de la traduccion cuando la hay: es la
+    # que explica por que la lista encogio.
+    if (!is.null(traduccion)) res$traduccion <- traduccion
     res
   }
 
@@ -228,6 +371,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       })
 
     enrich_mapping_rv(res$mapping)
+    enrich_traduccion_rv(res$traduccion %||% res$ranking$traduccion)
     # Un mapeo bajo hace el resultado no interpretable, asi que se avisa aunque
     # el enriquecimiento haya devuelto terminos.
     mp <- res$mapping
@@ -269,6 +413,18 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       n_lista    = if (identical(approach, "gsea")) NA_integer_
                    else res$n_lista %||% nrow(ctx$deg_significant() %||% data.frame()),
       n_universo = length(p$universe %||% character(0)),
+      # La traduccion cambia que genes entran en el test, asi que forma parte de
+      # los parametros del analisis, no de su presentacion.
+      traduccion = if (!isTRUE(p$traducir)) NA_character_ else {
+        tr <- res$traduccion %||% res$ranking$traduccion
+        if (is.null(tr)) "solicitada, sin resultado"
+        else sprintf("%s -> %s (%d de %d, %.1f %%; %d colapsados)",
+                     tr$mapping$keytype %||% "?", p$translate_to,
+                     tr$mapping$n_mapped %||% 0L, tr$mapping$n_input %||% 0L,
+                     100 * (tr$mapping$rate %||% 0), tr$mapping$n_colapsados %||% 0L)
+      },
+      anotacion_traduccion = if (isTRUE(p$traducir)) p$annot_path %||% NA_character_
+                             else NA_character_,
       mapeo      = res$mapping,
       n_terminos = if (is.null(res$table)) 0L else nrow(res$table),
       error      = res$error %||% NA_character_,
@@ -309,6 +465,22 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     }
     enrich_rv(res$table)
     enrich_obj_rv(res$obj)
+  })
+
+  output$deg_enrich_traduccion <- renderUI({
+    tr <- enrich_traduccion_rv()
+    if (is.null(tr) || is.null(tr$mapping)) return(NULL)
+    m <- tr$mapping
+    perdidos <- (m$n_input %||% 0L) - (m$n_mapped %||% 0L)
+    div(class = "small text-muted py-1 px-2 mb-1",
+        tags$b("Traduccion: "),
+        sprintf("%s -> %s, %d de %d genes (%.1f %%)",
+                m$keytype %||% "?", m$source %||% "?", m$n_mapped %||% 0L,
+                m$n_input %||% 0L, 100 * (m$rate %||% 0)),
+        if (perdidos > 0)
+          sprintf(". Se quedaron fuera %d: %d sin correspondencia y %d colapsados en un identificador ya presente.",
+                  perdidos, perdidos - (m$n_colapsados %||% 0L), m$n_colapsados %||% 0L)
+        else NULL)
   })
 
   output$deg_enrich_mapping <- renderUI({
@@ -429,7 +601,16 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     tab <- state$deg_rv$results
     if (is.null(tab) || !all(c("gene", "log2FC") %in% names(tab))) return(NULL)
     v <- stats::setNames(tab$log2FC, as.character(tab$gene))
-    v[!is.na(v) & nzchar(names(v))]
+    v <- v[!is.na(v) & nzchar(names(v))]
+    # Si el enriquecimiento se corrio traduciendo, el objeto guarda los genes ya
+    # traducidos: un vector de log2FC con los identificadores de la matriz no
+    # casaria con ninguno y la red saldria en gris.
+    p <- enrich_inputs()
+    if (isTRUE(p$traducir)) {
+      tv <- translate_ranking_with_annotation(v, p$annot_path, to = p$translate_to)
+      if (!is.null(tv$ranked)) v <- tv$ranked
+    }
+    v
   })
 
   observe({

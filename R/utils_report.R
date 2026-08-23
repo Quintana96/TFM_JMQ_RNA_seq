@@ -246,6 +246,15 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
       "Enfoque"            = e$enfoque %||% "—",
       "Ontologia / base"   = e$ontologia %||% "—",
       "keyType"            = e$keytype %||% "—",
+      # La traduccion de identificadores cambia que genes entran en el test, no
+      # como se presentan: sin ella en el informe, el resultado no se puede
+      # reproducir a partir de la matriz de conteos.
+      "Traduccion de IDs"  = if (is.na(e$traduccion %||% NA)) "no (se usaron los IDs de la matriz)"
+                             else e$traduccion,
+      # Los simbolos cambian entre versiones de la anotacion, asi que la ruta
+      # del fichero es parte del resultado igual que lo es la version del OrgDb.
+      "Anotacion usada"    = if (is.na(e$anotacion_traduccion %||% NA)) "—"
+                             else basename(e$anotacion_traduccion),
       "Genes en la lista"  = if (is.na(e$n_lista %||% NA)) "— (GSEA usa el ranking completo)"
                              else fmt_int(e$n_lista),
       "Universo (fondo)"   = fmt_int(e$n_universo %||% 0),

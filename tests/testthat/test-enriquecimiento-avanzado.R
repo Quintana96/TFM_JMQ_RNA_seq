@@ -381,6 +381,8 @@ test_that("el modulo server encadena GMT, ORA direccional, GSEA y comparacion", 
   srv <- function(input, output, session) {
     state <- new.env(parent = emptyenv())
     state$deg_rv <- shiny::reactiveValues(results = deg, fdr = 0.05, enrich = NULL)
+    # El modulo busca aqui la anotacion con la que traducir identificadores.
+    state$run_params_rv <- shiny::reactiveVal(list())
     ctx <- new.env(parent = emptyenv())
     ctx$deg_universe <- shiny::reactive(genes)
     ctx$deg_significant <- shiny::reactive(sig)
