@@ -69,8 +69,17 @@ HAS_QVALUE          <- pkg_ok("qvalue")
 # permite construir el mapa transcrito-gen que necesita tximport.
 HAS_SVA             <- pkg_ok("sva")
 HAS_RTRACKLAYER     <- pkg_ok("rtracklayer")
-# Fase 4: motores robustos, Swish y calculo de potencia.
+# Calculo de potencia a priori.
 HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
+# Graficos de red y distribucion del enriquecimiento (barras, cnet, emap, upset
+# y ridge), los del esquema del pipeline. enrichplot los dibuja, pero delega el
+# upset en ggupset y el ridge en ggridges: sin ellos esas dos vistas fallan en
+# tiempo de ejecucion, no al cargar, asi que se comprueban aqui.
+HAS_ENRICHPLOT      <- pkg_ok("enrichplot") && pkg_ok("ggupset") && pkg_ok("ggridges")
+# pathview pinta los log2FC sobre el diagrama oficial de una ruta KEGG. Se
+# ADJUNTA, no solo se carga: internamente llama a data(bods) sin declarar el
+# paquete y con requireNamespace() falla con "objeto 'bods' no encontrado".
+HAS_PATHVIEW        <- pkg_ok("pathview")
 
 #' Operador nulo-coalescente
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
@@ -78,9 +87,9 @@ HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
 
 #' @section Determinismo
 #' Semilla unica de todo lo estocastico del analisis: el numero de variables
-#' sustitutas de `sva::num.sv` (metodo "be", por permutacion), las permutaciones
-#' de `fishpond::swish`, el remuestreo del panel de replicabilidad y las
-#' miniaturas simuladas de los diagnosticos.
+#' sustitutas de `sva::num.sv` (metodo "be", por permutacion), el remuestreo del
+#' panel de replicabilidad, las permutaciones del analisis de conjuntos de genes
+#' y las miniaturas simuladas de los diagnosticos.
 #'
 #' Se centraliza para que el informe pueda declararla: una semilla fija que no
 #' se registra no sirve de nada, porque quien reproduzca el analisis no sabe
@@ -89,8 +98,6 @@ HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
 #' aleatoriedad de cualquier otro.
 ANALYSIS_SEED <- 1L
 
-#' Replicas inferenciales que permuta Swish. Es un parametro del resultado, no
-#' un detalle interno, asi que viaja al informe junto a la semilla.
 
 
 #' @section Paleta accesible

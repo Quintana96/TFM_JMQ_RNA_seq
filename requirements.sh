@@ -53,6 +53,9 @@ EOF
 
 Rscript - <<'RS'
 required_cran <- c(
+  # enrichplot los lleva en Suggests, no en Imports: sin ellos se instala bien
+  # y luego el upset y el ridge fallan al dibujar, no al cargar.
+  "ggupset", "ggridges",
   "shiny",
   "bslib",
   "shinyjs",
@@ -88,7 +91,9 @@ optional_bioc <- c(
   "rtracklayer",      # lectura del GFF/GTF para tx2gene y genes de rRNA
   "RNASeqPower",      # calculo de potencia a priori
   "ReactomePA",       # enriquecimiento sobre rutas de Reactome
-  "reactome.db"       # conjuntos de Reactome (necesario para el running score)
+  "reactome.db",      # conjuntos de Reactome (necesario para el running score)
+  "enrichplot",       # barras, red gen-concepto, mapa de terminos, upset y ridge
+  "pathview"          # log2FC pintados sobre el diagrama oficial de la ruta KEGG
 )
 installed <- rownames(installed.packages())
 missing_cran <- setdiff(required_cran, installed)

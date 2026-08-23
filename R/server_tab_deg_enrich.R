@@ -20,6 +20,10 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   # tocado la metrica entretanto.
   gsea_ctx_rv <- reactiveVal(NULL)
   compare_rv <- reactiveVal(NULL)
+  # El objeto S4 del enriquecimiento (enrichResult / gseaResult). La tabla no
+  # basta para los graficos de red: no conserva ni la pertenencia gen-termino ni
+  # el ranking. Ver R/utils_enrich_plots.R.
+  enrich_obj_rv <- reactiveVal(NULL)
 
   # OrgDb elegido en la interfaz. Estaba cableado a org.EcK12.eg.db, de modo que
   # con datos de otro organismo el enriquecimiento GO no podia funcionar aunque
@@ -99,6 +103,11 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       org_code    = org_code,
       keytype     = if (identical(ont, "KEGG")) input$deg_kegg_keytype %||% "kegg"
                     else input$deg_go_keytype %||% "SYMBOL",
+      # El selector de KEGG declara lo que KEGG espera recibir; este declara lo
+      # que son los identificadores de la matriz. Son cosas distintas y hasta
+      # ahora solo se leia el primero, de modo que no habia forma de decirle a la
+      # aplicacion que los genes venian en simbolos.
+      from_keytype = input$deg_go_keytype %||% "SYMBOL",
       # setReadable necesita OrgDb: no aplica a KEGG ni a conjuntos propios.
       readable    = isTRUE(input$deg_enrich_readable) && !ont %in% c("KEGG", "GMT"),
       simplify    = isTRUE(input$deg_go_simplify),
@@ -122,7 +131,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     function(genes) {
       if (identical(p$ont, "KEGG")) {
         run_enrichment_kegg(genes, universe = p$universe, organism = p$org_code,
-                            keyType = p$keytype)
+                            keyType = p$keytype, OrgDb = deg_orgdb(),
+                            from_keytype = p$from_keytype)
       } else if (identical(p$ont, "GMT")) {
         run_enrichment_gmt(genes, universe = p$universe, term2gene = p$term2gene,
                            minGSSize = p$min_size, maxGSSize = p$max_size)
@@ -289,7 +299,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
         " Pon el corte de p ajustado a 1 para ver todos los conjuntos testeados." else ""
       showNotification(paste0("Enriquecimiento sin resultados: ", res$error %||% "—", extra),
                        type = "warning", duration = 10)
-      enrich_rv(NULL); return()
+      enrich_rv(NULL); enrich_obj_rv(NULL); return()
     }
     if (isTRUE(p$directional) && length(res$errores %||% character(0))) {
       showNotification(
@@ -298,6 +308,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
         type = "message", duration = 10)
     }
     enrich_rv(res$table)
+    enrich_obj_rv(res$obj)
   })
 
   output$deg_enrich_mapping <- renderUI({
@@ -402,6 +413,169 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       df
     }
   )
+
+
+  # ── Mapas y redes de terminos ──────────────────────────────────────────────
+  # Completan el esquema del pipeline: el dotplot resume, pero no deja ver que
+  # los terminos comparten genes entre si. Son ggplot2, no plotly (ver la nota
+  # de cabecera de R/utils_enrich_plots.R).
+
+  # log2FC con el que colorear los genes de la red. Sale de la tabla DEG, asi
+  # que sus nombres son los identificadores de la matriz de conteos; si el
+  # enriquecimiento se corrio en otro espacio (keyType distinto, o readable =
+  # TRUE traduciendo a simbolos) no casaran, y en vez de un grafico mudo se
+  # avisa de cuantos genes han quedado sin color.
+  enrich_fold_change <- reactive({
+    tab <- state$deg_rv$results
+    if (is.null(tab) || !all(c("gene", "log2FC") %in% names(tab))) return(NULL)
+    v <- stats::setNames(tab$log2FC, as.character(tab$gene))
+    v[!is.na(v) & nzchar(names(v))]
+  })
+
+  observe({
+    obj <- enrich_obj_rv()
+    ch <- enrich_plot_choices(obj)
+    if (!length(ch)) {
+      updateSelectInput(session, "deg_enrich_plot_tipo", choices = character(0))
+      return()
+    }
+    actual <- isolate(input$deg_enrich_plot_tipo)
+    updateSelectInput(session, "deg_enrich_plot_tipo", choices = ch,
+                      selected = if (!is.null(actual) && actual %in% ch) actual else ch[[1]])
+  })
+
+  output$deg_enrich_plot_ayuda <- renderUI({
+    tipo <- input$deg_enrich_plot_tipo
+    if (is.null(tipo) || !nzchar(tipo %||% "")) return(NULL)
+    txt <- enrich_plot_ayuda(tipo)
+    if (!nzchar(txt)) return(NULL)
+    tags$p(class = "small text-muted mb-2", txt)
+  })
+
+  #' Construye el grafico una sola vez para la vista y para la descarga: si se
+  #' calculase dos veces, el emapplot —que reordena por similitud— podria salir
+  #' con una disposicion distinta en el PNG que en pantalla.
+  enrich_netplot_rv <- reactive({
+    obj <- enrich_obj_rv()
+    tipo <- input$deg_enrich_plot_tipo
+    if (is.null(obj) || is.null(tipo) || !nzchar(tipo %||% "")) return(NULL)
+    n <- max(2, round(as.numeric(input$deg_enrich_plot_n %||% 15)))
+    fc <- if (identical(tipo, "cnet")) enrich_fold_change() else NULL
+    tryCatch(
+      list(plot = enrich_make_network_plot(obj, tipo, top_n = n, fold_change = fc,
+                                           etiquetar_genes = isTRUE(input$deg_cnet_genes)),
+           error = NULL),
+      error = function(e) list(plot = NULL, error = conditionMessage(e))
+    )
+  })
+
+  output$deg_enrich_netplot <- renderPlot({
+    r <- enrich_netplot_rv()
+    validate(need(!is.null(r), "Corre un enriquecimiento para ver los mapas."))
+    validate(need(is.null(r$error), r$error))
+    r$plot
+  }, res = 110)
+
+  output$deg_enrich_netplot_aviso <- renderUI({
+    if (!identical(input$deg_enrich_plot_tipo, "cnet")) return(NULL)
+    obj <- enrich_obj_rv(); fc <- enrich_fold_change()
+    if (is.null(obj) || is.null(fc)) return(NULL)
+    df <- tryCatch(as.data.frame(obj), error = function(e) NULL)
+    col <- if (is.null(df)) NULL else if ("geneID" %in% names(df)) "geneID"
+           else if ("core_enrichment" %in% names(df)) "core_enrichment" else NULL
+    if (is.null(col)) return(NULL)
+    genes <- unique(unlist(strsplit(as.character(df[[col]]), "/")))
+    if (!length(genes)) return(NULL)
+    tasa <- mean(genes %in% names(fc))
+    if (tasa >= 0.5) return(NULL)
+    div(class = "alert alert-warning py-1 px-2 small mb-2",
+        icon("triangle-exclamation"), " ",
+        sprintf(paste("Solo el %.0f %% de los genes del enriquecimiento tiene log2FC",
+                      "asignable, asi que la mayoria quedan sin color. Ocurre cuando",
+                      "el enriquecimiento traduce los identificadores (keyType o",
+                      "'mostrar simbolos') y la tabla DEG usa los de la matriz."),
+                100 * tasa))
+  })
+
+  output$download_enrich_netplot <- downloadHandler(
+    filename = function() {
+      paste0("enriquecimiento_", input$deg_enrich_plot_tipo %||% "grafico", "_",
+             format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+    },
+    content = function(file) {
+      r <- enrich_netplot_rv()
+      if (is.null(r) || is.null(r$plot)) stop(r$error %||% "No hay grafico que descargar.")
+      # 300 ppp: es lo que necesita una figura impresa, y el renderPlot de
+      # pantalla se queda muy por debajo.
+      ggplot2::ggsave(file, r$plot, width = 11, height = 7.5, dpi = 300, bg = "white")
+    }
+  )
+
+  # ── Diagrama de ruta KEGG ──────────────────────────────────────────────────
+  # Solo tiene sentido sobre un enriquecimiento KEGG: pathview necesita el
+  # identificador de ruta (eco00020) para descargar el diagrama oficial.
+  kegg_rutas <- reactive({
+    df <- enrich_rv()
+    if (is.null(df) || !nrow(df) || !"ID" %in% names(df)) return(character(0))
+    ids <- as.character(df$ID)
+    ok <- grepl("^[a-z]{3,4}[0-9]{5}$", ids)
+    if (!any(ok)) return(character(0))
+    stats::setNames(ids[ok], paste0(df$Description[ok], "  (", ids[ok], ")"))
+  })
+
+  observe({
+    ch <- kegg_rutas()
+    updateSelectInput(session, "deg_kegg_pathway", choices = ch,
+                      selected = if (length(ch)) ch[[1]] else NULL)
+  })
+
+  output$deg_kegg_pathview_estado <- renderUI({
+    if (!length(kegg_rutas())) {
+      return(div(class = "alert alert-light border py-2 px-2 small mb-2",
+                 paste("El diagrama necesita un enriquecimiento KEGG. Elige KEGG como",
+                       "coleccion y vuelve a calcular; con GO o Reactome no hay",
+                       "identificador de ruta que descargar.")))
+    }
+    NULL
+  })
+
+  kegg_pathview_rv <- eventReactive(input$deg_kegg_pathview_btn, {
+    pid <- input$deg_kegg_pathway
+    req(pid)
+    fc <- enrich_fold_change()
+    p <- enrich_inputs()
+    if (is.null(fc) || !length(fc)) {
+      return(list(path = NULL, error = "No hay log2FC que pintar sobre la ruta."))
+    }
+    # El diagrama se colorea con los log2FC, que vienen con los identificadores
+    # de la matriz. pathview no los traduce: hay que darselos ya en el espacio
+    # que declara `gene.idtype`, o pinta un diagrama vacio con "no ID can be
+    # mapped". Es el mismo paso que hace el enriquecimiento KEGG.
+    idtype <- if (identical(p$keytype, "kegg")) "KEGG" else "ENTREZ"
+    if (identical(idtype, "ENTREZ") && !identical(p$from_keytype, "ENTREZID")) {
+      tr <- translate_to_entrez(names(fc), deg_orgdb(), keyType = p$from_keytype)
+      if (!length(tr$ids)) {
+        return(list(path = NULL, error = paste0(
+          "No se pudo traducir ningun gen de '", p$from_keytype, "' a ENTREZID: ",
+          tr$error %||% "sin coincidencias.")))
+      }
+      # tr$back va de ENTREZID al identificador original: se invierte para
+      # reetiquetar el vector de log2FC sin perder el orden ni los valores.
+      originales <- unname(tr$back[tr$ids])
+      fc <- stats::setNames(fc[originales], tr$ids)
+      fc <- fc[!is.na(fc)]
+    }
+    withProgress(message = "Descargando el diagrama de KEGG...", value = 0.4, {
+      enrich_pathview_png(pid, fc, species = p$org_code, gene_idtype = idtype)
+    })
+  })
+
+  output$deg_kegg_pathview <- renderImage({
+    r <- kegg_pathview_rv()
+    validate(need(is.null(r$error), r$error))
+    list(src = r$path, contentType = "image/png",
+         width = "100%", alt = "Diagrama de la ruta KEGG con los log2FC")
+  }, deleteFile = FALSE)
 
   # ── Running score / leading edge ───────────────────────────────────────────
   # Solo tiene sentido sobre una tabla de GSEA (la que trae NES).

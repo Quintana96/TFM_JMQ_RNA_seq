@@ -140,6 +140,7 @@ run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
                               pvalueCutoff = 0.05, qvalueCutoff = 0.2,
                               simplify_terms = FALSE, simplify_cutoff = 0.7,
                               readable = FALSE) {
+  obj_s4 <- NULL
   fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
     return(fail("clusterProfiler no esta instalado."))
@@ -185,6 +186,7 @@ run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
     # entera y se lleva por delante el resultado (incluido `mapping`).
     # Se cuenta sobre as.data.frame() y no sobre @result porque @result guarda
     # todos los terminos testeados y la conversion aplica los cutoffs.
+    obj_s4 <- ego   # el objeto S4 lo necesitan los graficos de enrichplot
     df <- if (is.null(ego)) NULL else as.data.frame(ego)
     if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e)
@@ -192,22 +194,51 @@ run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
   if (is.null(out)) return(fail("Sin terminos GO enriquecidos.", mapping))
   keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping)
+  list(table = out[, keep, drop = FALSE], obj = obj_s4, error = NULL, mapping = mapping)
 }
 
 #' Enriquecimiento KEGG. Para E. coli K12 substr MG1655 usa organism = "eco".
 #'
 #' `universe` es el cambio importante respecto a la version anterior: sin el,
 #' enrichKEGG usa todo el genoma como fondo en lugar de los genes testeados.
+#' `from_keytype` es el espacio de identificadores de la matriz de conteos, y
+#' `OrgDb` la anotacion con la que traducirlo. Sin ellos, pedir "ncbi-geneid" con
+#' una matriz de simbolos mapeaba el 0 %% y devolvia "sin terminos enriquecidos",
+#' que no distingue "no hay senal" de "los IDs no eran los que KEGG esperaba".
+#' Reactome ya traducia; KEGG no, y era la unica coleccion que no lo hacia.
 run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
-                                keyType = "kegg",
+                                keyType = "kegg", OrgDb = NULL,
+                                from_keytype = NULL,
                                 pvalueCutoff = 0.05, qvalueCutoff = 0.2) {
+  obj_s4 <- NULL
   fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
     return(fail("clusterProfiler no esta instalado."))
   }
   if (!length(genes)) return(fail("Lista de genes vacia."))
   genes_u <- unique(as.character(genes))
+
+  # Traduccion a ENTREZID cuando se pide "ncbi-geneid" y los genes vienen en otro
+  # espacio. El universo se traduce con las mismas reglas: un fondo en un espacio
+  # y una lista en otro darian un enriquecimiento sin sentido.
+  traduccion <- NULL
+  if (identical(keyType, "ncbi-geneid") && !is.null(from_keytype) &&
+      !identical(from_keytype, "ENTREZID") && !is.null(OrgDb)) {
+    tr <- translate_to_entrez(genes_u, OrgDb, keyType = from_keytype)
+    if (!length(tr$ids)) {
+      return(fail(paste0("No se pudo traducir ningun gen de '", from_keytype,
+                         "' a ENTREZID: ", tr$error %||% "sin coincidencias."),
+                  tr$mapping))
+    }
+    traduccion <- tr
+    genes_u <- tr$ids
+    if (length(universe)) {
+      tu <- translate_to_entrez(unique(as.character(universe)), OrgDb,
+                                keyType = from_keytype)
+      universe <- if (length(tu$ids)) tu$ids else NULL
+    }
+  }
+
   out <- tryCatch({
     ek <- clusterProfiler::enrichKEGG(
       gene          = genes_u,
@@ -217,6 +248,7 @@ run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
       pvalueCutoff  = pvalueCutoff,
       qvalueCutoff  = qvalueCutoff
     )
+    obj_s4 <- ek   # el objeto S4 lo necesitan los graficos de enrichplot
     df <- if (is.null(ek)) NULL else as.data.frame(ek)
     if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e)
@@ -230,8 +262,20 @@ run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
   }
   keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL,
-       mapping = mapping_from_generatio(out, length(genes_u), keyType))
+  tab <- out[, keep, drop = FALSE]
+  # Con traduccion, la columna geneID trae ENTREZIDs, que no dicen nada al leer
+  # la tabla. Se devuelven a los identificadores de entrada.
+  if (!is.null(traduccion) && "geneID" %in% names(tab)) {
+    tab$geneID <- vapply(strsplit(as.character(tab$geneID), "/"), function(ids) {
+      v <- traduccion$back[ids]
+      paste(ifelse(is.na(v), ids, v), collapse = "/")
+    }, character(1))
+  }
+  list(table = tab, obj = obj_s4, error = NULL,
+       # Con traduccion la tasa real es la de la traduccion: la deducida del
+       # GeneRatio mide otra cosa (cuantos de los traducidos estan en KEGG).
+       mapping = if (!is.null(traduccion)) traduccion$mapping
+                 else mapping_from_generatio(out, length(genes_u), keyType))
 }
 
 # ── Gene sets propios (GMT) ─────────────────────────────────────────────────
@@ -311,6 +355,7 @@ mapping_against_sets <- function(genes, term2gene, etiqueta = "GMT") {
 run_enrichment_gmt <- function(genes, universe = NULL, term2gene = NULL,
                                pvalueCutoff = 0.05, qvalueCutoff = 0.2,
                                minGSSize = 10, maxGSSize = 500) {
+  obj_s4 <- NULL
   fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
     return(fail("clusterProfiler no esta instalado."))
@@ -331,6 +376,7 @@ run_enrichment_gmt <- function(genes, universe = NULL, term2gene = NULL,
       minGSSize     = minGSSize,
       maxGSSize     = maxGSSize
     )
+    obj_s4 <- eg   # el objeto S4 lo necesitan los graficos de enrichplot
     df <- if (is.null(eg)) NULL else as.data.frame(eg)
     if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e)
@@ -339,7 +385,7 @@ run_enrichment_gmt <- function(genes, universe = NULL, term2gene = NULL,
   if (is.null(out)) return(fail("Sin conjuntos GMT enriquecidos.", mapping))
   keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping)
+  list(table = out[, keep, drop = FALSE], obj = obj_s4, error = NULL, mapping = mapping)
 }
 
 # ── ORA direccional ─────────────────────────────────────────────────────────
@@ -508,6 +554,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
                      pvalueCutoff = 0.05, minGSSize = 10, maxGSSize = 500,
                      eps = 1e-10, term2gene = NULL, readable = FALSE,
                      seed = 1L) {
+  obj_s4 <- NULL
   fail <- function(msg) list(table = NULL, error = msg, mapping = NULL)
   if (!requireNamespace("clusterProfiler", quietly = TRUE)) {
     return(fail("clusterProfiler no esta instalado."))
@@ -531,6 +578,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
         minGSSize = minGSSize, maxGSSize = maxGSSize, eps = eps,
         pvalueCutoff = pvalueCutoff, verbose = FALSE, seed = TRUE  # ver nota de `seed`
       )
+      obj_s4 <- gs   # el objeto S4 lo necesitan los graficos de enrichplot
       df <- if (is.null(gs)) NULL else as.data.frame(gs)
       if (is.null(df) || !nrow(df)) NULL else df
     }, error = function(e) e))
@@ -543,7 +591,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
     }
     keep <- intersect(c("ID", "Description", "setSize", "enrichmentScore", "NES",
                         "pvalue", "p.adjust", "qvalue", "core_enrichment"), names(out))
-    return(list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping))
+    return(list(table = out[, keep, drop = FALSE], obj = obj_s4, error = NULL, mapping = mapping))
   }
   if (is_reactome) {
     if (!requireNamespace("ReactomePA", quietly = TRUE)) {
@@ -570,6 +618,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
       gs <- tryCatch(do.call(ReactomePA::gsePathway, c(args, list(eps = eps))),
                      error = function(e) do.call(ReactomePA::gsePathway, args))
       if (isTRUE(readable)) gs <- enrich_set_readable(gs, as_orgdb_object(OrgDb), "ENTREZID")
+      obj_s4 <- gs   # el objeto S4 lo necesitan los graficos de enrichplot
       df <- if (is.null(gs)) NULL else as.data.frame(gs)
       if (is.null(df) || !nrow(df)) NULL else df
     }, error = function(e) e))
@@ -583,7 +632,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
     }
     keep <- intersect(c("ID", "Description", "setSize", "enrichmentScore", "NES",
                         "pvalue", "p.adjust", "qvalue", "core_enrichment"), names(out))
-    return(list(table = out[, keep, drop = FALSE], error = NULL,
+    return(list(table = out[, keep, drop = FALSE], obj = obj_s4, error = NULL,
                 mapping = tr$mapping, ranked_used = tr$ranked))
   }
   if (!is_kegg) {
@@ -615,6 +664,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
     }
     # Aplica a core_enrichment, que es la columna que se lee gen a gen.
     if (isTRUE(readable) && !is_kegg) gs <- enrich_set_readable(gs, OrgDb, keyType)
+    obj_s4 <- gs   # el objeto S4 lo necesitan los graficos de enrichplot
     df <- if (is.null(gs)) NULL else as.data.frame(gs)
     if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e))
@@ -625,7 +675,7 @@ run_gsea <- function(ranked, ont = "BP", OrgDb = NULL, organism = "eco",
                                 mapping = mapping))
   keep <- intersect(c("ID", "Description", "setSize", "enrichmentScore", "NES",
                       "pvalue", "p.adjust", "qvalue", "core_enrichment"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL, mapping = mapping)
+  list(table = out[, keep, drop = FALSE], obj = obj_s4, error = NULL, mapping = mapping)
 }
 
 # ── Running score y leading edge ────────────────────────────────────────────
@@ -1051,6 +1101,7 @@ run_enrichment_reactome <- function(genes, universe = NULL, OrgDb = NULL,
                                     pvalueCutoff = 0.05, qvalueCutoff = 0.2,
                                     minGSSize = 10, maxGSSize = 500,
                                     readable = FALSE) {
+  obj_s4 <- NULL
   fail <- function(msg, mapping = NULL) list(table = NULL, error = msg, mapping = mapping)
   if (!requireNamespace("ReactomePA", quietly = TRUE)) {
     return(fail("ReactomePA no esta instalado."))
@@ -1085,6 +1136,7 @@ run_enrichment_reactome <- function(genes, universe = NULL, OrgDb = NULL,
     # setReadable con keytype ENTREZID: los IDs del resultado ya estan en ese
     # espacio, no en el de entrada.
     if (isTRUE(readable)) ep <- enrich_set_readable(ep, as_orgdb_object(OrgDb), "ENTREZID")
+    obj_s4 <- ep   # el objeto S4 lo necesitan los graficos de enrichplot
     df <- if (is.null(ep)) NULL else as.data.frame(ep)
     if (is.null(df) || !nrow(df)) NULL else df
   }, error = function(e) e)
@@ -1093,5 +1145,5 @@ run_enrichment_reactome <- function(genes, universe = NULL, OrgDb = NULL,
   if (is.null(out)) return(fail("Sin rutas de Reactome enriquecidas.", tr$mapping))
   keep <- intersect(c("ID", "Description", "GeneRatio", "BgRatio",
                       "pvalue", "p.adjust", "qvalue", "Count", "geneID"), names(out))
-  list(table = out[, keep, drop = FALSE], error = NULL, mapping = tr$mapping)
+  list(table = out[, keep, drop = FALSE], obj = obj_s4, error = NULL, mapping = tr$mapping)
 }

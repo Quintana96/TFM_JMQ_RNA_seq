@@ -652,7 +652,7 @@ ui_tab_deg_results <- function() {
             # datos de cualquier otro organismo el enriquecimiento GO no podia
             # funcionar aunque su paquete estuviera instalado.
             conditionalPanel(
-              "input.deg_ontology !== 'KEGG' && input.deg_ontology !== 'GMT'",
+              "input.deg_ontology !== 'GMT'",
               layout_columns(
                 col_widths = c(8, 4),
                 selectInput("deg_orgdb", "Organismo (OrgDb)",
@@ -676,7 +676,14 @@ ui_tab_deg_results <- function() {
                 selectInput("deg_kegg_keytype", "Tipo de identificador",
                             choices = c("kegg", "ncbi-geneid", "ncbi-proteinid", "uniprot"),
                             selected = "kegg")
-              )
+              ),
+              tags$p(class = "small text-muted mb-0",
+                     paste("Este selector dice lo que KEGG espera RECIBIR, no lo que",
+                           "son tus genes: eso lo declara el 'Tipo de identificador'",
+                           "de arriba. Con 'ncbi-geneid' la aplicacion traduce de uno",
+                           "a otro usando el OrgDb. Para E. coli hace falta:",
+                           "'kegg' espera los b-numbers historicos (b0001), que una",
+                           "matriz de featureCounts no trae."))
             ),
             # Reactome cubre un catalogo CERRADO de eucariotas: no hay procariotas.
             # Por eso el organismo es un desplegable y no un campo libre como el
@@ -785,6 +792,46 @@ ui_tab_deg_results <- function() {
                 header_download_btn("download_enrich_table", "la tabla de enriquecimiento")
               ),
               DTOutput("deg_enrich_table")
+            ),
+            nav_panel(
+              "Mapas y redes",
+              tags$p(class = "small text-muted mb-1",
+                     paste("El dotplot ordena los terminos, pero no deja ver que",
+                           "comparten genes entre si. Estas cuatro vistas son las",
+                           "del esquema del pipeline y responden a esa pregunta",
+                           "desde angulos distintos.")),
+              div(style = "display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;",
+                  selectInput("deg_enrich_plot_tipo", "Representacion",
+                              choices = NULL, width = "260px"),
+                  sliderInput("deg_enrich_plot_n", "Terminos",
+                              min = 3, max = 40, value = 15, step = 1, width = "220px"),
+                  downloadButton("download_enrich_netplot", "Descargar PNG (300 ppp)",
+                                 icon = icon("download"),
+                                 class = "btn-sm btn-outline-secondary mb-3")),
+              conditionalPanel(
+                "input.deg_enrich_plot_tipo === 'cnet'",
+                checkboxInput("deg_cnet_genes",
+                              "Etiquetar tambien los genes (util solo con terminos pequenos)",
+                              value = FALSE)),
+              uiOutput("deg_enrich_plot_ayuda"),
+              uiOutput("deg_enrich_netplot_aviso"),
+              plotOutput("deg_enrich_netplot", height = "560px")
+            ),
+            nav_panel(
+              "Ruta KEGG",
+              tags$p(class = "small text-muted mb-1",
+                     paste("Pinta los log2FC sobre el diagrama oficial de la ruta.",
+                           "Es la unica vista que situa los genes en su contexto",
+                           "bioquimico real: que paso de la ruta esta afectado y en",
+                           "que sentido. El diagrama se descarga de KEGG, asi que",
+                           "necesita conexion.")),
+              uiOutput("deg_kegg_pathview_estado"),
+              div(style = "display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;",
+                  selectInput("deg_kegg_pathway", "Ruta", choices = NULL, width = "520px"),
+                  actionButton("deg_kegg_pathview_btn",
+                               tagList(icon("diagram-project"), " Dibujar la ruta"),
+                               class = "btn-sm mb-3")),
+              imageOutput("deg_kegg_pathview", height = "auto")
             ),
             nav_panel(
               "Running score (GSEA)",
