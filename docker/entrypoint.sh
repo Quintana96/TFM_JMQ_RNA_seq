@@ -30,7 +30,7 @@ comprobar_entorno() {
 case "${1:-app}" in
   app)
     comprobar_entorno
-    printf 'RNA-seq Workflow Runner en http://%s:%s\n' \
+    printf 'SARA en http://%s:%s\n' \
       "${SHINY_HOST:-0.0.0.0}" "${SHINY_PORT:-3838}"
     exec Rscript app.R
     ;;

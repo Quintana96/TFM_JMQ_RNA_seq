@@ -4,14 +4,14 @@
 # despliegue— deja escritos en un fichero versionado los montajes y los limites
 # de recursos, que de otro modo viven en la linea de comandos de quien la lanzo.
 services:
-  rnaseq-app:
+  sara:
     build:
       context: .
       args:
         # Cambiar esta fecha cambia las versiones de CRAN de la imagen: es un
         # parametro de reproducibilidad, no de conveniencia.
         CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-08-20
-    image: rnaseq-app:1.0
+    image: sara:1.0
     ports:
       - "3838:3838"
     volumes:

@@ -30,7 +30,7 @@ dentro de la imagen en lugar de descubrirse en ejecución.
 ## Construir
 
 ```bash
-docker build -t rnaseq-app:1.0 .
+docker build -t sara:1.0 .
 ```
 
 La construcción tarda del orden de decenas de minutos en frío, dominada por la
@@ -41,7 +41,7 @@ de capas caliente, un cambio en el código de la aplicación reconstruye solo la
 Para fijar otra instantánea de CRAN:
 
 ```bash
-docker build --build-arg CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/2026-08-20 -t rnaseq-app:1.0 .
+docker build --build-arg CRAN_SNAPSHOT=https://packagemanager.posit.co/cran/2026-08-20 -t sara:1.0 .
 ```
 
 ## Ejecutar
@@ -53,7 +53,7 @@ docker compose up
 La aplicación queda en `http://localhost:3838`. O sin compose:
 
 ```bash
-docker run --rm -p 3838:3838 -v "$PWD/data:/data:ro" -v "$PWD/outputs:/app/outputs" rnaseq-app:1.0
+docker run --rm -p 3838:3838 -v "$PWD/data:/data:ro" -v "$PWD/outputs:/app/outputs" sara:1.0
 ```
 
 Dos decisiones de montaje que conviene no cambiar sin motivo:
@@ -71,7 +71,7 @@ Una imagen no es válida por construir sin error, sino por comportarse dentro
 como lo hacía el entorno de desarrollo:
 
 ```bash
-docker run --rm rnaseq-app:1.0 verify
+docker run --rm sara:1.0 verify
 ```
 
 Comprueba, en orden de coste creciente, que las ocho herramientas del pipeline
@@ -83,7 +83,7 @@ integración continua.
 Para consultar el entorno empaquetado:
 
 ```bash
-docker run --rm rnaseq-app:1.0 versions
+docker run --rm sara:1.0 versions
 ```
 
 ## Recursos y paralelismo

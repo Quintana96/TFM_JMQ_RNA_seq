@@ -9,7 +9,7 @@
 # El registro autoritativo de lo realmente instalado no es este fichero sino
 # `/opt/env/versions.txt`, que se escribe DENTRO de la imagen durante la
 # construccion: si el resolutor sustituye una version, queda constancia.
-name: rnaseq-app
+name: sara
 channels:
   - conda-forge
   - bioconda

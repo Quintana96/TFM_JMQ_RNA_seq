@@ -429,6 +429,22 @@ app_css <- HTML("
   /* ── Metricas ────────────────────────────────────────────────────────────
      Una sola forma para todas: el color lo pone el estado (is-ok / is-warn /
      is-bad), no la posicion en la fila. */
+  /* El nombre manda y la expansion del acronimo acompana: en una sola linea,
+     mas pequena y sin peso, para que no compita con el titulo. Se oculta en
+     pantallas estrechas, donde la barra ya va justa. */
+  .app-brand { display: inline-flex; align-items: center; gap: .1rem; }
+  .app-logo  { margin-right: .5rem; vertical-align: middle; }
+  .app-name  { font-weight: 700; letter-spacing: .04em; }
+
+  .app-subtitle {
+    font-weight: 400;
+    font-size: .72rem;
+    opacity: .68;
+    margin-left: .45rem;
+    letter-spacing: .01em;
+  }
+  @media (max-width: 992px) { .app-subtitle { display: none; } }
+
   .stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

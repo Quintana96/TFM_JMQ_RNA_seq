@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# RNA-seq Workflow Runner — imagen de ejecucion autocontenida.
+# SARA (Shiny App for RNA-seq Analysis) — imagen de ejecucion autocontenida.
 #
 # El problema que resuelve: la aplicacion depende a la vez de R con una docena
 # de paquetes de CRAN y Bioconductor, y de ocho herramientas de linea de comandos
@@ -21,8 +21,8 @@
 #      anade decenas de minutos por construccion.
 #
 # Uso:
-#   docker build -t rnaseq-app:1.0 .
-#   docker run --rm -p 3838:3838 -v "$PWD/data:/data:ro" -v "$PWD/outputs:/app/outputs" rnaseq-app:1.0
+#   docker build -t sara:1.0 .
+#   docker run --rm -p 3838:3838 -v "$PWD/data:/data:ro" -v "$PWD/outputs:/app/outputs" sara:1.0
 
 # ── Etapa 1: herramientas del pipeline ──────────────────────────────────────
 FROM mambaorg/micromamba:1.5.8 AS tools
@@ -42,7 +42,7 @@ RUN micromamba create -y -p /opt/env -f /tmp/environment.yml \
 # cruzada entre paquetes. Es la version con la que la aplicacion se valido.
 FROM bioconductor/bioconductor_docker:RELEASE_3_22 AS runtime
 
-LABEL org.opencontainers.image.title="RNA-seq Workflow Runner" \
+LABEL org.opencontainers.image.title="SARA" \
       org.opencontainers.image.description="Aplicacion Shiny para el analisis integral de datos RNA-seq, desde FASTQ hasta enriquecimiento funcional." \
       org.opencontainers.image.licenses="MIT"
 

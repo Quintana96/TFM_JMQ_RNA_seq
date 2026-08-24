@@ -1,4 +1,4 @@
-# RNA-seq Workflow Runner (Nombre provisional)
+# SARA — Shiny App for RNA-seq Analysis
 
 Una aplicación web interactiva desarrollada con R Shiny para el análisis integral de datos de RNA-seq. Integra un pipeline bioinformático completo —desde los archivos FASTQ crudos hasta el análisis de expresión diferencial— en una interfaz gráfica accesible.
 
@@ -24,7 +24,7 @@ Una aplicación web interactiva desarrollada con R Shiny para el análisis integ
 
 ## Descripción general
 
-RNA-seq Workflow Runner es una aplicación Shiny que actúa como interfaz gráfica para un pipeline de análisis de RNA-seq. Permite configurar y ejecutar el análisis completo desde la interfaz web, monitorizar el progreso en tiempo real, explorar los resultados de calidad y cuantificación, y realizar análisis de expresión diferencial con múltiples motores estadísticos, todo sin necesidad de escribir código.
+SARA es una aplicación Shiny que actúa como interfaz gráfica para un pipeline de análisis de RNA-seq. Permite configurar y ejecutar el análisis completo desde la interfaz web, monitorizar el progreso en tiempo real, explorar los resultados de calidad y cuantificación, y realizar análisis de expresión diferencial con múltiples motores estadísticos, todo sin necesidad de escribir código.
 
 La aplicación puede operar en dos modos:
 
@@ -394,7 +394,7 @@ como el entorno de desarrollo —herramientas en el PATH, paquetes de R cargable
 **la batería de tests completa dentro del contenedor**:
 
 ```bash
-docker run --rm rnaseq-app:1.0 verify
+docker run --rm sara:1.0 verify
 ```
 
 Detalles de construcción, montajes, límites de recursos y limitaciones conocidas

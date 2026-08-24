@@ -5,10 +5,28 @@
 #' dependen del estado del server.
 
 ui <- page_navbar(
-  title  = tags$span("RNA-seq Workflow Runner"),
+  # La marca en la barra: icono, nombre y expansion del acronimo. El icono va
+  # como <img> y no en linea porque asi el navegador lo cachea una vez y no se
+  # reenvia el SVG entero en cada render de la UI.
+  title  = tags$span(
+    class = "app-brand",
+    tags$img(src = "sara_icono.svg", alt = "", height = "26", class = "app-logo"),
+    tags$span(class = "app-name", "SARA"),
+    tags$span(class = "app-subtitle", "Shiny App for RNA-seq Analysis")
+  ),
   id     = "main_nav",
   theme  = app_theme,
-  header = tagList(useShinyjs(), tags$style(app_css)),
+  header = tagList(
+    useShinyjs(),
+    tags$head(
+      tags$link(rel = "icon", type = "image/png", sizes = "32x32",
+                href = "sara_icono_32.png"),
+      tags$link(rel = "icon", type = "image/png", sizes = "64x64",
+                href = "sara_icono_64.png"),
+      tags$link(rel = "apple-touch-icon", href = "sara_icono_180.png")
+    ),
+    tags$style(app_css)
+  ),
   fillable = FALSE,
 
   # Tab 0 — Portada. Es un indice de los cuatro pasos con su estado, no un
