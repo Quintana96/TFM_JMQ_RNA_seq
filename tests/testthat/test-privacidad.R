@@ -1,6 +1,6 @@
 #' test-privacidad.R
-#' Los identificadores de muestra de un estudio clinico suelen llevar
-#' informacion identificativa, y en esta app viajan a graficos, tablas, informes
+#' Los identificadores de muestra de un estudio clínico suelen llevar
+#' información identificativa, y en esta app viajan a gráficos, tablas, informes
 #' y ficheros persistidos: basta exportar una figura para difundirlos.
 
 test_that("la seudonimizacion mantiene alineados matriz y samplesheet", {
@@ -13,7 +13,7 @@ test_that("la seudonimizacion mantiene alineados matriz y samplesheet", {
   r <- pseudonymize_dataset(counts, meta)
 
   # Si se renombra la matriz sin el samplesheet, el alineamiento se rompe y el
-  # analisis falla de formas dificiles de diagnosticar.
+  # análisis falla de formas difíciles de diagnosticar.
   expect_identical(colnames(r$counts), r$meta$sample_id)
   expect_equal(nrow(r$map), 4)
   expect_false(any(grepl("TCGA", colnames(r$counts))))
@@ -36,7 +36,7 @@ test_that("la correspondencia es reversible y estable", {
 
 test_that("los identificadores desconocidos se dejan intactos", {
   map <- build_pseudonym_map(c("a", "b"))
-  # Convertirlos en NA en silencio seria peor que dejarlos visibles.
+  # Convertirlos en NA en silencio sería peor que dejarlos visibles.
   expect_identical(apply_pseudonyms(c("a", "z"), map), c("S01", "z"))
 })
 
@@ -52,11 +52,11 @@ test_that("se detectan columnas potencialmente identificativas", {
   # condition y centro se repiten entre muestras: no reidentifican por si solas.
   expect_false("condition" %in% det)
   expect_false("centro" %in% det)
-  # sample_id se excluye siempre: es la clave, no un dato de mas.
+  # sample_id se excluye siempre: es la clave, no un dato de más.
   expect_false("sample_id" %in% det)
 })
 
-test_that("una columna unica por muestra se marca aunque su nombre no lo delate", {
+test_that("una columna única por muestra se marca aunque su nombre no lo delate", {
   meta <- data.frame(
     sample_id = paste0("s", 1:4),
     condition = c("a", "a", "b", "b"),

@@ -1,7 +1,7 @@
 #' test-auditoria.R
-#' Cada analisis diferencial debe dejar rastro en disco. Antes solo lo dejaba si
-#' el usuario pulsaba descargar, de modo que una ejecucion del pipeline tenia su
-#' log y sus parametros pero los analisis hechos sobre ella no dejaban ninguno.
+#' Cada análisis diferencial debe dejar rastro en disco. Antes solo lo dejaba si
+#' el usuario pulsaba descargar, de modo que una ejecución del pipeline tenía su
+#' log y sus parámetros pero los análisis hechos sobre ella no dejaban ninguno.
 
 rv_para_guardar <- function() {
   counts <- make_test_counts(n_genes = 150, n_per_group = 4)
@@ -17,7 +17,7 @@ rv_para_guardar <- function() {
        counts_source = list(method = "tximport", ok = TRUE))
 }
 
-test_that("un analisis se persiste completo en 05_deg/<timestamp>", {
+test_that("un análisis se persiste completo en 05_deg/<timestamp>", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   base <- withr::local_tempdir()
   rv <- suppressMessages(rv_para_guardar())
@@ -33,7 +33,7 @@ test_that("un analisis se persiste completo en 05_deg/<timestamp>", {
   }
 
   # La tabla guardada es la COMPLETA, no solo los significativos: recortarla
-  # impediria recalcular otros umbrales o rehacer el enriquecimiento despues.
+  # impediria recalcular otros umbrales o rehacer el enriquecimiento después.
   tab <- utils::read.delim(file.path(d, "resultados.tsv"))
   expect_equal(nrow(tab), nrow(rv$results))
 })
@@ -68,15 +68,15 @@ test_that("el registro de auditoria acumula eventos sin perder los previos", {
 
 test_that("los detalles no rompen el formato TSV", {
   base <- withr::local_tempdir()
-  # Un valor con tabulador y salto de linea debe quedar en UNA linea.
+  # Un valor con tabulador y salto de línea debe quedar en UNA línea.
   append_audit_log("prueba", list(nota = "linea1\nlinea2\tcon tab"), outputs_dir = base)
   al <- read_audit_log(base)
   expect_equal(nrow(al), 1)
   expect_false(grepl("\t", al$detalles[1], fixed = TRUE))
 })
 
-test_that("un fallo al escribir el registro no tumba el analisis", {
-  # Ruta imposible: la funcion debe devolver FALSE, no lanzar.
+test_that("un fallo al escribir el registro no tumba el análisis", {
+  # Ruta imposible: la función debe devolver FALSE, no lanzar.
   expect_false(append_audit_log("x", list(), outputs_dir = "/proc/no/existe/jamas"))
 })
 

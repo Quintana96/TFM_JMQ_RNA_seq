@@ -1,7 +1,7 @@
 #' test-provenance.R
 #' El pipeline debe dejar constancia de con que se ejecuto: estado de salida,
 #' versiones de las herramientas y huella de las entradas. Sin eso es imposible
-#' reconstruir que produjo un resultado, y cambiar la version de una herramienta
+#' reconstruir que produjo un resultado, y cambiar la versión de una herramienta
 #' basta para alterar la lista de genes diferenciales.
 
 escribir_run <- function(root, status = "success", code = 0L) {
@@ -20,10 +20,10 @@ escribir_run <- function(root, status = "success", code = 0L) {
   root
 }
 
-test_that("el estado sale del fichero explicito y no de adivinar el log", {
+test_that("el estado sale del fichero explícito y no de adivinar el log", {
   root <- withr::local_tempdir()
   escribir_run(root, status = "error", code = 1L)
-  # El log dice lo contrario a proposito: debe ganar el fichero de estado.
+  # El log dice lo contrario a propósito: debe ganar el fichero de estado.
   writeLines("Analysis completed successfully", file.path(root, "workflow_live.log"))
 
   expect_identical(status_from_log(root), "error")
@@ -31,7 +31,7 @@ test_that("el estado sale del fichero explicito y no de adivinar el log", {
   expect_identical(st$exit_code, "1")
 })
 
-test_that("una ejecucion correcta se reporta como completada", {
+test_that("una ejecución correcta se reporta como completada", {
   root <- withr::local_tempdir()
   escribir_run(root, status = "success", code = 0L)
   expect_identical(status_from_log(root), "completado")
@@ -43,7 +43,7 @@ test_that("sin exit_status.tsv se recurre al log (ejecuciones antiguas)", {
   expect_identical(status_from_log(root), "completado")
 
   root2 <- withr::local_tempdir()
-  writeLines("fallo en la linea 42", file.path(root2, "workflow_live.log"))
+  writeLines("fallo en la línea 42", file.path(root2, "workflow_live.log"))
   expect_identical(status_from_log(root2), "error")
 
   expect_identical(status_from_log(withr::local_tempdir()), "sin log")

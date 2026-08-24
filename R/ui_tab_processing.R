@@ -1,7 +1,7 @@
 #' ui_tab_processing.R
 #' Helper que devuelve el tagList para el renderUI("tab2_content") (Tab 2).
 
-#' Construye el contenido del Tab 2 a partir del snapshot de configuracion `cfg`.
+#' Construye el contenido del Tab 2 a partir del snapshot de configuración `cfg`.
 #' Si process_unlocked es FALSE, muestra un aviso con un boton de retorno a Tab 1.
 ui_tab_processing_content <- function(cfg, total_sz) {
   tagList(
@@ -11,7 +11,7 @@ ui_tab_processing_content <- function(cfg, total_sz) {
 
       # Izquierda: resumen y controles
       card(
-        card_header("Resumen del analisis"),
+        card_header("Resumen del análisis"),
         tags$dl(class = "row small mb-1",
           tags$dt(class = "col-6", "Tipo:"),
           tags$dd(class = "col-6", if (cfg$analysis_type == "alignment")
@@ -38,7 +38,7 @@ ui_tab_processing_content <- function(cfg, total_sz) {
         ),
         hr(),
         # La accion principal va primera y a ancho completo; las secundarias
-        # debajo. Antes "Ejecutar workflow" era el ultimo de tres botones en
+        # debajo. Antes "Ejecutar workflow" era el último de tres botones en
         # una fila, a la derecha del de detener.
         tags$div(class = "d-grid gap-2",
           actionButton("run_btn", tagList(icon("play"), " Ejecutar workflow"),
@@ -58,7 +58,7 @@ ui_tab_processing_content <- function(cfg, total_sz) {
 
         # Metricas de tiempo y muestras. Antes eran cuatro pares
         # "etiqueta: valor" en una banda lila con un borde propio, un color que
-        # no aparecia en ningun otro sitio de la aplicacion. Son metricas, y las
+        # no aparecía en ningun otro sitio de la aplicación. Son metricas, y las
         # metricas ya tienen una forma definida.
         tags$div(class = "stat-grid mb-3",
           stat_tile(textOutput("elapsed_text", inline = TRUE), "Transcurrido", "info"),
@@ -97,6 +97,6 @@ ui_tab_processing_locked <- function() {
       " Completa la pestana 1 antes de continuar.",
       div(style = "margin-top:10px;",
           actionButton("btn_goto_config",
-                       tagList(icon("gear"), " Ir a configuracion"),
+                       tagList(icon("gear"), " Ir a configuración"),
                        class = "btn-primary btn-sm")))
 }

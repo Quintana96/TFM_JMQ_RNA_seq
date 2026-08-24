@@ -55,7 +55,7 @@ load_count_matrix_tsv <- function(path) {
   df
 }
 
-#' Localiza los ficheros de cuantificacion de salmon/kallisto de una ejecucion.
+#' Localiza los ficheros de cuantificación de salmon/kallisto de una ejecución.
 quant_files_for_run <- function(output_dir, tool) {
   aln_dir <- file.path(output_dir, "03_alignments", tool)
   if (!dir.exists(aln_dir)) return(NULL)
@@ -73,8 +73,8 @@ quant_files_for_run <- function(output_dir, tool) {
   qfiles
 }
 
-#' Identificadores de transcrito presentes en un fichero de cuantificacion.
-#' Sirve para comprobar contra que anotacion casan ANTES de llamar a tximport.
+#' Identificadores de transcrito presentes en un fichero de cuantificación.
+#' Sirve para comprobar contra que anotación casan ANTES de llamar a tximport.
 quant_tx_ids <- function(qfile, tool) {
   if (!length(qfile) || !file.exists(qfile[1])) return(character(0))
   f <- qfile[1]
@@ -94,19 +94,19 @@ quant_tx_ids <- function(qfile, tool) {
 #' Carga la matriz de conteos generada por el workflow para una tool dada.
 #'
 #' Para salmon/kallisto se intenta la ruta correcta (tximport con `tx2gene`) y
-#' solo se cae a la suma cruda de `est_counts` si no hay anotacion utilizable.
+#' solo se cae a la suma cruda de `est_counts` si no hay anotación utilizable.
 #'
-#' Por que importa (docs/REVISION_ESTADISTICA.md, A8): la version anterior
+#' Por qué importa (docs/REVISION_ESTADISTICA.md, A8): la versión anterior
 #' llamaba a `tximport()` SIN `tx2gene` y sin `txOut = TRUE`, lo que falla
 #' siempre ("tximport failed at summarizing to the gene-level"), y el fallo
-#' quedaba escondido en un `tryCatch` que devolvia NULL. Resultado: la rama de
-#' tximport nunca se ejecutaba con exito y todos los analisis con salmon o
+#' quedaba escondido en un `tryCatch` que devolvía NULL. Resultado: la rama de
+#' tximport nunca se ejecutaba con exito y todos los análisis con salmon o
 #' kallisto usaban `round(est_counts)`, perdiendo los offsets de longitud media
 #' de transcrito por muestra — los que corrigen los cambios de longitud efectiva
 #' de gen por uso diferencial de isoformas.
 #'
-#' Ahora la degradacion es explicita: el resultado lleva un atributo
-#' "counts_source" con lo que se ha hecho y por que, para que la interfaz lo
+#' Ahora la degradación es explícita: el resultado lleva un atributo
+#' "counts_source" con lo que se ha hecho y por qué, para que la interfaz lo
 #' muestre en lugar de fingir que se uso la ruta buena.
 #'
 #' @param annotation_file GFF/GTF con el que construir `tx2gene`. Sin el, no hay
@@ -135,32 +135,32 @@ load_counts_from_workflow <- function(output_dir, tool, annotation_file = NULL) 
     m
   }
 
-  if (!isTRUE(HAS_TXIMPORT)) return(fallback("tximport no esta instalado."))
+  if (!isTRUE(HAS_TXIMPORT)) return(fallback("tximport no está instalado."))
 
   t2g_all <- build_tx2gene_from_annotation(annotation_file)
   if (is.null(t2g_all)) {
     return(fallback(paste0(
       "No se ha podido construir el mapa transcrito-gen",
       if (is.null(annotation_file) || !nzchar(annotation_file %||% ""))
-        " (no se indico fichero de anotacion)." else " desde la anotacion indicada.")))
+        " (no se indico fichero de anotación)." else " desde la anotación indicada.")))
   }
   ids <- quant_tx_ids(qfiles, tool)
   if (!length(ids)) return(fallback("No se han podido leer los identificadores de transcrito."))
 
   pick <- pick_tx2gene_for_quant(t2g_all, ids)
-  # Umbral: por debajo de la mitad de los transcritos emparejados, la anotacion
-  # no corresponde al transcriptoma usado y resumir a gen daria basura.
+  # Umbral: por debajo de la mitad de los transcritos emparejados, la anotación
+  # no corresponde al transcriptoma usado y resumir a gen daría basura.
   if (is.null(pick$tx2gene) || !is.finite(pick$rate) || pick$rate < 0.5) {
     return(fallback(paste0(
-      "La anotacion solo casa con ", pick$n_matched, " de ", pick$n_tx,
+      "La anotación solo casa con ", pick$n_matched, " de ", pick$n_tx,
       " transcritos (", round(100 * (pick$rate %||% 0), 1),
       " %): probablemente no corresponde al transcriptoma con el que se cuantifico.")))
   }
 
-  # ignoreTxVersion = FALSE a proposito: las variantes de identificador ya se han
+  # ignoreTxVersion = FALSE a propósito: las variantes de identificador ya se han
   # resuelto en pick_tx2gene_for_quant(), que elige la convencion que realmente
   # casa. Dejarlo en TRUE hace que tximport corte por el primer punto y descarte
-  # en silencio los transcritos cuyo ID lleva un accession con version
+  # en silencio los transcritos cuyo ID lleva un accession con versión
   # ("cds-AAC73112.1"), colapsando la matriz a un puñado de genes.
   txi <- tryCatch(
     tximport::tximport(qfiles, type = tool, tx2gene = pick$tx2gene,
@@ -174,7 +174,7 @@ load_counts_from_workflow <- function(output_dir, tool, annotation_file = NULL) 
   m <- round(txi$counts)
   attr(m, "counts_source") <- list(
     method = "tximport (lengthScaledTPM)", ok = TRUE,
-    detail = paste0("Transcritos resumidos a gen con la anotacion indicada: ",
+    detail = paste0("Transcritos resumidos a gen con la anotación indicada: ",
                     pick$n_matched, " de ", pick$n_tx, " transcritos emparejados (",
                     round(100 * pick$rate, 1), " %), convencion de identificador '",
                     pick$alias_type, "'."))

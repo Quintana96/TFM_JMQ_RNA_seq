@@ -1,28 +1,28 @@
 #' utils_diag.R
-#' Funciones puras (sin Shiny) para los diagnosticos post-ajuste del analisis
-#' diferencial: histograma de p-valores, estimacion de pi0, dispersiones, RLE y
-#' distribucion de outliers de Cook.
+#' Funciones puras (sin Shiny) para los diagnósticos post-ajuste del análisis
+#' diferencial: histograma de p-valores, estimación de pi0, dispersiones, RLE y
+#' distribución de outliers de Cook.
 #'
-#' Por que existe este archivo (docs/REVISION_ESTADISTICA.md, B1): Pall et al.
+#' Por qué existe este archivo (docs/REVISION_ESTADISTICA.md, B1): Pall et al.
 #' (PLoS Biology 2023) revisaron 4.616 datasets de GEO y encontraron que solo el
-#' 25 % producia histogramas de p-valores con la forma teoricamente esperada, y
-#' que el 37 % declaraba implicitamente que mas de la mitad de los genes
+#' 25 % producía histogramas de p-valores con la forma teoricamente esperada, y
+#' que el 37 % declaraba implicitamente que más de la mitad de los genes
 #' cambian (pi0 < 0,5). Son fallos que no se ven en la tabla de resultados: solo
-#' aparecen si se miran los diagnosticos, y ninguna de las apps Shiny
+#' aparecen si se miran los diagnósticos, y ninguna de las apps Shiny
 #' comparables los muestra.
 
 # ── Desglose de los NA en padj ──────────────────────────────────────────────
 
-#' Clasifica por que un gen no tiene padj.
+#' Clasifica por qué un gen no tiene padj.
 #'
 #' En DESeq2 un `padj = NA` tiene tres causas distintas y muy informativas, que
 #' se distinguen por el patron de baseMean/pvalue/padj:
 #'   - conteo cero en todas las muestras -> baseMean == 0
-#'   - outlier detectado por distancia de Cook -> pvalue tambien es NA
+#'   - outlier detectado por distancia de Cook -> pvalue también es NA
 #'   - descartado por el filtrado independiente -> pvalue existe, padj es NA
-#' Colapsarlas a "no significativo" oculta informacion: un gen con un outlier
-#' extremo puede ser el hallazgo mas interesante, o la señal de que una muestra
-#' esta mal.
+#' Colapsarlas a "no significativo" oculta información: un gen con un outlier
+#' extremo puede ser el hallazgo más interesante, o la señal de que una muestra
+#' está mal.
 padj_na_breakdown <- function(deg_df) {
   if (is.null(deg_df) || !nrow(deg_df)) return(NULL)
   bm <- deg_df$baseMean
@@ -40,7 +40,7 @@ padj_na_breakdown <- function(deg_df) {
   )
 }
 
-#' Texto de una linea con el desglose, listo para mostrar bajo la tabla.
+#' Texto de una línea con el desglose, listo para mostrar bajo la tabla.
 padj_na_breakdown_text <- function(b) {
   if (is.null(b)) return(NULL)
   paste0(
@@ -53,11 +53,11 @@ padj_na_breakdown_text <- function(b) {
 
 # ── Outliers de Cook por muestra ────────────────────────────────────────────
 
-#' Reparto entre muestras de los maximos de distancia de Cook.
+#' Reparto entre muestras de los máximos de distancia de Cook.
 #'
 #' Si una sola muestra concentra los outliers, el problema no es de genes sino
-#' de esa muestra. Con `n` muestras el reparto esperado por azar es 1/n, asi que
-#' se marca dominancia cuando una supera el doble de su cuota y ademas el 40 %.
+#' de esa muestra. Con `n` muestras el reparto esperado por azar es 1/n, así que
+#' se marca dominancia cuando una supera el doble de su cuota y además el 40 %.
 cooks_sample_summary <- function(cooks_mat) {
   if (is.null(cooks_mat) || !length(cooks_mat)) return(NULL)
   cm <- as.matrix(cooks_mat)
@@ -84,10 +84,10 @@ cooks_sample_summary <- function(cooks_mat) {
 
 # ── pi0 y forma del histograma de p-valores ─────────────────────────────────
 
-#' Estima la proporcion de hipotesis nulas ciertas (pi0).
+#' Estima la proporción de hipótesis nulas ciertas (pi0).
 #'
 #' `limma::propTrueNull` es la via por defecto porque no añade dependencias y es
-#' estable con pocos p-valores; `qvalue::qvalue` se usa como comprobacion
+#' estable con pocos p-valores; `qvalue::qvalue` se usa como comprobación
 #' cruzada y devuelve NA cuando hay muy pocos tests.
 estimate_pi0 <- function(pvalues) {
   p <- pvalues[!is.na(pvalues) & is.finite(pvalues)]
@@ -99,7 +99,7 @@ estimate_pi0 <- function(pvalues) {
   out
 }
 
-#' Datos del histograma de p-valores (conteos por bin, en lugar del grafico).
+#' Datos del histograma de p-valores (conteos por bin, en lugar del gráfico).
 pvalue_hist_data <- function(pvalues, bins = 40) {
   p <- pvalues[!is.na(pvalues) & is.finite(pvalues)]
   if (!length(p)) return(NULL)
@@ -112,11 +112,11 @@ pvalue_hist_data <- function(pvalues, bins = 40) {
   )
 }
 
-#' Veredicto automatico sobre la forma del histograma de p-valores.
+#' Veredicto automático sobre la forma del histograma de p-valores.
 #'
 #' Traduce a lenguaje llano las formas que describe Pall et al.: pico a la
 #' izquierda con suelo uniforme (esperada), suelo hundido con exceso de
-#' p-valores altos (conservadora), acumulacion en ambos extremos (bimodal, tipica
+#' p-valores altos (conservadora), acumulación en ambos extremos (bimodal, típica
 #' de supuestos violados o efectos batch no modelados), y pi0 implausiblemente
 #' bajo.
 diagnose_pvalue_shape <- function(pvalues, pi0 = NA_real_) {
@@ -138,23 +138,23 @@ diagnose_pvalue_shape <- function(pvalues, pi0 = NA_real_) {
   if (!is.na(pi0) && pi0 < 0.5) {
     return(list(verdict = "sospechoso",
       label = "pi0 implausiblemente bajo",
-      detail = paste0("pi0 = ", round(pi0, 3), " implica que mas de la mitad de los genes ",
+      detail = paste0("pi0 = ", round(pi0, 3), " implica que más de la mitad de los genes ",
                       "cambian. Es poco creible en la mayoria de diseños y suele indicar ",
                       "estructura no modelada (batch, muestras mal asignadas).")))
   }
   if (r_last > 1.5 && r_last > r_first) {
     return(list(verdict = "bimodal",
       label = "Exceso de p-valores altos (bimodal)",
-      detail = paste0("Hay ", round(r_last, 1), " veces mas p-valores cerca de 1 de lo ",
+      detail = paste0("Hay ", round(r_last, 1), " veces más p-valores cerca de 1 de lo ",
                       "esperado. Suele venir de supuestos violados, de un efecto batch no ",
                       "modelado o de conteos muy bajos sin prefiltrar.")))
   }
   if (r_mid < 0.6) {
     return(list(verdict = "conservador",
-      label = "Distribucion conservadora",
-      detail = paste0("El suelo del histograma esta hundido (", round(r_mid, 2),
-                      " veces lo esperado): el test esta siendo mas conservador de lo ",
-                      "que asume la correccion por FDR.")))
+      label = "Distribución conservadora",
+      detail = paste0("El suelo del histograma está hundido (", round(r_mid, 2),
+                      " veces lo esperado): el test está siendo más conservador de lo ",
+                      "que asume la corrección por FDR.")))
   }
   if (r_first < 1.2) {
     return(list(verdict = "plano",
@@ -165,7 +165,7 @@ diagnose_pvalue_shape <- function(pvalues, pi0 = NA_real_) {
     label = "Forma esperada",
     detail = paste0("Pico a la izquierda (", round(r_first, 1),
                     " veces lo esperado) sobre un suelo aproximadamente uniforme. ",
-                    "Es la forma que deberia tener un analisis bien especificado."))
+                    "Es la forma que debería tener un análisis bien especificado."))
 }
 
 #' Distribuciones de referencia para las miniaturas de la interfaz.
@@ -188,24 +188,24 @@ reference_pvalue_shapes <- function(n = 4000) {
 
 # ── RLE (Relative Log Expression) ───────────────────────────────────────────
 
-#' Diagnostico de sesgo de longitud en el analisis de sobre-representacion.
+#' Diagnóstico de sesgo de longitud en el análisis de sobre-representación.
 #'
-#' Por que existe (docs/REVISION_ESTADISTICA.md, B3c): Young, Wakefield, Smyth y
+#' Por qué existe (docs/REVISION_ESTADISTICA.md, B3c): Young, Wakefield, Smyth y
 #' Oshlack (2010) mostraron que el ORA estandar da resultados sesgados en RNA-seq
-#' porque los transcritos largos tienen mas probabilidad de ser detectados como
-#' diferenciales, lo que arrastra a las categorias GO que los contienen.
+#' porque los transcritos largos tienen más probabilidad de ser detectados como
+#' diferenciales, lo que arrastra a las categorías GO que los contienen.
 #'
-#' Decision de diseño: en lugar de ofrecer `goseq` a ciegas, se MIDE el sesgo en
-#' los datos del usuario. Es la informacion que decide: si en este dataset la
+#' Decisión de diseño: en lugar de ofrecer `goseq` a ciegas, se MIDE el sesgo en
+#' los datos del usuario. Es la información que decide: si en este dataset la
 #' probabilidad de ser DE no depende de la longitud, corregir no aporta nada; si
-#' depende, el enriquecimiento GO hay que leerlo con cautela. Se calcula tambien
-#' la funcion de ponderacion por probabilidad (la curva que dibuja `goseq`), sin
+#' depende, el enriquecimiento GO hay que leerlo con cautela. Se calcula también
+#' la función de ponderación por probabilidad (la curva que dibuja `goseq`), sin
 #' añadir dependencia.
 #'
 #' @param deg_df tabla DEG estandar
 #' @param lengths vector de longitudes con nombres = identificadores de gen
 #' @param fdr umbral de significacion
-#' @param n_bins numero de bins de longitud para la curva
+#' @param n_bins número de bins de longitud para la curva
 #' @return list(table, spearman, p_value, n_used, odds_ratio, verdict)
 length_bias_diagnostic <- function(deg_df, lengths, fdr = 0.05, n_bins = 12L) {
   out <- list(table = NULL, spearman = NA_real_, p_value = NA_real_,
@@ -219,8 +219,8 @@ length_bias_diagnostic <- function(deg_df, lengths, fdr = 0.05, n_bins = 12L) {
   de  <- as.integer(deg_df$padj[ok] <= fdr)
   out$n_used <- sum(ok)
 
-  # Correlacion de rangos entre longitud y evidencia de expresion diferencial.
-  # Se usa el rango del p-valor invertido para que "mas alto = mas DE".
+  # Correlación de rangos entre longitud y evidencia de expresión diferencial.
+  # Se usa el rango del p-valor invertido para que "más alto = más DE".
   ev <- -log10(pmax(deg_df$pvalue[ok], .Machine$double.xmin))
   ct <- suppressWarnings(tryCatch(
     stats::cor.test(len, ev, method = "spearman", exact = FALSE),
@@ -230,7 +230,7 @@ length_bias_diagnostic <- function(deg_df, lengths, fdr = 0.05, n_bins = 12L) {
     out$p_value  <- as.numeric(ct$p.value)
   }
 
-  # Curva de proporcion de DE por bin de longitud (la PWF de goseq).
+  # Curva de proporción de DE por bin de longitud (la PWF de goseq).
   brks <- unique(stats::quantile(len, probs = seq(0, 1, length.out = n_bins + 1L),
                                  na.rm = TRUE))
   if (length(brks) < 3) return(out)
@@ -245,7 +245,7 @@ length_bias_diagnostic <- function(deg_df, lengths, fdr = 0.05, n_bins = 12L) {
   df$len_median <- as.numeric(tapply(len, bin, stats::median)[as.character(df$bin)])
   out$table <- df
 
-  # Odds ratio entre el tercio mas largo y el mas corto: cuantifica el sesgo en
+  # Odds ratio entre el tercio más largo y el más corto: cuantifica el sesgo en
   # una cifra interpretable.
   q <- stats::quantile(len, c(1/3, 2/3), na.rm = TRUE)
   short <- len <= q[1]; long <- len >= q[2]
@@ -256,7 +256,7 @@ length_bias_diagnostic <- function(deg_df, lengths, fdr = 0.05, n_bins = 12L) {
   out
 }
 
-#' Traduce el diagnostico de sesgo de longitud a una recomendacion concreta.
+#' Traduce el diagnóstico de sesgo de longitud a una recomendación concreta.
 interpret_length_bias <- function(rho, p_value, odds_ratio) {
   if (is.na(rho)) {
     return(list(level = "desconocido", label = "No evaluable",
@@ -265,29 +265,29 @@ interpret_length_bias <- function(rho, p_value, odds_ratio) {
   strong <- abs(rho) >= 0.15 || (!is.na(odds_ratio) && (odds_ratio >= 1.5 || odds_ratio <= 1/1.5))
   signif <- !is.na(p_value) && p_value < 0.05
   or_txt <- if (is.na(odds_ratio)) "" else paste0(
-    " Los genes del tercio mas largo tienen ", round(odds_ratio, 2),
-    " veces las probabilidades de salir diferenciales que los del tercio mas corto.")
+    " Los genes del tercio más largo tienen ", round(odds_ratio, 2),
+    " veces las probabilidades de salir diferenciales que los del tercio más corto.")
   if (strong && signif) {
     return(list(level = "aviso", label = "Sesgo de longitud detectado",
       detail = paste0(
-        "La correlacion entre longitud del gen y evidencia de expresion ",
+        "La correlación entre longitud del gen y evidencia de expresión ",
         "diferencial es rho = ", round(rho, 3), " (p = ", signif(p_value, 3), ").",
-        or_txt, " El analisis de sobre-representacion (GO/KEGG) esta sesgado hacia ",
-        "las categorias que contienen genes largos: interpretalo con cautela y ",
-        "prioriza GSEA, que usa el ranking completo, o una correccion por longitud ",
+        or_txt, " El análisis de sobre-representación (GO/KEGG) está sesgado hacía ",
+        "las categorías que contienen genes largos: interpretalo con cautela y ",
+        "prioriza GSEA, que usa el ranking completo, o una corrección por longitud ",
         "tipo goseq.")))
   }
   if (signif) {
     return(list(level = "leve", label = "Sesgo de longitud leve",
       detail = paste0(
-        "La correlacion es estadisticamente detectable (rho = ", round(rho, 3),
+        "La correlación es estadisticamente detectable (rho = ", round(rho, 3),
         ", p = ", signif(p_value, 3), ") pero pequeña.", or_txt,
-        " Con decenas de miles de genes casi cualquier correlacion sale ",
-        "significativa; la magnitud importa mas que el p-valor.")))
+        " Con decenas de miles de genes casi cualquier correlación sale ",
+        "significativa; la magnitud importa más que el p-valor.")))
   }
   list(level = "ok", label = "Sin sesgo de longitud apreciable",
     detail = paste0(
-      "No hay relacion apreciable entre longitud del gen y evidencia de expresion ",
+      "No hay relación apreciable entre longitud del gen y evidencia de expresión ",
       "diferencial (rho = ", round(rho, 3), ", p = ", signif(p_value %||% NA, 3), ").",
       or_txt, " Corregir por longitud no aportaria nada en este dataset."))
 }
@@ -295,15 +295,15 @@ interpret_length_bias <- function(rho, p_value, odds_ratio) {
 #' Resumen RLE por muestra: log2CPM menos la mediana del gen.
 #'
 #' Se devuelven cuantiles y no los valores crudos porque con decenas de miles de
-#' genes el grafico no necesita los puntos. Una muestra bien normalizada tiene la
+#' genes el gráfico no necesita los puntos. Una muestra bien normalizada tiene la
 #' mediana cerca de 0 y un IQR estrecho; una mediana desplazada indica fallo de
-#' normalizacion o un problema con esa muestra.
+#' normalización o un problema con esa muestra.
 #' @param normalized si TRUE (por defecto) el RLE se calcula sobre conteos
-#'   normalizados por COMPOSICION (TMM). El RLE es un diagnostico de la
-#'   normalizacion aplicada: calcularlo sobre CPM por tamaño de libreria crudo
+#'   normalizados por COMPOSICION (TMM). El RLE es un diagnóstico de la
+#'   normalización aplicada: calcularlo sobre CPM por tamaño de libreria crudo
 #'   puede marcar como desviada una muestra que TMM o la mediana de ratios
 #'   corrigen perfectamente, y al reves. Se deja el modo crudo disponible para
-#'   poder comparar el antes y el despues.
+#'   poder comparar el antes y el después.
 rle_summary <- function(counts, normalized = TRUE) {
   if (is.null(counts) || !nrow(counts) || !ncol(counts)) return(NULL)
   cm <- as.matrix(counts)
@@ -324,37 +324,37 @@ rle_summary <- function(counts, normalized = TRUE) {
     stringsAsFactors = FALSE
   )
   df$iqr <- df$q3 - df$q1
-  # Muestras cuya mediana se aleja de 0 mas que el doble del IQR tipico.
+  # Muestras cuya mediana se aleja de 0 más que el doble del IQR típico.
   thr <- max(0.1, 2 * stats::median(df$iqr, na.rm = TRUE))
   df$flag <- abs(df$med) > thr
   attr(df, "median_threshold") <- thr
   df
 }
 
-# ── Distribucion de la expresion normalizada ────────────────────────────────
+# ── Distribución de la expresión normalizada ────────────────────────────────
 #
-# Por que existe: el RLE responde "esta bien normalizada esta muestra respecto a
-# las demas", pero no enseña la FORMA de la distribucion. Son dos preguntas
+# Por qué existe: el RLE responde "está bien normalizada esta muestra respecto a
+# las demas", pero no enseña la FORMA de la distribución. Son dos preguntas
 # distintas y la segunda es la que detecta los problemas clasicos de una matriz
 # de conteos antes de modelarla: una muestra con la moda desplazada, una moda
-# secundaria que delata contaminacion o una poblacion celular distinta, y sobre
+# secundaria que delata contaminación o una población celular distinta, y sobre
 # todo el pico de genes no expresados, que es lo que justifica el prefiltrado.
 #
-# Es tambien el diagnostico que la vinieta de limma-voom y el workflow de edgeR
-# ponen ANTES del ajuste (plotDensities, boxplot de logCPM), asi que su sitio es
-# la pestana de diagnosticos y no un adorno.
+# Es también el diagnóstico que la vinieta de limma-voom y el workflow de edgeR
+# ponen ANTES del ajuste (plotDensities, boxplot de logCPM), así que su sitio es
+# la pestana de diagnósticos y no un adorno.
 
 #' Matriz log2(CPM + 1) sobre la que se leen las distribuciones.
 #'
 #' @param normalized si TRUE (por defecto) los CPM se calculan sobre los factores
-#'   de normalizacion por COMPOSICION (TMM). El modo crudo —CPM por tamaño de
-#'   libreria— se conserva a proposito: comparar las dos vistas es la unica forma
-#'   de VER que la normalizacion ha hecho algo, que es justo lo que un usuario sin
-#'   formacion estadistica no puede dar por supuesto.
+#'   de normalización por COMPOSICION (TMM). El modo crudo —CPM por tamaño de
+#'   libreria— se conserva a propósito: comparar las dos vistas es la única forma
+#'   de VER que la normalización ha hecho algo, que es justo lo que un usuario sin
+#'   formacion estadística no puede dar por supuesto.
 #' @param drop_zero_rows si TRUE se descartan los genes con conteo cero en TODAS
-#'   las muestras. No aportan informacion y su masa en log2(0+1) = 0 domina la
-#'   moda de la densidad hasta esconder la distribucion de los genes expresados.
-#'   Los genes con ceros en ALGUNAS muestras se conservan: ahi el cero es un dato.
+#'   las muestras. No aportan información y su masa en log2(0+1) = 0 domina la
+#'   moda de la densidad hasta esconder la distribución de los genes expresados.
+#'   Los genes con ceros en ALGUNAS muestras se conservan: ahí el cero es un dato.
 #' @return list(mat, n_genes, n_dropped) o NULL si no hay matriz utilizable.
 expression_logcpm <- function(counts, normalized = TRUE, drop_zero_rows = TRUE) {
   if (is.null(counts) || !nrow(counts) || !ncol(counts)) return(NULL)
@@ -380,12 +380,12 @@ expression_logcpm <- function(counts, normalized = TRUE, drop_zero_rows = TRUE) 
        n_total = as.integer(n_total))
 }
 
-#' Densidad y cuantiles de la expresion por muestra.
+#' Densidad y cuantiles de la expresión por muestra.
 #'
-#' Detalle que decide si el grafico es comparable o engañoso: TODAS las densidades
+#' Detalle que decide si el gráfico es comparable o engañoso: TODAS las densidades
 #' se estiman con el MISMO ancho de banda y sobre la MISMA rejilla. `density()`
-#' elige por defecto un ancho por vector, asi que una muestra con menos dispersion
-#' sale con una curva mas picuda por construccion y no porque su distribucion lo
+#' elige por defecto un ancho por vector, así que una muestra con menos dispersion
+#' sale con una curva más picuda por construcción y no porque su distribución lo
 #' sea. El ancho comun se calcula sobre los valores agrupados.
 #'
 #' @return list(density, box, n_genes, n_dropped, normalized, bw) donde `density`
@@ -411,7 +411,7 @@ expression_distribution <- function(counts, normalized = TRUE,
   rownames(box) <- NULL
 
   # Ancho de banda comun. Sobre una submuestra si la matriz es grande: bw.nrd0
-  # solo necesita desviacion e IQR, y con cientos de miles de valores el coste
+  # solo necesita desviación e IQR, y con cientos de miles de valores el coste
   # deja de ser despreciable para una cifra que no cambia.
   pooled <- as.numeric(mat)
   pooled <- pooled[is.finite(pooled)]
@@ -441,12 +441,12 @@ expression_distribution <- function(counts, normalized = TRUE,
        n_total = lc$n_total, normalized = isTRUE(normalized), bw = bw)
 }
 
-#' Añade a un resumen de distribucion la columna de grupo tomada del samplesheet.
+#' Añade a un resumen de distribución la columna de grupo tomada del samplesheet.
 #'
-#' Colorear por condicion es lo que convierte el grafico en un diagnostico: una
-#' distribucion desplazada importa poco si es una muestra suelta y mucho si son
+#' Colorear por condición es lo que convierte el gráfico en un diagnóstico: una
+#' distribución desplazada importa poco si es una muestra suelta y mucho si son
 #' todas las de un grupo, porque entonces la diferencia entre condiciones que el
-#' modelo va a testear esta confundida con una diferencia tecnica.
+#' modelo va a testear esta confundida con una diferencia técnica.
 distribution_add_group <- function(df, meta = NULL, group_col = NULL) {
   df$grupo <- "(sin grupo)"
   if (is.null(meta) || !is.data.frame(meta) || !nrow(meta)) return(df)
@@ -464,7 +464,7 @@ distribution_add_group <- function(df, meta = NULL, group_col = NULL) {
   df
 }
 
-#' Frase que acompaña al grafico: cuantos genes lo componen y cuantos se dejaron
+#' Frase que acompaña al gráfico: cuantos genes lo componen y cuantos se dejaron
 #' fuera por no tener conteo en ninguna muestra.
 distribution_caption <- function(dist) {
   if (is.null(dist)) return(NULL)
@@ -473,7 +473,7 @@ distribution_caption <- function(dist) {
   paste0(fmt_int(dist$n_genes), " genes, ", escala,
          if (dist$n_dropped > 0)
            paste0("; ", fmt_int(dist$n_dropped), " genes sin conteo en ninguna ",
-                  "muestra excluidos del grafico")
+                  "muestra excluidos del gráfico")
          else "",
          ".")
 }

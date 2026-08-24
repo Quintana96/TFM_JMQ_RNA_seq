@@ -1,17 +1,17 @@
-# Comprobacion de las herramientas del pipeline (R/utils_status.R).
+# Comprobación de las herramientas del pipeline (R/utils_status.R).
 #
 # El workflow ya las verifica en su primer paso y aborta si falta alguna, pero
-# para entonces la ejecucion ya esta lanzada: arriba se lee "Error (codigo 1)" y
-# la causa aparece veinte lineas mas abajo en el log. Comprobarlo en la
+# para entonces la ejecución ya está lanzada: arriba se lee "Error (código 1)" y
+# la causa aparece veinte líneas más abajo en el log. Comprobarlo en la
 # interfaz convierte eso en una frase antes de empezar.
 
-test_that("cada estrategia exige sus herramientas y ninguna de mas", {
+test_that("cada estrategia exige sus herramientas y ninguna de más", {
   comunes <- c("fastqc", "fastp", "multiqc")
 
   aln <- herramientas_requeridas("alignment", "bowtie2")
   expect_true(all(comunes %in% aln))
   expect_true(all(c("bowtie2", "samtools", "featureCounts") %in% aln))
-  # Pedir un cuantificador que no se va a usar bloquearia el analisis por una
+  # Pedir un cuantificador que no se va a usar bloquearia el análisis por una
   # herramienta que no hace falta.
   expect_false(any(c("salmon", "kallisto") %in% aln))
 
@@ -33,7 +33,7 @@ test_that("con todo en el PATH no se reporta nada", {
   expect_null(mensaje_herramientas(e))
 })
 
-test_that("se nombra lo que falta, no un 'faltan herramientas' generico", {
+test_that("se nombra lo que falta, no un 'faltan herramientas' genérico", {
   e <- comprobar_herramientas(entornos = character(0),
                               necesarias = c("ls", "no_existe_esta_herramienta"))
   expect_equal(e$faltan, "no_existe_esta_herramienta")
@@ -44,9 +44,9 @@ test_that("se nombra lo que falta, no un 'faltan herramientas' generico", {
   expect_match(msg, "requirements.sh", fixed = TRUE)
 })
 
-test_that("si estan instaladas pero fuera del PATH, se dice donde", {
-  # Es el caso real: la aplicacion arrancada sin activar el entorno de conda.
-  # Decir "no encontradas" a secas manda a instalar algo que ya esta instalado.
+test_that("si están instaladas pero fuera del PATH, se dice donde", {
+  # Es el caso real: la aplicación arrancada sin activar el entorno de conda.
+  # Decir "no encontradas" a secas manda a instalar algo que ya está instalado.
   d <- withr::local_tempdir()
   bin <- file.path(d, "bin"); dir.create(bin)
   file.create(file.path(bin, "no_existe_esta_herramienta"))

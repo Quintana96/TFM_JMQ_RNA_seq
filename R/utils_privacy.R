@@ -1,23 +1,23 @@
 #' utils_privacy.R
 #' Seudonimizacion de identificadores de muestra.
 #'
-#' Por que existe: los identificadores de muestra de un estudio clinico suelen
-#' llevar informacion identificativa (codigo de paciente, fecha, centro), y en
-#' esta aplicacion viajan a todos los graficos, tablas, informes y ficheros
+#' Por qué existe: los identificadores de muestra de un estudio clínico suelen
+#' llevar información identificativa (código de paciente, fecha, centro), y en
+#' esta aplicación viajan a todos los gráficos, tablas, informes y ficheros
 #' persistidos. Basta con exportar una figura para difundirlos.
 #'
 #' El matiz que conviene tener claro, y que la interfaz debe decir: esto es
 #' SEUDONIMIZACION, no anonimizacion. Existe una tabla de correspondencia que
-#' permite deshacerla, asi que los datos siguen siendo datos personales a
-#' efectos del RGPD; lo que se consigue es que la informacion identificativa no
+#' permite deshacerla, así que los datos siguen siendo datos personales a
+#' efectos del RGPD; lo que se consigue es que la información identificativa no
 #' viaje en los entregables. La tabla de correspondencia se descarga aparte y a
-#' proposito, para que la decision de exportarla sea explicita.
+#' propósito, para que la decisión de exportarla sea explícita.
 #'
-#' Y un limite que no se puede ocultar: los datos de EXPRESION son en si mismos
+#' Y un límite que no se puede ocultar: los datos de EXPRESIÓN son en si mismos
 #' reidentificables. Schadt, Woo y Hao (Nature Genetics 2012) demostraron que se
-#' pueden inferir genotipos individuales a partir de niveles de expresion. Es
+#' pueden inferir genotipos individuales a partir de niveles de expresión. Es
 #' decir, renombrar las columnas reduce la exposicion accidental, pero no
-#' convierte una matriz de expresion humana en un dato anonimo.
+#' convierte una matriz de expresión humana en un dato anonimo.
 
 #' Construye una tabla de correspondencia entre identificadores reales y alias.
 #'
@@ -54,7 +54,7 @@ apply_pseudonyms <- function(ids, map) {
 #'
 #' Se hace en un solo sitio porque las columnas de la matriz y la columna
 #' `sample_id` del samplesheet tienen que seguir casando: renombrar una sin la
-#' otra rompe el alineamiento y el analisis fallaria de formas dificiles de
+#' otra rompe el alineamiento y el análisis fallaria de formas difíciles de
 #' diagnosticar.
 #'
 #' @param counts matriz de conteos (genes x muestras)
@@ -76,9 +76,9 @@ pseudonymize_dataset <- function(counts, meta, prefijo = "S") {
 
 #' Columnas del samplesheet que parecen identificativas.
 #'
-#' Sirve para avisar, no para borrar nada: la decision es del usuario. Detecta
+#' Sirve para avisar, no para borrar nada: la decisión es del usuario. Detecta
 #' por nombre de columna los campos que el RGPD considera de riesgo en un
-#' contexto clinico y los que, por ser unicos por muestra, pueden reidentificar
+#' contexto clínico y los que, por ser únicos por muestra, pueden reidentificar
 #' aunque no lo parezcan.
 #'
 #' @return character con los nombres de columna sospechosos

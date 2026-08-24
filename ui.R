@@ -1,12 +1,12 @@
 #' ui.R
-#' UI principal: navbar con la portada mas las cuatro pestanas del analisis.
+#' UI principal: navbar con la portada más las cuatro pestanas del análisis.
 #' El contenido detallado de cada pestana vive en los helpers ui_tab_*. Todas
-#' salvo la de configuracion se renderizan dinamicamente (uiOutput) porque
+#' salvo la de configuración se renderizan dinamicamente (uiOutput) porque
 #' dependen del estado del server.
 
 ui <- page_navbar(
   # La marca en la barra: icono, nombre y expansion del acronimo. El icono va
-  # como <img> y no en linea porque asi el navegador lo cachea una vez y no se
+  # como <img> y no en línea porque así el navegador lo cachea una vez y no se
   # reenvia el SVG entero en cada render de la UI.
   title  = tags$span(
     class = "app-brand",
@@ -29,39 +29,39 @@ ui <- page_navbar(
   ),
   fillable = FALSE,
 
-  # Tab 0 — Portada. Es un indice de los cuatro pasos con su estado, no un
-  # formulario: la aplicacion no tenia punto de entrada y se abria directamente
-  # sobre un tablero de seis tarjetas de configuracion.
+  # Tab 0 — Portada. Es un índice de los cuatro pasos con su estado, no un
+  # formulario: la aplicación no tenía punto de entrada y se abria directamente
+  # sobre un tablero de seis tarjetas de configuración.
   nav_panel(
     title = tagList(icon("house"), " Inicio"),
     value = "tab_home",
     uiOutput("home_content")
   ),
 
-  # Tab 1 — Configuracion (estatica)
+  # Tab 1 — Configuración (estatica)
   nav_panel(
-    title = "1 · Configuracion",
+    title = "1 · Configuración",
     value = "tab_config",
     ui_tab_config()
   ),
 
-  # Tab 2 — Procesamiento (dinamica via renderUI)
+  # Tab 2 — Procesamiento (dinámica via renderUI)
   nav_panel(
     title = "2 · Procesamiento",
     value = "tab_process",
     uiOutput("tab2_content")
   ),
 
-  # Tab 3 — Resultados (dinamica via renderUI)
+  # Tab 3 — Resultados (dinámica via renderUI)
   nav_panel(
     title = "3 · Resultados",
     value = "tab_results",
     uiOutput("tab3_content")
   ),
 
-  # Tab 4 — Expresion diferencial (dinamica via renderUI)
+  # Tab 4 — Expresión diferencial (dinámica via renderUI)
   nav_panel(
-    title = "4 · Expresion diferencial",
+    title = "4 · Expresión diferencial",
     value = "tab_deg",
     uiOutput("tab_deg_content")
   )

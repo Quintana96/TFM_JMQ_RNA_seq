@@ -1,8 +1,8 @@
 #' test-enriquecimiento.R
 #' La entrada del enriquecimiento —lista de genes y universo— determina el
 #' resultado tanto como el propio test. Wijesooriya et al. (2022) documentan que
-#' el fondo mal definido es el error mas extendido en analisis de
-#' sobre-representacion.
+#' el fondo mal definido es el error más extendido en análisis de
+#' sobre-representación.
 
 tabla_deg <- function() {
   data.frame(
@@ -15,7 +15,7 @@ tabla_deg <- function() {
   )
 }
 
-test_that("la lista del ORA no depende de los filtros de visualizacion", {
+test_that("la lista del ORA no depende de los filtros de visualización", {
   tab <- tabla_deg()
 
   # Significativos a FDR 0,05: todos los que tienen padj <= 0,05.
@@ -35,7 +35,7 @@ test_that("el universo excluye los genes sin padj", {
   u <- deg_testable_universe(tab)
 
   # g05 y g08 no tienen padj: descartados por filtrado independiente, conteo
-  # cero u outlier de Cook. Nunca podrian haber entrado en la lista.
+  # cero u outlier de Cook. Nunca podrían haber entrado en la lista.
   expect_false("g05" %in% u)
   expect_false("g08" %in% u)
   expect_equal(length(u), sum(!is.na(tab$padj)))
@@ -49,7 +49,7 @@ test_that("el universo excluye los genes sin padj", {
 test_that("el universo cae al fondo completo si ningun gen tiene padj", {
   tab <- tabla_deg()
   tab$padj <- NA_real_
-  # Un motor que no rellene padj dejaria el universo vacio y romperia el
+  # Un motor que no rellene padj dejaría el universo vacio y rompería el
   # enriquecimiento entero; el respaldo es preferible a no poder ejecutarlo.
   expect_equal(length(deg_testable_universe(tab)), nrow(tab))
 })
@@ -61,11 +61,11 @@ test_that("tabla vacia o nula no rompe el universo", {
 
 test_that("el ranking de GSEA se limita a los genes evaluables", {
   tab <- tabla_deg()
-  # g05 y g08 no tienen padj: no eran evaluables, asi que no pueden entrar en el
+  # g05 y g08 no tienen padj: no eran evaluables, así que no pueden entrar en el
   # ranking. Incluirlos rompe la coherencia con el universo del ORA y sesga el
-  # resultado: los genes no evaluables (baja expresion) se concentran en la cola,
-  # de modo que cualquier conjunto realista queda desplazado hacia la cabeza.
-  # La tabla de prueba no trae columna `stat`, asi que se usa log2FC.
+  # resultado: los genes no evaluables (baja expresión) se concentran en la cola,
+  # de modo que cualquier conjunto realista queda desplazado hacía la cabeza.
+  # La tabla de prueba no trae columna `stat`, así que se usa log2FC.
   rk <- deg_ranking_metric(tab, "log2FC")
   expect_false("g05" %in% names(rk$ranked))
   expect_false("g08" %in% names(rk$ranked))
@@ -81,7 +81,7 @@ test_that("el ranking de GSEA se limita a los genes evaluables", {
 
 test_that("sin ningun padj el ranking usa la tabla entera", {
   tab <- tabla_deg(); tab$padj <- NA_real_
-  # Un motor que no rellene padj dejaria el ranking vacio y GSEA no podria
+  # Un motor que no rellene padj dejaría el ranking vacio y GSEA no podría
   # correr; es preferible un ranking imperfecto a ninguno.
   rk <- deg_ranking_metric(tab, "log2FC")
   expect_gt(length(rk$ranked), 0)

@@ -1,11 +1,11 @@
 #' test-enriquecimiento-avanzado.R
 #' Cubre lo que se anadio al enriquecimiento por encima del ORA/GSEA basico:
-#' parametros de GSEA expuestos, gene sets propios en GMT, ORA direccional,
-#' running score y comparacion ORA/GSEA.
+#' parámetros de GSEA expuestos, gene sets propios en GMT, ORA direccional,
+#' running score y comparación ORA/GSEA.
 #'
-#' Los casos sinteticos comprueban la mecanica (que los parametros llegan al
+#' Los casos sinteticos comprueban la mecanica (que los parámetros llegan al
 #' motor y que las tablas se combinan bien) y los casos con el dataset humano
-#' GSE52778 (airway) comprueban lo que solo se ve con anotacion real: que el
+#' GSE52778 (airway) comprueban lo que solo se ve con anotación real: que el
 #' keyType decide el mapeo y que ORA y GSEA no responden lo mismo.
 
 tiene_cp   <- function() requireNamespace("clusterProfiler", quietly = TRUE)
@@ -15,7 +15,7 @@ tiene_fgsea <- function() requireNamespace("fgsea", quietly = TRUE)
 gmt_temporal <- function(sets) {
   f <- tempfile(fileext = ".gmt")
   writeLines(vapply(names(sets), function(n)
-    paste(c(n, paste0("descripcion de ", n), sets[[n]]), collapse = "\t"),
+    paste(c(n, paste0("descripción de ", n), sets[[n]]), collapse = "\t"),
     character(1)), f)
   f
 }
@@ -42,8 +42,8 @@ test_that("read_gene_sets_gmt devuelve TERM2GENE y el rango de tamaños", {
   expect_equal(gs$n_genes, 92L)
   expect_true(grepl("2 conjuntos", gmt_summary_text(gs)))
   expect_true(grepl("12 y 80 genes", gmt_summary_text(gs)))
-  # read.gmt puede devolver factores segun la version; el resto del codigo hace
-  # intersect() contra character y un factor lo romperia en silencio.
+  # read.gmt puede devolver factores según la versión; el resto del código hace
+  # intersect() contra character y un factor lo rompería en silencio.
   expect_type(gs$term2gene$gene, "character")
 })
 
@@ -94,7 +94,7 @@ test_that("sin GMT cargado, ORA y GSEA piden el fichero en vez de fallar", {
                                     term2gene = NULL)$error))
 })
 
-# ── Parametros de GSEA expuestos ────────────────────────────────────────────
+# ── Parámetros de GSEA expuestos ────────────────────────────────────────────
 
 test_that("eps = 0 sustituye el p-valor truncado por el exacto", {
   skip_if_not(tiene_cp() && tiene_fgsea())
@@ -117,7 +117,7 @@ test_that("eps = 0 sustituye el p-valor truncado por el exacto", {
   # orden relativo se pierde; con eps = 0 se separan.
   expect_equal(p_trunc, 1e-10)
   expect_lt(p_exact, 1e-10)
-  # El NES no depende del eps: cambia la estimacion del p-valor, no el estadistico.
+  # El NES no depende del eps: cambia la estimación del p-valor, no el estadístico.
   expect_equal(truncado$table$NES[truncado$table$ID == "objetivo"],
                exacto$table$NES[exacto$table$ID == "objetivo"])
 })
@@ -131,7 +131,7 @@ test_that("pvalueCutoff = 1 distingue 'nada llega a 0,05' de un fallo", {
     azar2 = sample(names(rk), 80)
   )))
 
-  # Conjuntos al azar: ninguno deberia pasar el corte por defecto.
+  # Conjuntos al azar: ninguno debería pasar el corte por defecto.
   estricto <- suppressWarnings(run_gsea(rk, ont = "GMT", term2gene = gs$term2gene,
                                         exponent = 0, pvalueCutoff = 0.05))
   todo <- suppressWarnings(run_gsea(rk, ont = "GMT", term2gene = gs$term2gene,
@@ -139,7 +139,7 @@ test_that("pvalueCutoff = 1 distingue 'nada llega a 0,05' de un fallo", {
   expect_null(estricto$table)
   expect_equal(nrow(todo$table), 2L)
   # Y es la tabla completa la que permite ver que SI se testearon los conjuntos:
-  # con el corte puesto, ese caso es indistinguible de un error de anotacion.
+  # con el corte puesto, ese caso es indistinguible de un error de anotación.
   expect_true(all(todo$table$p.adjust > 0.05))
 })
 
@@ -169,12 +169,12 @@ test_that("minGSSize y maxGSSize acotan los conjuntos testeados", {
 
 # ── ORA direccional ─────────────────────────────────────────────────────────
 
-test_that("separar por direccion recupera la señal que la lista mezclada diluye", {
+test_that("separar por dirección recupera la señal que la lista mezclada diluye", {
   skip_if_not(tiene_cp())
   genes <- sprintf("g%04d", 1:2000)
   set.seed(3)
   # Los conjuntos de relleno no son decorativos: enricher() restringe el fondo a
-  # los genes que aparecen en el GMT, asi que con solo dos conjuntos el universo
+  # los genes que aparecen en el GMT, así que con solo dos conjuntos el universo
   # se reduce a sus 80 genes y no queda contraste que medir.
   gs <- read_gene_sets_gmt(gmt_temporal(list(
     inducido  = genes[1:40],
@@ -202,17 +202,17 @@ test_that("separar por direccion recupera la señal que la lista mezclada diluye
                                    res$table$ID == "inducido"]
   p_alza <- res$table$p.adjust[res$table$Direccion == "Al alza" &
                                  res$table$ID == "inducido"]
-  # El mismo conjunto es varios ordenes de magnitud mas significativo cuando la
-  # lista no arrastra los 31 genes de la direccion contraria: eso es la dilucion.
+  # El mismo conjunto es varios ordenes de magnitud más significativo cuando la
+  # lista no arrastra los 31 genes de la dirección contraria: eso es la dilucion.
   expect_lt(p_alza, p_mezcla)
   # Y cada mitad solo ve su conjunto.
   expect_false("reprimido" %in% res$table$ID[res$table$Direccion == "Al alza"])
 })
 
-test_that("run_ora_directional aisla las direcciones sin genes o sin terminos", {
-  # Runner falso: no hace falta clusterProfiler para comprobar la combinacion.
+test_that("run_ora_directional aisla las direcciones sin genes o sin términos", {
+  # Runner falso: no hace falta clusterProfiler para comprobar la combinación.
   runner <- function(g) {
-    if (length(g) < 3) return(list(table = NULL, error = "Sin terminos enriquecidos.",
+    if (length(g) < 3) return(list(table = NULL, error = "Sin términos enriquecidos.",
                                    mapping = NULL))
     list(table = data.frame(ID = "T1", Description = "termino", p.adjust = 0.01,
                             Count = length(g), stringsAsFactors = FALSE),
@@ -223,7 +223,7 @@ test_that("run_ora_directional aisla las direcciones sin genes o sin terminos", 
                     stringsAsFactors = FALSE)
 
   res <- run_ora_directional(sig, runner)
-  # Sin genes a la baja, esa direccion se reporta como tal en vez de tumbar todo.
+  # Sin genes a la baja, esa dirección se reporta como tal en vez de tumbar todo.
   expect_true(grepl("Sin genes", res$errores[["A la baja"]]))
   expect_setequal(unique(res$table$Direccion), c("Conjunto", "Al alza"))
   # El mapeo que se muestra es el del conjunto completo, no el de una mitad.
@@ -245,13 +245,13 @@ test_that("el dotplot reparte el top entre direcciones y no colapsa etiquetas", 
     stringsAsFactors = FALSE
   )
   top <- enrichment_dotplot_data(df, top_n = 2)
-  # Sin reparto, las cuatro filas mas significativas serian todas "Al alza" y la
-  # comparacion entre direcciones desapareceria del grafico.
+  # Sin reparto, las cuatro filas más significativas serían todas "Al alza" y la
+  # comparación entre direcciones desapareceria del gráfico.
   expect_equal(as.integer(table(top$Direccion)), c(2L, 2L))
   expect_equal(length(unique(top$plot_label)), nrow(top))
   expect_true(all(grepl("\\[", top$plot_label)))
 
-  # Sin columna Direccion se mantiene el comportamiento anterior.
+  # Sin columna Dirección se mantiene el comportamiento anterior.
   simple <- enrichment_dotplot_data(
     df[df$Direccion == "Al alza", setdiff(names(df), "Direccion")], top_n = 3)
   expect_equal(nrow(simple), 3L)
@@ -273,8 +273,8 @@ test_that("el running score reproduce el enrichment score de la tabla GSEA", {
   genes <- gsea_term_genes("objetivo", ont = "GMT", term2gene = gs$term2gene)
   expect_setequal(genes$genes, conjunto)
 
-  # gseaParam = exponent: la curva tiene que ser la del estadistico con el que se
-  # calculo el NES, o el pico no coincidiria con el ES de la tabla.
+  # gseaParam = exponent: la curva tiene que ser la del estadístico con el que se
+  # cálculo el NES, o el pico no coincidiria con el ES de la tabla.
   rs <- gsea_running_score(rk, genes$genes, gseaParam = 0)
   expect_null(rs$error)
   expect_equal(rs$n_hits, length(conjunto))
@@ -294,8 +294,8 @@ test_that("el running score avisa cuando el conjunto no toca el ranking", {
   skip_if_not(tiene_fgsea())
   rk <- ranking_sintetico(100)
   rs <- gsea_running_score(rk, c("otro1", "otro2"))
-  # Es el sintoma tipico de un keyType equivocado, y hay que decirlo en vez de
-  # devolver un grafico vacio.
+  # Es el sintoma típico de un keyType equivocado, y hay que decirlo en vez de
+  # devolver un gráfico vacio.
   expect_true(grepl("keyType", rs$error))
   expect_null(rs$curve)
   expect_true(nzchar(gsea_running_score(NULL, "a")$error))
@@ -308,9 +308,9 @@ test_that("leading_edge_genes parte la cadena core_enrichment", {
   expect_equal(leading_edge_genes(""), character(0))
 })
 
-# ── Comparacion ORA / GSEA ──────────────────────────────────────────────────
+# ── Comparación ORA / GSEA ──────────────────────────────────────────────────
 
-test_that("compare_ora_gsea calcula el solapamiento y los terminos solo de GSEA", {
+test_that("compare_ora_gsea calcula el solapamiento y los términos solo de GSEA", {
   ora <- data.frame(ID = c("T1", "T2", "T3"),
                     Description = c("a", "b", "c"),
                     p.adjust = c(0.001, 0.01, 0.30),
@@ -322,7 +322,7 @@ test_that("compare_ora_gsea calcula el solapamiento y los terminos solo de GSEA"
                      stringsAsFactors = FALSE)
 
   cmp <- compare_ora_gsea(ora, gsea)
-  # T3 no es significativo, asi que no entra en la comparacion.
+  # T3 no es significativo, así que no entra en la comparación.
   expect_equal(cmp$n_ora, 2L)
   expect_equal(cmp$n_gsea, 3L)
   expect_equal(cmp$n_comun, 1L)
@@ -332,15 +332,15 @@ test_that("compare_ora_gsea calcula el solapamiento y los terminos solo de GSEA"
   expect_equal(cmp$comunes$ID, "T2")
   expect_equal(cmp$comunes$NES, 2.1)
 
-  # Sin terminos en ninguno de los dos, el Jaccard es indefinido y no 0: 0
-  # sugeriria discrepancia total entre dos analisis que no han visto nada.
+  # Sin términos en ninguno de los dos, el Jaccard es indefinido y no 0: 0
+  # sugeriria discrepancia total entre dos análisis que no han visto nada.
   vacio <- compare_ora_gsea(NULL, NULL)
   expect_true(is.na(vacio$jaccard))
   expect_equal(vacio$n_comun, 0L)
   expect_null(compare_ora_gsea_table(vacio))
 })
 
-test_that("compare_ora_gsea_table etiqueta quien ve cada termino", {
+test_that("compare_ora_gsea_table etiqueta quien ve cada término", {
   ora <- data.frame(ID = c("T1", "T2"), Description = c("a", "b"),
                     p.adjust = c(0.001, 0.01), stringsAsFactors = FALSE)
   gsea <- data.frame(ID = c("T2", "T3"), Description = c("b", "c"),
@@ -356,9 +356,9 @@ test_that("compare_ora_gsea_table etiqueta quien ve cada termino", {
   expect_equal(tb$padj_GSEA[tb$ID == "T2"], 0.02)
 })
 
-# ── Integracion del modulo server ───────────────────────────────────────────
+# ── Integración del modulo server ───────────────────────────────────────────
 
-test_that("el modulo server encadena GMT, ORA direccional, GSEA y comparacion", {
+test_that("el modulo server encadena GMT, ORA direccional, GSEA y comparación", {
   skip_if_not(tiene_cp() && tiene_fgsea())
   genes <- sprintf("g%04d", 1:2000)
   set.seed(5)
@@ -381,7 +381,7 @@ test_that("el modulo server encadena GMT, ORA direccional, GSEA y comparacion", 
   srv <- function(input, output, session) {
     state <- new.env(parent = emptyenv())
     state$deg_rv <- shiny::reactiveValues(results = deg, fdr = 0.05, enrich = NULL)
-    # El modulo busca aqui la anotacion con la que traducir identificadores.
+    # El modulo busca aquí la anotación con la que traducir identificadores.
     state$run_params_rv <- shiny::reactiveVal(list())
     ctx <- new.env(parent = emptyenv())
     ctx$deg_universe <- shiny::reactive(genes)
@@ -413,8 +413,8 @@ test_that("el modulo server encadena GMT, ORA direccional, GSEA y comparacion", 
     session$setInputs(deg_run_enrich_btn = 2)
     e2 <- session$userData$state$deg_rv$enrich
     expect_equal(e2$enfoque, "GSEA")
-    # Los parametros de la interfaz llegan al motor y quedan registrados para el
-    # informe: sin ellos el resultado no seria reproducible.
+    # Los parámetros de la interfaz llegan al motor y quedan registrados para el
+    # informe: sin ellos el resultado no sería reproducible.
     expect_equal(e2$gsea_eps, 0)
     expect_equal(e2$gsea_pcutoff, 1)
     expect_equal(e2$gsea_min_size, 10)
@@ -435,9 +435,9 @@ test_that("el modulo server encadena GMT, ORA direccional, GSEA y comparacion", 
 
 airway_dir <- "/Users/usuario/Desktop/UEM/TFM/datasets_test/GSE52778_airway"
 
-#' Tabla DEG minima a partir del dataset airway.
+#' Tabla DEG mínima a partir del dataset airway.
 #'
-#' Se usa una t de Welch sobre logCPM y no un motor completo: aqui lo que se
+#' Se usa una t de Welch sobre logCPM y no un motor completo: aquí lo que se
 #' testea es el enriquecimiento, y un ranking real de IDs ENSEMBL humanos ya
 #' basta para eso. Ahorra un ajuste de DESeq2 sobre 16.000 genes por test.
 airway_deg <- function() {
@@ -496,7 +496,7 @@ test_that("GSEA sobre datos reales: corte de p, running score y ORA que no lo ve
   # readable = TRUE: core_enrichment sale en simbolos, no en ENSG00000...
   expect_false(grepl("ENSG", gsea$table$core_enrichment[1]))
 
-  # Running score del termino mas significativo, reconstruido desde el OrgDb.
+  # Running score del término más significativo, reconstruido desde el OrgDb.
   mejor <- gsea$table[order(gsea$table$p.adjust), ][1, ]
   tg <- gsea_term_genes(mejor$ID, ont = "CC", OrgDb = "org.Hs.eg.db",
                         keyType = "ENSEMBL")
@@ -504,7 +504,7 @@ test_that("GSEA sobre datos reales: corte de p, running score y ORA que no lo ve
   rs <- gsea_running_score(rk$ranked, tg$genes, gseaParam = 0)
   expect_null(rs$error)
   # El conjunto que recupera GOALL es el mismo que testeo gseGO (por eso se usa
-  # GOALL y no GO: con GO faltarian los genes de los terminos descendientes).
+  # GOALL y no GO: con GO faltarian los genes de los términos descendientes).
   expect_equal(rs$n_hits, mejor$setSize)
   expect_equal(rs$es, mejor$enrichmentScore, tolerance = 1e-6)
 
@@ -515,8 +515,8 @@ test_that("GSEA sobre datos reales: corte de p, running score y ORA que no lo ve
                            ont = "CC", keyType = "ENSEMBL", readable = TRUE)
   cmp <- compare_ora_gsea(ora$table, gsea$table)
   expect_equal(cmp$n_gsea, n_sig)
-  # Los terminos que solo ve GSEA son la razon de tener los dos enfoques: señal
-  # coordinada que ningun gen individual lleva mas alla del corte de la lista.
+  # Los términos que solo ve GSEA son la razón de tener los dos enfoques: señal
+  # coordinada que ningun gen individual lleva más alla del corte de la lista.
   expect_gt(cmp$n_gsea - cmp$n_comun, 0)
   tb <- compare_ora_gsea_table(cmp)
   expect_true("Solo GSEA" %in% tb$Visto)

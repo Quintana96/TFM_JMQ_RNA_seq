@@ -1,8 +1,8 @@
-#' test-distribucion-expresion.R
-#' La densidad y el diagrama de cajas de la expresion son diagnosticos, no
+#' test-distribución-expresión.R
+#' La densidad y el diagrama de cajas de la expresión son diagnósticos, no
 #' adornos: se leen ANTES de ajustar el modelo (vinieta de limma-voom, workflow
 #' de edgeR) y de ellos depende que el usuario decida prefiltrar o descartar una
-#' muestra. Lo que se verifica aqui es que lo que dibujan es comparable entre
+#' muestra. Lo que se verifica aquí es que lo que dibujan es comparable entre
 #' muestras y que lo que dejan fuera se declara.
 
 test_that("los genes sin conteo en ninguna muestra se excluyen y se cuentan", {
@@ -13,16 +13,16 @@ test_that("los genes sin conteo en ninguna muestra se excluyen y se cuentan", {
   expect_equal(lc$n_total, 200L)
   expect_equal(lc$n_dropped, 20L)
   expect_equal(lc$n_genes, 180L)
-  # Un gen con ceros en ALGUNAS muestras se conserva: ahi el cero es un dato,
-  # no ausencia de informacion.
+  # Un gen con ceros en ALGUNAS muestras se conserva: ahí el cero es un dato,
+  # no ausencia de información.
   cm2 <- cm; cm2[21, 1] <- 0L
   expect_equal(expression_logcpm(cm2)$n_genes, 180L)
 })
 
 test_that("todas las muestras comparten rejilla y ancho de banda", {
-  # Es la propiedad que hace comparable el grafico: density() elige por defecto
-  # un ancho por vector, de modo que la muestra menos dispersa saldria mas
-  # picuda por construccion y no porque su distribucion lo sea.
+  # Es la propiedad que hace comparable el gráfico: density() elige por defecto
+  # un ancho por vector, de modo que la muestra menos dispersa saldría más
+  # picuda por construcción y no porque su distribución lo sea.
   cm <- make_test_counts(n_genes = 300, n_per_group = 3)
   d <- expression_distribution(cm)
 
@@ -33,7 +33,7 @@ test_that("todas las muestras comparten rejilla y ancho de banda", {
   expect_true(is.finite(d$bw) && d$bw > 0)
 })
 
-test_that("los cuantiles del diagrama de cajas estan ordenados", {
+test_that("los cuantiles del diagrama de cajas están ordenados", {
   cm <- make_test_counts(n_genes = 300, n_per_group = 3)
   b <- expression_distribution(cm)$box
 
@@ -60,10 +60,10 @@ test_that("la escala normalizada y la cruda no dan lo mismo con librerias dispar
   expect_lt(sep_norm, sep_crudo)
 })
 
-test_that("el grupo se asigna por sample_id y no por posicion", {
+test_that("el grupo se asigna por sample_id y no por posición", {
   # La trampa clasica: el samplesheet llega en otro orden que las columnas de la
-  # matriz. Emparejar por posicion invierte los grupos en silencio y colorea el
-  # grafico al reves, que es peor que no colorearlo.
+  # matriz. Emparejar por posición invierte los grupos en silencio y colorea el
+  # gráfico al reves, que es peor que no colorearlo.
   cm <- make_test_counts(n_genes = 200, n_per_group = 3)
   meta <- make_test_meta(cm)
   meta_desordenada <- meta[rev(seq_len(nrow(meta))), , drop = FALSE]
@@ -75,7 +75,7 @@ test_that("el grupo se asigna por sample_id y no por posicion", {
   expect_equal(g$grupo, esperado)
 })
 
-test_that("las muestras que no estan en el samplesheet quedan sin grupo, no fuera", {
+test_that("las muestras que no están en el samplesheet quedan sin grupo, no fuera", {
   cm <- make_test_counts(n_genes = 200, n_per_group = 3)
   meta <- make_test_meta(cm)[1:4, , drop = FALSE]
 
@@ -106,14 +106,14 @@ test_that("una matriz vacia o degenerada devuelve NULL en lugar de fallar", {
   expect_null(expression_distribution(cm))
 })
 
-# ── Integracion del modulo server ───────────────────────────────────────────
+# ── Integración del modulo server ───────────────────────────────────────────
 #
 # Los reactivos internos del modulo no son accesibles desde testServer (viven en
-# el marco de server_tab_deg_diag, no en el de la funcion server de prueba), asi
-# que se comprueba lo unico que es realmente contrato: lo que sale por los
+# el marco de server_tab_deg_diag, no en el de la función server de prueba), así
+# que se comprueba lo único que es realmente contrato: lo que sale por los
 # outputs.
 
-test_that("el modulo server produce los dos graficos y respeta el selector de escala", {
+test_that("el modulo server produce los dos gráficos y respeta el selector de escala", {
   skip_if_not_installed("plotly")
   cm <- make_test_counts(n_genes = 300, n_per_group = 3)
   # Profundidades muy dispares entre grupos: garantiza que normalizar cambie el
@@ -132,13 +132,13 @@ test_that("el modulo server produce los dos graficos y respeta el selector de es
   shiny::testServer(srv, {
     session$setInputs(deg_diag_expr_scale = "norm", deg_condition_col = "condition",
                       deg_diag_pv_subset = "tested", deg_source = "current")
-    # Evaluar el output es la prueba: si el grafico fallara, esto lanzaria.
+    # Evaluar el output es la prueba: si el gráfico fallara, esto lanzaria.
     cajas_norm <- output$deg_expr_box
     expect_true(nzchar(output$deg_expr_density))
     expect_true(nzchar(cajas_norm))
     expect_true(grepl("TMM", as.character(output$deg_expr_dist_caption$html)))
     # Las muestras se identifican por su nombre y los grupos del samplesheet
-    # llegan al grafico.
+    # llegan al gráfico.
     expect_true(grepl("ctrl1", cajas_norm, fixed = TRUE))
     expect_true(grepl("trt1", cajas_norm, fixed = TRUE))
 
@@ -152,7 +152,7 @@ test_that("el modulo server produce los dos graficos y respeta el selector de es
   })
 })
 
-test_that("sin conteos cargados los graficos explican que falta en lugar de fallar", {
+test_that("sin conteos cargados los gráficos explican que falta en lugar de fallar", {
   skip_if_not_installed("plotly")
   srv <- function(input, output, session) {
     state <- new.env(parent = emptyenv())
@@ -164,8 +164,8 @@ test_that("sin conteos cargados los graficos explican que falta en lugar de fall
   shiny::testServer(srv, {
     session$setInputs(deg_diag_expr_scale = "norm", deg_condition_col = "condition",
                       deg_diag_pv_subset = "tested", deg_source = "current")
-    # El mensaje sustituye al grafico; lo que no puede pasar es que el output
-    # lance y se lleve por delante la pestana entera de diagnosticos.
+    # El mensaje sustituye al gráfico; lo que no puede pasar es que el output
+    # lance y se lleve por delante la pestana entera de diagnósticos.
     expect_true(nzchar(output$deg_expr_density))
     expect_true(nzchar(output$deg_expr_box))
     expect_null(output$deg_expr_dist_caption)

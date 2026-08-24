@@ -1,8 +1,8 @@
 #' test-umbral-lfc-na.R
-#' Regresion: el umbral de |log2FC| del test NO siempre es un numero.
+#' Regresión: el umbral de |log2FC| del test NO siempre es un número.
 #'
 #' Swish no recibe umbral de fold-change —trabaja sobre las replicas
-#' inferenciales, no sobre la matriz prefiltrada—, asi que el ajuste lo registra
+#' inferenciales, no sobre la matriz prefiltrada—, así que el ajuste lo registra
 #' como `NA_real_` para no atribuirle un test que no hizo. `%||%` no captura ese
 #' NA (solo NULL y length 0), de modo que las ramas `if (lfc_thr > 0)` abortaban
 #' el render con "valor ausente donde TRUE/FALSE es necesario": se caian el panel
@@ -22,7 +22,7 @@ test_that("has_lfc_threshold() no se cae con NA, NULL ni vacio", {
   expect_true(has_lfc_threshold(0.5))
 })
 
-#' Tabla DEG minima con la forma que devuelven los motores.
+#' Tabla DEG mínima con la forma que devuelven los motores.
 deg_tabla_minima <- function(n = 60) {
   data.frame(
     gene          = sprintf("g%03d", seq_len(n)),
@@ -38,7 +38,7 @@ deg_tabla_minima <- function(n = 60) {
 }
 
 
-test_that("el volcano sigue dibujando las lineas de umbral cuando SI lo hay", {
+test_that("el volcano sigue dibujando las líneas de umbral cuando SI lo hay", {
   deg <- deg_tabla_minima()
 
   srv <- function(input, output, session) {
@@ -53,14 +53,14 @@ test_that("el volcano sigue dibujando las lineas de umbral cuando SI lo hay", {
   }
 
   shiny::testServer(srv, {
-    # El titulo declara el umbral: es lo que distingue este caso del anterior y
+    # El título declara el umbral: es lo que distingue este caso del anterior y
     # asegura que el arreglo del NA no ha desactivado la rama buena.
     expect_true(grepl("umbral del test", output$deg_volcano_plot, fixed = TRUE))
   })
 })
 
 test_that("ninguna rama del umbral compara sin proteger contra NA", {
-  # Guarda de estilo: el fallo original fue copiar la comparacion a tres sitios y
+  # Guarda de estilo: el fallo original fue copiar la comparación a tres sitios y
   # protegerla solo en uno. Si vuelve a aparecer un `if (lfc_thr > 0)` suelto,
   # este test lo caza antes que el usuario.
   ficheros <- list.files(file.path(app_root, "R"), pattern = "[.]R$",

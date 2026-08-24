@@ -3,8 +3,8 @@
 #' y fabricas de downloadHandler (CSV / plotly) que se inicializan en server.
 #'
 #' Nota: csv_download() y plotly_download() devuelven un downloadHandler y por tanto
-#' deben usarse dentro de la funcion server. Se definen aqui para que esten disponibles
-#' tanto en el modulo server_tab_results como en cualquier extension futura.
+#' deben usarse dentro de la función server. Se definen aquí para que esten disponibles
+#' tanto en el modulo server_tab_results como en cualquier extensión futura.
 
 #' Boton de descarga compacto para la cabecera de una tarjeta.
 header_download_btn <- function(output_id, title) {
@@ -17,16 +17,16 @@ header_download_btn <- function(output_id, title) {
   )
 }
 
-#' Card header con titulo a la izquierda y controles a la derecha.
+#' Card header con título a la izquierda y controles a la derecha.
 #'
 #' Sustituye a las diez repeticiones de
-#' `card_header(tags$div(class = "card-title-download", tags$span(titulo), div(...)))`
-#' que habia esparcidas por ui_tab_deg.R y ui_tab_results.R. Cada copia
-#' separaba los controles con su propio `gap` y su propio `align-items`, asi que
-#' la misma cabecera se alineaba distinto en cada pestana. Aqui la alineacion se
+#' `card_header(tags$div(class = "card-title-download", tags$span(título), div(...)))`
+#' que había esparcidas por ui_tab_deg.R y ui_tab_results.R. Cada copia
+#' separaba los controles con su propio `gap` y su propio `align-items`, así que
+#' la misma cabecera se alineaba distinto en cada pestana. Aquí la alineacion se
 #' decide una vez.
 #'
-#' @param title Titulo de la tarjeta.
+#' @param title Título de la tarjeta.
 #' @param ... Controles que van a la derecha (selectores, botones).
 #' @param download_id Si se indica, añade el boton de descarga al final.
 card_header_tools <- function(title, ..., download_id = NULL) {
@@ -58,8 +58,8 @@ status_pill <- function(label, level = "neutral", aria = NULL) {
             label)
 }
 
-#' Metrica compacta. `level` colorea el filo izquierdo segun el ESTADO, no
-#' segun la posicion de la tarjeta en la fila.
+#' Metrica compacta. `level` colorea el filo izquierdo según el ESTADO, no
+#' según la posición de la tarjeta en la fila.
 stat_tile <- function(value, label, level = "neutral") {
   level <- match.arg(level, c("ok", "warn", "bad", "info", "neutral"))
   clase <- if (identical(level, "neutral")) "metric-card" else paste0("metric-card is-", level)
@@ -69,7 +69,7 @@ stat_tile <- function(value, label, level = "neutral") {
   )
 }
 
-#' Titulo de seccion dentro de una pestana (con subtitulo opcional).
+#' Título de sección dentro de una pestana (con subtitulo opcional).
 section_title <- function(title, subtitle = NULL) {
   tagList(
     tags$div(class = "section-title", title),
@@ -125,14 +125,14 @@ plotly_download <- function(prefix, plot_fun) {
           }
         }
       } else {
-        image_error <- "El paquete webshot2 no esta instalado."
+        image_error <- "El paquete webshot2 no está instalado."
       }
 
       if (!length(image_files)) {
         writeLines(
           c(
             "No se pudo generar una imagen PNG/JPEG de la figura.",
-            "La figura interactiva esta disponible en index.html.",
+            "La figura interactiva está disponible en index.html.",
             "",
             "Para generar imagenes, instala o configura Chrome/Chromium para webshot2/chromote.",
             paste("Detalle:", image_error %||% "sin detalle disponible")

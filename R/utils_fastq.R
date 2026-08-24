@@ -1,5 +1,5 @@
 #' utils_fastq.R
-#' Deteccion y nombrado de muestras FASTQ paired/single end.
+#' Detección y nombrado de muestras FASTQ paired/single end.
 
 #' Genera todas las rutas candidatas para un sample y un set de sufijos
 sample_fastq_paths <- function(dir_path, samples, suffixes) {
@@ -24,7 +24,7 @@ read_type_label <- function(read_type) {
   if (identical(read_type, "se")) "Single-end" else "Paired-end"
 }
 
-#' Detecta muestras (caracter vector) en un directorio segun el read_type
+#' Detecta muestras (carácter vector) en un directorio según el read_type
 detect_samples <- function(dir_path, read_type = "pe") {
   if (!nzchar(dir_path) || !dir.exists(dir_path)) return(character(0))
   if (identical(read_type, "se")) {
@@ -45,7 +45,7 @@ detect_samples <- function(dir_path, read_type = "pe") {
   }
 }
 
-#' Vector logico: TRUE si a la muestra le falta el archivo R2
+#' Vector lógico: TRUE si a la muestra le falta el archivo R2
 missing_r2 <- function(dir_path, samples) {
   if (length(samples) == 0) return(logical(0))
   vapply(samples, function(s) {

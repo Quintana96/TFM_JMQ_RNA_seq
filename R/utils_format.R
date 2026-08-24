@@ -1,7 +1,7 @@
 #' utils_format.R
 #' Funciones de formato de texto, bytes, tiempos y logs.
 
-#' Formatea un numero de bytes en una cadena legible
+#' Formatea un número de bytes en una cadena legible
 fmt_bytes <- function(b) {
   b <- as.numeric(b)
   if (is.na(b))    return("—")
@@ -21,7 +21,7 @@ fmt_elapsed <- function(secs) {
 
 #' Entero con separador de miles ("18.402").
 #' `decimal.mark` se pasa explicitamente porque con big.mark = "." y el
-#' decimal.mark por defecto tambien ".", R avisa de la ambiguedad.
+#' decimal.mark por defecto también ".", R avisa de la ambiguedad.
 fmt_int <- function(x) {
   if (length(x) == 0 || is.null(x) || any(is.na(x))) return("—")
   formatC(as.integer(x), format = "d", big.mark = ".", decimal.mark = ",")
@@ -54,5 +54,5 @@ trim_log_text <- function(x, max_chars = 250000L) {
   )
 }
 
-#' Conversion segura a numerico (suprime warnings y devuelve NA)
+#' Conversión segura a numérico (suprime warnings y devuelve NA)
 num_or_na <- function(x) suppressWarnings(as.numeric(x))

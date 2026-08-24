@@ -1,23 +1,23 @@
 #' helper-app.R
-#' Carga la aplicacion para poder testear sus funciones puras.
+#' Carga la aplicación para poder testear sus funciones puras.
 #'
 #' La app no es un paquete de R: Shiny sourcea `global.R` y `R/*.R` por su
-#' cuenta al arrancar. testthat no hace eso, asi que se replica aqui el mismo
+#' cuenta al arrancar. testthat no hace eso, así que se replica aquí el mismo
 #' orden de carga. Este helper lo ejecuta testthat automaticamente (los ficheros
 #' `helper-*.R` se cargan antes que los `test-*.R`).
 #'
 #' Se sourcean solo `global.R` y `R/`: `ui.R` y `server.R` construyen objetos
 #' Shiny que no hacen falta para testear las funciones puras, que son las que
-#' contienen la logica estadistica.
+#' contienen la lógica estadística.
 
 app_root <- local({
   d <- normalizePath(file.path(dirname(dirname(getwd()))), mustWork = FALSE)
-  # Segun desde donde se invoque (raiz del proyecto o tests/testthat), la raiz
-  # de la app esta a distinta profundidad. Se localiza por un fichero ancla.
+  # Según desde donde se invoque (raíz del proyecto o tests/testthat), la raíz
+  # de la app está a distinta profundidad. Se localiza por un fichero ancla.
   for (cand in c(getwd(), dirname(getwd()), d, file.path(d, ".."))) {
     if (file.exists(file.path(cand, "global.R"))) return(normalizePath(cand))
   }
-  stop("No se encuentra la raiz de la aplicacion (global.R).")
+  stop("No se encuentra la raíz de la aplicación (global.R).")
 })
 
 suppressPackageStartupMessages(
@@ -52,7 +52,7 @@ make_test_counts <- function(n_genes = 400, n_per_group = 4, n_de = 40,
 
 #' Samplesheet acompañante de `make_test_counts()`.
 #'
-#' Los niveles se eligen a proposito de forma que el orden alfabetico NO
+#' Los niveles se eligen a propósito de forma que el orden alfabetico NO
 #' coincida con el contraste habitual: "trt" vs "ctrl" tiene como denominador
 #' "ctrl", que es el primero alfabeticamente, mientras que "ctrl" vs "trt" tiene
 #' como denominador "trt", que no lo es. Ese segundo caso es el que destapa los

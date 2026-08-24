@@ -1,10 +1,10 @@
 #' test-script-exportado.R
 #' El script R descargable es el entregable de reproducibilidad de la app: si no
-#' se ejecuta, o se ejecuta pero reproduce OTRO analisis, no sirve para nada.
+#' se ejecuta, o se ejecuta pero reproduce OTRO análisis, no sirve para nada.
 #'
 #' El caso critico es el contraste cuyo denominador no es el primer nivel en
 #' orden alfabetico ("ctrl vs trt": el denominador es "trt"). El script tomaba el
-#' primer nivel alfabetico como referencia, releveleaba mal y pedia despues un
+#' primer nivel alfabetico como referencia, releveleaba mal y pedia después un
 #' coeficiente inexistente, de modo que fallaba al ejecutarse.
 
 fit_rv <- function(counts, meta, num, den, method = "DESeq2") {
@@ -67,12 +67,12 @@ test_that("el script exportado se ejecuta y reproduce las llamadas de significac
 
 # ── Diseños con variables sustitutas ────────────────────────────────────────
 #
-# El caso que fallaba: sva + prefiltrado automatico, que es el modo por defecto.
+# El caso que fallaba: sva + prefiltrado automático, que es el modo por defecto.
 # El bloque de prefiltrado se emite ANTES del que crea las SV, pero interpolaba
 # `design_code` (que ya las incluye), de modo que el script moria en la primera
-# linea util con "object 'SV1' not found". Y el bloque de sva reestimaba las
-# variables con `~ condition` porque leia `rv$design_base`, un campo que ningun
-# sitio de la aplicacion rellenaba: aunque el orden hubiera sido correcto, el
+# línea útil con "object 'SV1' not found". Y el bloque de sva reestimaba las
+# variables con `~ condition` porque leía `rv$design_base`, un campo que ningun
+# sitio de la aplicación rellenaba: aunque el orden hubiera sido correcto, el
 # script no reproducia un ajuste con batch o con formula libre.
 
 #' Reproduce lo que hace el observer de la pestana 4 con sva activado:
@@ -114,13 +114,13 @@ test_that("con sva el prefiltrado no referencia variables que aun no existen", {
   lineas <- strsplit(script, "\n", fixed = TRUE)[[1]]
 
   # El diseño del prefiltrado es el BASE: sin SV, porque en la app las SV se
-  # estiman despues, sobre la matriz ya prefiltrada.
+  # estiman después, sobre la matriz ya prefiltrada.
   pref <- grep("^design <- model.matrix", lineas, value = TRUE)
   expect_length(pref, 1L)
   expect_false(grepl("SV", pref, fixed = TRUE))
   expect_true(grepl("lote", pref, fixed = TRUE))
 
-  # Y ninguna linea puede mencionar SV1 antes de la que lo crea.
+  # Y ninguna línea puede mencionar SV1 antes de la que lo crea.
   crea_sv <- grep("meta <- cbind(meta, as.data.frame(sv))", lineas, fixed = TRUE)
   usa_sv  <- grep("SV1", lineas, fixed = TRUE)
   expect_length(crea_sv, 1L)
@@ -139,7 +139,7 @@ test_that("con sva el modelo de svaseq es el diseño base real, no ~ condition",
   mod <- grep("^mod  <- model.matrix", strsplit(script, "\n", fixed = TRUE)[[1]],
               value = TRUE)
   expect_length(mod, 1L)
-  # El ajuste llevaba batch: reestimar las SV con `~ condition` daria otras
+  # El ajuste llevaba batch: reestimar las SV con `~ condition` daría otras
   # variables y otro resultado.
   expect_true(grepl("~ lote + condition", mod, fixed = TRUE))
   expect_false(grepl("model.matrix(~ condition,", mod, fixed = TRUE))
@@ -206,7 +206,7 @@ test_that("con IHW el script atacha S4Vectors", {
   rv$padj_method <- "IHW"
 
   s <- build_deg_r_script(rv)
-  # Sin S4Vectors atachado, IHW falla con "no se pudo encontrar la funcion mcols".
+  # Sin S4Vectors atachado, IHW falla con "no se pudo encontrar la función mcols".
   expect_true(grepl("library(S4Vectors)", s, fixed = TRUE))
   expect_true(grepl("filterFun = IHW::ihw", s, fixed = TRUE))
 })

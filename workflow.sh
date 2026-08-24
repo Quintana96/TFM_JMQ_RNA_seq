@@ -2,7 +2,7 @@
 
 # -E (errtrace) hace que el trap ERR se herede en funciones y subshells. Sin el,
 # un fallo dentro de run_cmd o del pipe bowtie2|samtools terminaba el script
-# (correcto) pero sin el mensaje que dice en que linea, que es justo lo que se
+# (correcto) pero sin el mensaje que dice en que línea, que es justo lo que se
 # necesita para diagnosticarlo.
 set -Eeuo pipefail
 shopt -s nullglob
@@ -32,22 +32,22 @@ ALIGNMENT_TYPE="bowtie2"
 READ_TYPE="pe"
 FRAGMENT_LENGTH=200
 FRAGMENT_SD=20
-# Replicas inferenciales de la cuantificacion (salmon: --numGibbsSamples,
-# kallisto: -b). Las necesita Swish para propagar la incertidumbre de asignacion
+# Replicas inferenciales de la cuantificación (salmon: --numGibbsSamples,
+# kallisto: -b). Las necesita Swish para propagar la incertidumbre de asignación
 # de lecturas entre transcritos que comparten secuencia. 0 las desactiva.
 INFERENTIAL_REPS=20
 # Tipo de feature que cuenta featureCounts (-t) y atributo que agrupa (-g).
 # El default se mantiene en gene/locus_tag para no cambiar el comportamiento
-# existente. Las buenas practicas para procariotas (Genome Biology 2021) hacen el
-# analisis diferencial a nivel de CDS; con FEATURE_TYPE=CDS se obtiene eso, a
+# existente. Las buenas prácticas para procariotas (Genome Biology 2021) hacen el
+# análisis diferencial a nivel de CDS; con FEATURE_TYPE=CDS se obtiene eso, a
 # cambio de excluir los genes no codificantes (rRNA, tRNA) del recuento.
 FEATURE_TYPE="gene"
 FEATURE_ATTR="locus_tag"
-# Orientacion de la libreria para featureCounts (-s): 0 sin orientar, 1 directa,
+# Orientación de la libreria para featureCounts (-s): 0 sin orientar, 1 directa,
 # 2 inversa (el caso de los protocolos dUTP, que son la mayoria hoy). "auto"
 # la infiere de los propios datos.
 STRANDEDNESS="auto"
-# Hilos. Antes estaba cableado a 8, lo que sobresuscribe maquinas mas pequeñas
+# Hilos. Antes estaba cableado a 8, lo que sobresuscribe maquinas más pequeñas
 # y no quedaba registrado en ninguna parte.
 THREADS_ARG=""
 
@@ -104,7 +104,7 @@ if [[ -z "$FEATURE_TYPE" || -z "$FEATURE_ATTR" ]]; then
     exit 1
 fi
 
-# Numero de hilos: el indicado, o los nucleos disponibles menos uno para no
+# Número de hilos: el indicado, o los nucleos disponibles menos uno para no
 # dejar la maquina sin capacidad de respuesta.
 if [[ -n "$THREADS_ARG" ]]; then
     THREADS="$THREADS_ARG"
@@ -150,28 +150,28 @@ file_size() {
 }
 
 
-# ── Metricas de ejecucion: tiempo y memoria ────────────────────────────────
+# ── Metricas de ejecución: tiempo y memoria ────────────────────────────────
 #
-# Responden a la pregunta practica de "cuanto tarda y cuanta RAM hace falta",
+# Responden a la pregunta práctica de "cuanto tarda y cuanta RAM hace falta",
 # que es lo que hay que saber para decidir si esto corre en un portatil o
 # necesita un servidor.
 #
 # La memoria se mide con un MUESTREADOR en segundo plano y no con
-# `/usr/bin/time`, por dos razones. La primera es de portabilidad: la version
+# `/usr/bin/time`, por dos razones. La primera es de portabilidad: la versión
 # BSD de macOS y la GNU de Linux difieren en las opciones (-l frente a -v), en
 # las unidades (bytes frente a kilobytes) y en si aceptan -o para escribir a
-# fichero, de modo que habria que mantener dos caminos. La segunda es que
-# `time` mide un proceso, y aqui interesa el arbol entero: cuando bowtie2
-# escribe a samtools por una tuberia los dos estan vivos a la vez, y lo que hay
+# fichero, de modo que habría que mantener dos caminos. La segunda es que
+# `time` mide un proceso, y aquí interesa el árbol entero: cuando bowtie2
+# escribe a samtools por una tuberia los dos están vivos a la vez, y lo que hay
 # que reservar es lo que ocupan juntos.
 #
-# Limitacion, que conviene declarar en lugar de aparentar precision: al
-# muestrear una vez por segundo, un pico mas corto que eso puede pasar
-# desapercibido. Para herramientas que tardan minutos la aproximacion es buena;
-# para medir con exactitud haria falta cgroups o un `time` especifico de la
+# Limitación, que conviene declarar en lugar de aparentar precisión: al
+# muestrear una vez por segundo, un pico más corto que eso puede pasar
+# desapercibido. Para herramientas que tardan minutos la aproximación es buena;
+# para medir con exactitud haría falta cgroups o un `time` específico de la
 # plataforma.
 RUN_START_EPOCH=$(date +%s)
-SAMPLES_FILE=""      # epoch <TAB> rss_kb del arbol de procesos
+SAMPLES_FILE=""      # epoch <TAB> rss_kb del árbol de procesos
 STEPS_FILE=""        # paso <TAB> inicio <TAB> fin
 METRICS_FILE=""      # resumen por paso, ya agregado
 SAMPLER_PID=""
@@ -185,7 +185,7 @@ rss_tree_kb() {
         { padre[$1] = $2; rss[$1] = $3 }
         END {
             descendiente[raiz] = 1
-            # El arbol es poco profundo, asi que basta con repetir hasta que
+            # El árbol es poco profundo, así que basta con repetir hasta que
             # deje de crecer en vez de ordenarlo topologicamente.
             do {
                 nuevo = 0
@@ -205,7 +205,7 @@ start_sampler() {
     local raiz=$$
     (
         # El muestreador muere solo si el script desaparece: sin esto, un fallo
-        # duro dejaria un proceso huerfano muestreando para siempre.
+        # duro dejaría un proceso huerfano muestreando para siempre.
         while kill -0 "$raiz" 2>/dev/null; do
             printf '%s\t%s\n' "$(date +%s)" "$(rss_tree_kb "$raiz")" >> "$SAMPLES_FILE"
             sleep "$RSS_INTERVAL"
@@ -222,7 +222,7 @@ stop_sampler() {
 }
 
 # Marca de paso. Cada llamada cierra el paso anterior y abre uno nuevo, de modo
-# que no hay que emparejar inicio y fin a mano en un script de 700 lineas.
+# que no hay que emparejar inicio y fin a mano en un script de 700 líneas.
 CURRENT_STEP=""
 CURRENT_STEP_START=0
 step_close() {
@@ -264,13 +264,13 @@ write_metrics() {
                 # Ventana abierta por la izquierda, (inicio, fin).
                 #
                 # Con los dos extremos incluidos la muestra de la frontera se
-                # contaba dos veces, y ademas el instante en que un paso empieza
+                # contaba dos veces, y además el instante en que un paso empieza
                 # es justo aquel en el que los procesos del anterior TODAVIA no
                 # han terminado de cerrarse. Medido: al arrancar el conteo, la
-                # muestra de ese segundo daba 2,4 GB porque FastQC seguia vivo;
-                # un segundo despues, 82 MB. Atribuir ese pico al conteo es
-                # falso, asi que la ventana empieza despues del instante de
-                # arranque. El total de la ejecucion no se ve afectado: ese se
+                # muestra de ese segundo daba 2,4 GB porque FastQC seguía vivo;
+                # un segundo después, 82 MB. Atribuir ese pico al conteo es
+                # falso, así que la ventana empieza después del instante de
+                # arranque. El total de la ejecución no se ve afectado: ese se
                 # calcula sobre todas las muestras.
                 for (i = 0; i < n; i++)
                     if (t[i] > ini && t[i] < fin && r[i] > pico) pico = r[i]
@@ -295,20 +295,20 @@ write_metrics() {
     } > "$METRICS_FILE"
 }
 
-trap 'log "ERROR: fallo en la linea ${BASH_LINENO[0]:-$LINENO}${FUNCNAME[0]:+ (funcion ${FUNCNAME[0]})}. Revisa el comando anterior."' ERR
+trap 'log "ERROR: fallo en la línea ${BASH_LINENO[0]:-$LINENO}${FUNCNAME[0]:+ (función ${FUNCNAME[0]})}. Revisa el comando anterior."' ERR
 
 # Estado de salida como FICHERO, no solo como texto en el log.
 #
-# La app deducia si una ejecucion habia terminado bien buscando la frase
+# La app deducia si una ejecución había terminado bien buscando la frase
 # "Analysis completed successfully" en el log y clasificaba como error cualquier
 # tail que contuviera "Error". Eso es fragil por partida doble: cambiar el texto
-# del log rompe la deteccion, y el aviso de una herramienta que mencione "Error"
-# marca como fallida una ejecucion correcta. Con esto queda un dato explicito.
+# del log rompe la detección, y el aviso de una herramienta que mencione "Error"
+# marca como fallida una ejecución correcta. Con esto queda un dato explícito.
 RUN_STATUS_FILE=""
 write_exit_status() {
     local code=$1
-    # Las metricas se cierran aqui y no en el camino feliz: una ejecucion que
-    # falla a mitad tambien consumio tiempo y memoria, y saber cuanto es justo
+    # Las metricas se cierran aquí y no en el camino feliz: una ejecución que
+    # falla a mitad también consumio tiempo y memoria, y saber cuanto es justo
     # lo que hace falta para diagnosticarla.
     step_close
     stop_sampler
@@ -361,8 +361,8 @@ salmon_index_type() {
 }
 
 # El estado de salida se habilita ANTES de validar las herramientas: la causa
-# mas frecuente de fallo temprano es justamente que falte un binario en PATH, y
-# esa ejecucion tambien tiene que dejar constancia de por que murio.
+# más frecuente de fallo temprano es justamente que falte un binario en PATH, y
+# esa ejecución también tiene que dejar constancia de por qué murio.
 mkdir -p "$OUTPUT"
 RUN_STATUS_FILE="${OUTPUT}/exit_status.tsv"
 SAMPLES_FILE="${OUTPUT}/.rss_samples.tsv"
@@ -395,14 +395,14 @@ ALIGNMENTS="${OUTPUT}/03_alignments/${ALIGNMENT_TYPE}"
 COUNTS="${OUTPUT}/04_counts"
 
 # Index paths for different aligners
-# Los indices se cachean FUERA del directorio de la ejecucion, en una carpeta
-# indexada por el md5 de la referencia. Antes vivian en ${OUTPUT}/indices, y como
-# la app crea un directorio nuevo por ejecucion, la logica de "indice existente,
-# se reutiliza" no se activaba nunca: se reconstruia el indice en cada corrida,
-# que en genomas grandes es la parte mas lenta del pipeline.
+# Los índices se cachean FUERA del directorio de la ejecución, en una carpeta
+# indexada por el md5 de la referencia. Antes vivian en ${OUTPUT}/índices, y como
+# la app crea un directorio nuevo por ejecución, la lógica de "índice existente,
+# se reutiliza" no se activaba nunca: se reconstruia el índice en cada corrida,
+# que en genomas grandes es la parte más lenta del pipeline.
 #
 # El md5 de la referencia como clave garantiza que un cambio en el genoma o el
-# transcriptoma invalida el indice automaticamente.
+# transcriptoma inválida el índice automaticamente.
 GENOME_MD5="$(md5_of "$GENOME_FILE")"
 INDEX_CACHE="${INDEX_CACHE_DIR:-$(dirname "$OUTPUT")/.index_cache}/${GENOME_MD5}"
 mkdir -p "$INDEX_CACHE" 2>/dev/null || INDEX_CACHE="${OUTPUT}/indices"
@@ -440,8 +440,8 @@ fi
 
 # ── Integridad de los FASTQ ────────────────────────────────────────────────
 # Un .gz truncado (transferencia interrumpida, disco lleno) fallaba tarde y con
-# un error criptico de fastp o del alineador, a veces despues de horas de
-# ejecucion. Comprobarlo aqui cuesta segundos y el mensaje dice que fichero es.
+# un error criptico de fastp o del alineador, a veces después de horas de
+# ejecución. Comprobarlo aquí cuesta segundos y el mensaje dice que fichero es.
 log "Comprobando integridad de los FASTQ..."
 corruptos=0
 for fq in "${FASTQ_FILES[@]}"; do
@@ -457,7 +457,7 @@ for fq in "${FASTQ_FILES[@]}"; do
     fi
 done
 if [[ $corruptos -gt 0 ]]; then
-    log "Error: $corruptos fichero(s) FASTQ no superan la comprobacion de integridad."
+    log "Error: $corruptos fichero(s) FASTQ no superan la comprobación de integridad."
     exit 1
 fi
 log "+ ${#FASTQ_FILES[@]} FASTQ integros"
@@ -465,12 +465,12 @@ log "+ ${#FASTQ_FILES[@]} FASTQ integros"
 log "Entrada: $INPUT"
 log "Salida: $OUTPUT"
 log "Genoma/transcriptoma: $GENOME_FILE"
-log "Anotacion: $ANNOTATION_FILE"
+log "Anotación: $ANNOTATION_FILE"
 log "Tipo de alineamiento: $ALIGNMENT_TYPE"
 log "Tipo de lectura: $READ_TYPE"
 
-# Parametros en formato legible por la app. Sin esto, una ejecucion guardada no
-# deja rastro de con que anotacion se hizo, y la app no puede construir el mapa
+# Parámetros en formato legible por la app. Sin esto, una ejecución guardada no
+# deja rastro de con que anotación se hizo, y la app no puede construir el mapa
 # transcrito-gen para tximport ni identificar los genes de rRNA.
 RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
 {
@@ -489,9 +489,9 @@ RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
     printf 'feature_attr\t%s\n'     "$FEATURE_ATTR"
     printf 'threads\t%s\n'          "$THREADS"
     printf 'n_fastq\t%s\n'          "${#FASTQ_FILES[@]}"
-    # Quien, donde y con que version del pipeline. Es el minimo de un registro
-    # de auditoria y lo exigen las buenas practicas de laboratorio clinico para
-    # los componentes informaticos.
+    # Quien, donde y con que versión del pipeline. Es el mínimo de un registro
+    # de auditoria y lo exigen las buenas prácticas de laboratorio clínico para
+    # los componentes informáticos.
     printf 'user\t%s\n'             "$(whoami 2>/dev/null || echo '—')"
     printf 'host\t%s\n'             "$(hostname 2>/dev/null || echo '—')"
     printf 'workflow_md5\t%s\n'     "$(md5_of "${BASH_SOURCE[0]}")"
@@ -502,34 +502,34 @@ RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
 
 # ── Versiones de las herramientas ──────────────────────────────────────────
 # Sin esto es imposible reconstruir que produjo exactamente un resultado. Se ha
-# demostrado que cambiar la version de una herramienta del pipeline altera la
+# demostrado que cambiar la versión de una herramienta del pipeline altera la
 # lista de genes diferenciales (Wessels Perelo et al., NAR Genom Bioinform 2024),
-# asi que la version es parte del resultado, no un detalle de instalacion.
+# así que la versión es parte del resultado, no un detalle de instalación.
 log "Registrando versiones de las herramientas..."
 {
     printf 'tool\tversion\tpath\n'
     for t in fastqc fastp multiqc bowtie2 samtools featureCounts salmon kallisto; do
         if command -v "$t" >/dev/null 2>&1; then
-            # Dos cuidados aqui, los dos aprendidos ejecutando.
+            # Dos cuidados aquí, los dos aprendidos ejecutando.
             #
-            # Primero, NO se canaliza hacia `head`: con `set -o pipefail`, una
-            # herramienta que sigue escribiendo despues de la primera linea
+            # Primero, NO se canaliza hacía `head`: con `set -o pipefail`, una
+            # herramienta que sigue escribiendo después de la primera línea
             # recibe SIGPIPE cuando head cierra, la tuberia devuelve 141 y
-            # `set -e` aborta el script. Ocurria con bowtie2, que imprime nueve
-            # lineas: la ejecucion moria al registrar versiones, antes de
+            # `set -e` aborta el script. Ocurría con bowtie2, que imprime nueve
+            # líneas: la ejecución moria al registrar versiones, antes de
             # alinear nada.
             #
-            # Segundo, no todas aceptan `--version`: featureCounts usa `-v` y
-            # kallisto usa `version`. Y bowtie2 antepone dos lineas de aviso a
-            # la version real. Coger la primera linea a ciegas registraba un
+            # Segundo, no todas aceptan `--versión`: featureCounts usa `-v` y
+            # kallisto usa `versión`. Y bowtie2 antepone dos líneas de aviso a
+            # la versión real. Coger la primera línea a ciegas registraba un
             # aviso o un mensaje de error en el fichero de procedencia, que es
             # justo el fichero que debe poder creerse.
             case "$t" in
                 featureCounts) v_full="$("$t" -v 2>&1 || true)" ;;
-                kallisto)      v_full="$("$t" version 2>&1 || true)" ;;
-                *)             v_full="$("$t" --version 2>&1 || true)" ;;
+                kallisto)      v_full="$("$t" versión 2>&1 || true)" ;;
+                *)             v_full="$("$t" --versión 2>&1 || true)" ;;
             esac
-            # Primera linea no vacia que no sea un aviso ni un error, en UNA
+            # Primera línea no vacia que no sea un aviso ni un error, en UNA
             # sola pasada de awk. Encadenar dos filtros donde el segundo sale
             # pronto reproduce el mismo SIGPIPE que se acaba de corregir.
             v="$(printf '%s\n' "$v_full" \
@@ -548,7 +548,7 @@ log "Registrando versiones de las herramientas..."
 
 # ── Huella de los ficheros de entrada ──────────────────────────────────────
 # Permite demostrar que dos ejecuciones partieron de los mismos datos, y
-# detectar que una entrada cambio despues de analizarla.
+# detectar que una entrada cambio después de analizarla.
 log "Calculando checksums de las entradas..."
 {
     printf 'file\tsize_bytes\tmd5\n'
@@ -577,16 +577,16 @@ step indice "Building ${ALIGNMENT_TYPE} index..."
 
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
     if [[ -s "${BOWTIE_INDEX}.1.bt2" && -s "${BOWTIE_INDEX}.2.bt2" && -s "${BOWTIE_INDEX}.3.bt2" && -s "${BOWTIE_INDEX}.4.bt2" && -s "${BOWTIE_INDEX}.rev.1.bt2" && -s "${BOWTIE_INDEX}.rev.2.bt2" ]]; then
-        log "Indice Bowtie2 existente detectado; se reutiliza."
+        log "Índice Bowtie2 existente detectado; se reutiliza."
     else
         rm -f "${BOWTIE_INDEX}".*.bt2.tmp "${BOWTIE_INDEX}".*.bt2
-        log "Construyendo indice Bowtie2. Este paso puede tardar varios minutos y puede no imprimir progreso continuo."
+        log "Construyendo índice Bowtie2. Este paso puede tardar varios minutos y puede no imprimir progreso continuo."
         run_cmd bowtie2-build "$GENOME_FILE" "$BOWTIE_INDEX"
     fi
     INDEX="$BOWTIE_INDEX"
 elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
     if [[ -d "$SALMON_INDEX" && -s "${SALMON_INDEX}/versionInfo.json" ]]; then
-        log "Indice Salmon existente detectado; se reutiliza."
+        log "Índice Salmon existente detectado; se reutiliza."
     else
         rm -rf "$SALMON_INDEX"
         SALMON_INDEX_TYPE=$(salmon_index_type)
@@ -595,7 +595,7 @@ elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
     fi
 elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
     if [[ -s "$KALLISTO_INDEX" ]]; then
-        log "Indice kallisto existente detectado; se reutiliza."
+        log "Índice kallisto existente detectado; se reutiliza."
     else
         rm -f "$KALLISTO_INDEX"
         run_cmd kallisto index -i "$KALLISTO_INDEX" "$GENOME_FILE"
@@ -613,8 +613,8 @@ else
 fi
 
 # Process each sample
-# Es el paso que domina el tiempo total: recorte con fastp mas alineamiento o
-# cuantificacion, una vez por muestra.
+# Es el paso que domina el tiempo total: recorte con fastp más alineamiento o
+# cuantificación, una vez por muestra.
 step procesado "Procesando ${#SAMPLE_FILES[@]} muestras (recorte y ${ALIGNMENT_TYPE})..."
 for READ1 in "${SAMPLE_FILES[@]}"; do
 
@@ -750,7 +750,7 @@ fi
 step qc_final "Control de calidad post-trimming con FastQC..."
 run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 
-# ── Orientacion de la libreria ─────────────────────────────────────────────
+# ── Orientación de la libreria ─────────────────────────────────────────────
 # featureCounts contaba SIEMPRE como no orientada (-s 0). La mayoria de los
 # protocolos actuales son stranded (dUTP, que corresponde a -s 2), y contar una
 # libreria stranded como no orientada suma las lecturas antisentido: en genomas
@@ -758,15 +758,15 @@ run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 # solapantes y degrada la especificidad (Zhao et al., BMC Genomics 2015).
 #
 # En modo "auto" se infiere de los propios datos contando un subconjunto de
-# lecturas con las tres orientaciones y quedandose con la que asigna mas.
+# lecturas con las tres orientaciones y quedandose con la que asigna más.
 infer_strandedness() {
     local bam="$1" s0 s1 s2 best
     local tmp="${COUNTS}/.strand_check"
     local -a pe_flags=()
     # featureCounts ABORTA con "Paired-end reads were detected in single-end read
     # library" si recibe un BAM pareado sin -p. La inferencia lo llamaba sin esos
-    # flags y con `|| true`, asi que el error se tragaba, el fichero de resumen no
-    # se escribia y las tres orientaciones salian 0: la funcion devolvia siempre
+    # flags y con `|| true`, así que el error se tragaba, el fichero de resumen no
+    # se escribía y las tres orientaciones salian 0: la función devolvía siempre
     # 0 (sin orientar) creyendo haberlo medido.
     [[ "$READ_TYPE" == "pe" ]] && pe_flags=(-p --countReadPairs)
     mkdir -p "$tmp"
@@ -779,20 +779,20 @@ infer_strandedness() {
     s1=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s1.txt.summary" 2>/dev/null || echo 0)
     s2=$(awk 'NR>1 && $1=="Assigned" {print $2}' "${tmp}/s2.txt.summary" 2>/dev/null || echo 0)
     s0=${s0:-0}; s1=${s1:-0}; s2=${s2:-0}
-    # El diagnostico va a STDERR: esta funcion se invoca con $(...) y su stdout es
+    # El diagnóstico va a STDERR: esta función se invoca con $(...) y su stdout es
     # el valor de retorno. Escribiendolo en stdout, el mensaje acababa DENTRO de
-    # la variable y `-s` recibia una linea de log entera.
-    log "  asignadas por orientacion -> sin orientar: $s0 | directa: $s1 | inversa: $s2" >&2
-    # La comparacion NO puede ser "la que mas asigna". El modo sin orientar cuenta
-    # las lecturas en ambos sentidos, asi que su recuento es por construccion mayor
+    # la variable y `-s` recibía una línea de log entera.
+    log "  asignadas por orientación -> sin orientar: $s0 | directa: $s1 | inversa: $s2" >&2
+    # La comparación NO puede ser "la que más asigna". El modo sin orientar cuenta
+    # las lecturas en ambos sentidos, así que su recuento es por construcción mayor
     # o igual que el de cualquiera de los dos modos orientados: ganaria siempre, y
-    # la inferencia devolveria "sin orientar" para cualquier libreria, tambien para
+    # la inferencia devolveria "sin orientar" para cualquier libreria, también para
     # una dUTP perfectamente orientada.
     #
     # El criterio correcto es el que usan las herramientas al uso (RSeQC): mirar
     # como se REPARTEN entre los dos sentidos las lecturas que si son asignables
-    # por hebra. Si el reparto es muy asimetrico, la libreria esta orientada en ese
-    # sentido; si esta repartido, no lo esta.
+    # por hebra. Si el reparto es muy asimétrico, la libreria está orientada en ese
+    # sentido; si está repartido, no lo está.
     local total_orientado=$(( s1 + s2 ))
     best=0
     if [[ "$total_orientado" -lt 1000 ]]; then
@@ -806,9 +806,9 @@ infer_strandedness() {
         fi
     fi
     rm -rf "$tmp"
-    # Guarda final: si nada se pudo medir, no se puede afirmar una orientacion.
+    # Guarda final: si nada se pudo medir, no se puede afirmar una orientación.
     if [[ "$s0" -eq 0 && "$s1" -eq 0 && "$s2" -eq 0 ]]; then
-        log "  ADVERTENCIA: no se pudo medir la orientacion; se usa 0 (sin orientar)." >&2
+        log "  ADVERTENCIA: no se pudo medir la orientación; se usa 0 (sin orientar)." >&2
     fi
     printf '%s' "$best"
 }
@@ -816,9 +816,9 @@ infer_strandedness() {
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" && "$STRANDEDNESS" == "auto" ]]; then
     FIRST_BAM=$( (shopt -s nullglob; b=( "$ALIGNMENTS"/*.bam ); echo "${b[0]:-}") )
     if [[ -n "$FIRST_BAM" && -f "$FIRST_BAM" ]]; then
-        log "Infiriendo la orientacion de la libreria a partir de $(basename "$FIRST_BAM")..."
+        log "Infiriendo la orientación de la libreria a partir de $(basename "$FIRST_BAM")..."
         STRANDEDNESS=$(infer_strandedness "$FIRST_BAM")
-        log "+ Orientacion inferida: -s $STRANDEDNESS"
+        log "+ Orientación inferida: -s $STRANDEDNESS"
     else
         STRANDEDNESS=0
     fi
@@ -862,12 +862,12 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
 
     # Create count matrix in TSV format
     log "+ Crear matriz de conteos: ${COUNTS}/count_matrix.tsv"
-    # La cabecera se limpia CAMPO A CAMPO, no con un sed sobre la linea entera.
-    # El `sed '1s|.*/||g'` que habia aqui es codicioso sobre toda la linea: con
-    # rutas absolutas colapsaba `Geneid\t/ruta/A.bam\t/ruta/B.bam` en un unico
+    # La cabecera se limpia CAMPO A CAMPO, no con un sed sobre la línea entera.
+    # El `sed '1s|.*/||g'` que había aquí es codicioso sobre toda la línea: con
+    # rutas absolutas colapsaba `Geneid\t/ruta/A.bam\t/ruta/B.bam` en un único
     # campo `B`, dejando una cabecera de 1 columna frente a N+1 de datos. El
     # lector de la app no encontraba el patron `^Geneid\t`, read.delim abortaba y
-    # devolvia NULL, y la interfaz anunciaba "Workflow finalizado correctamente"
+    # devolvía NULL, y la interfaz anunciaba "Workflow finalizado correctamente"
     # sin matriz. Con awk cada campo se procesa por separado.
     awk 'BEGIN { FS=OFS="\t" } !/^#/ { print }' "${COUNTS}/gene_counts.txt" \
         | cut -f1,7- \
@@ -877,9 +877,9 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
         > "${COUNTS}/count_matrix.tsv"
 
 elif [[ "$ALIGNMENT_TYPE" == "salmon" || "$ALIGNMENT_TYPE" == "kallisto" ]]; then
-    # Resumen de transcritos a genes con tximport, reutilizando la misma funcion
-    # que usa la aplicacion (scripts/build_count_matrix.R). Antes se escribia un
-    # fichero con SOLO la cabecera y un comentario diciendo que hacia falta un
+    # Resumen de transcritos a genes con tximport, reutilizando la misma función
+    # que usa la aplicación (scripts/build_count_matrix.R). Antes se escribía un
+    # fichero con SOLO la cabecera y un comentario diciendo que hacía falta un
     # script de R: quien se llevaba la carpeta de resultados obtenia una matriz
     # vacia presentada como el entregable principal.
     log "Resumiendo transcritos a genes con tximport (${ALIGNMENT_TYPE})..."
@@ -890,19 +890,19 @@ elif [[ "$ALIGNMENT_TYPE" == "salmon" || "$ALIGNMENT_TYPE" == "kallisto" ]]; the
             "${COUNTS}/count_matrix.tsv" "$ANNOTATION_FILE"; then
         log "+ Matriz de conteos por gen: ${COUNTS}/count_matrix.tsv"
     else
-        # Sin anotacion utilizable no hay resumen a gen posible. Se avisa y NO se
+        # Sin anotación utilizable no hay resumen a gen posible. Se avisa y NO se
         # deja un fichero a medias: es preferible que falte el artefacto a que
-        # exista uno que parece valido y no lo es.
+        # exista uno que parece válido y no lo es.
         rm -f "${COUNTS}/count_matrix.tsv"
-        log "! No se ha podido construir la matriz por gen (revisa la anotacion)."
+        log "! No se ha podido construir la matriz por gen (revisa la anotación)."
         log "  Las cuantificaciones por muestra quedan en ${COUNTS}/ y la app"
-        log "  puede resumirlas al cargar la ejecucion."
+        log "  puede resumirlas al cargar la ejecución."
     fi
 
     # Copia de las cuantificaciones por muestra, con el nombre de la muestra en
     # el fichero. Antes se copiaban con `cp "$ALIGNMENTS"/*/*.sf "${COUNTS}/"`:
-    # todas se llaman quant.sf (o abundance.tsv), asi que cada copia sobrescribia
-    # la anterior y solo sobrevivia la ultima muestra, en silencio por el
+    # todas se llaman quant.sf (o abundance.tsv), así que cada copia sobrescribia
+    # la anterior y solo sobrevivia la última muestra, en silencio por el
     # `|| true`.
     if [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then quant_name="quant.sf"
     else quant_name="abundance.tsv"; fi

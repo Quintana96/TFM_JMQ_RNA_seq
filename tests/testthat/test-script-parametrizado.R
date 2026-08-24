@@ -2,13 +2,13 @@
 #' El script exportado tiene que PARSEAR para todas las combinaciones que la
 #' interfaz permite, no solo para la que se probo al escribirlo.
 #'
-#' Existe porque la bateria anterior solo cubria DESeq2 con prefiltrado NULL, sin
+#' Existe porque la batería anterior solo cubria DESeq2 con prefiltrado NULL, sin
 #' batch, sin variables sustitutas y sin modo de outliers. Por ese hueco se colo
-#' un fallo real: con Wilcoxon, run_deg() devolvia como `design` una etiqueta en
+#' un fallo real: con Wilcoxon, run_deg() devolvía como `design` una etiqueta en
 #' PROSA ("sin modelo (test de dos muestras...)") y el generador la interpolaba
 #' dentro de model.matrix(), produciendo un script que no parseaba. Como el
-#' prefiltrado por defecto es automatico, le ocurria a cualquiera que exportase
-#' un analisis Wilcoxon.
+#' prefiltrado por defecto es automático, le ocurría a cualquiera que exportase
+#' un análisis Wilcoxon.
 
 ajusta <- function(method, prefilter_mode = "auto", batch = FALSE,
                    design_formula = NULL, outliers = "na", n_per_group = 4) {
@@ -61,7 +61,7 @@ test_that("el script parsea con los tres modos de outliers", {
     rv <- ajusta("DESeq2", outliers = o)
     s <- build_deg_r_script(rv)
     expect_silent(parse(text = s))
-    # Y el modo elegido tiene que aparecer: si no, dos analisis con resultados
+    # Y el modo elegido tiene que aparecer: si no, dos análisis con resultados
     # distintos producirian el mismo script.
     if (identical(o, "keep")) expect_true(grepl("cooksCutoff = FALSE", s, fixed = TRUE))
     if (identical(o, "refit")) expect_true(grepl("minReplicatesForReplace", s, fixed = TRUE))

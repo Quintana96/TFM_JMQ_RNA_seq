@@ -1,27 +1,27 @@
 #' utils_audit.R
-#' Persistencia de los analisis diferenciales y registro de auditoria.
+#' Persistencia de los análisis diferenciales y registro de auditoria.
 #'
-#' Por que existe: hasta ahora el informe y el script solo existian si el usuario
-#' pulsaba descargar. Una ejecucion del pipeline dejaba su rastro en disco
-#' (log, run_params.tsv), pero los analisis diferenciales hechos sobre ella no
-#' dejaban ninguno: no habia forma de saber cuantos se lanzaron, con que
-#' parametros, ni cual produjo la figura que acabo en la memoria.
+#' Por qué existe: hasta ahora el informe y el script solo existian si el usuario
+#' pulsaba descargar. Una ejecución del pipeline dejaba su rastro en disco
+#' (log, run_params.tsv), pero los análisis diferenciales hechos sobre ella no
+#' dejaban ninguno: no había forma de saber cuantos se lanzaron, con que
+#' parámetros, ni cual produjo la figura que acabo en la memoria.
 #'
-#' El patron es el del cuaderno de recogida de datos electronico de las normas
-#' de buena practica clinica: un registro append-only de quien hizo que, cuando
-#' y con que parametros. No pretende ser inviolable —es un fichero de texto—,
+#' El patron es el del cuaderno de recogida de datos electrónico de las normas
+#' de buena práctica clínica: un registro append-only de quien hizo que, cuando
+#' y con que parámetros. No pretende ser inviolable —es un fichero de texto—,
 #' pero convierte "creo que use FDR 0,05" en un dato consultable.
 
-#' Ruta del registro de auditoria (uno por instalacion, en outputs/).
+#' Ruta del registro de auditoria (uno por instalación, en outputs/).
 audit_log_path <- function(outputs_dir = NULL) {
   base <- outputs_dir %||% outputs_base_dir()
   file.path(base, "audit_log.tsv")
 }
 
-#' Añade una linea al registro de auditoria.
+#' Añade una línea al registro de auditoria.
 #'
-#' Nunca falla hacia fuera: un problema al escribir el registro no puede tumbar
-#' un analisis que ya se ha calculado correctamente.
+#' Nunca falla hacía fuera: un problema al escribir el registro no puede tumbar
+#' un análisis que ya se ha calculado correctamente.
 #'
 #' @param accion etiqueta corta de la accion ("deg_run", "deg_export"...)
 #' @param detalles lista clave-valor; se serializa como "k=v; k=v"
@@ -35,7 +35,7 @@ append_audit_log <- function(accion, detalles = list(), outputs_dir = NULL) {
     txt <- paste(vapply(names(detalles), function(k) {
       v <- detalles[[k]]
       v <- if (is.null(v) || !length(v)) "—" else paste(as.character(v), collapse = ",")
-      # Ni tabuladores ni saltos: cada evento tiene que caber en una linea para
+      # Ni tabuladores ni saltos: cada evento tiene que caber en una línea para
       # que el fichero siga siendo un TSV legible.
       paste0(k, "=", gsub("[\t\r\n]+", " ", v))
     }, character(1)), collapse = "; ")
@@ -62,19 +62,19 @@ read_audit_log <- function(outputs_dir = NULL, n_max = 500L) {
   utils::tail(df, n_max)
 }
 
-#' Persiste un analisis diferencial completo en disco.
+#' Persiste un análisis diferencial completo en disco.
 #'
 #' Escribe en `<destino>/05_deg/<timestamp>/`:
-#'   - `deg_params.tsv`  parametros del ajuste, en el mismo formato clave-valor
+#'   - `deg_params.tsv`  parámetros del ajuste, en el mismo formato clave-valor
 #'                       que run_params.tsv del pipeline
 #'   - `resultados.tsv`  la tabla COMPLETA, no solo los significativos
 #'   - `samplesheet.tsv` los metadatos tal como se usaron (incluidas las SV)
 #'   - `informe.html`    el mismo informe que se descarga desde la interfaz
-#'   - `analisis.R`      el script equivalente
+#'   - `análisis.R`      el script equivalente
 #'
 #' @param rv `state$deg_rv`
-#' @param diagnostics diagnosticos para el informe (puede ser NULL)
-#' @param base_dir directorio de la ejecucion de origen; si no hay (matriz
+#' @param diagnostics diagnósticos para el informe (puede ser NULL)
+#' @param base_dir directorio de la ejecución de origen; si no hay (matriz
 #'   subida), se usa `outputs/analisis_sueltos/`
 #' @return ruta del directorio escrito, o NULL si no se pudo
 persist_deg_analysis <- function(rv, diagnostics = NULL, base_dir = NULL,
@@ -90,8 +90,8 @@ persist_deg_analysis <- function(rv, diagnostics = NULL, base_dir = NULL,
     dest <- file.path(raiz, "05_deg", stamp)
     dir.create(dest, recursive = TRUE, showWarnings = FALSE)
 
-    # Parametros en el mismo formato clave-valor que usa el pipeline, para que
-    # se puedan leer con la misma funcion.
+    # Parámetros en el mismo formato clave-valor que usa el pipeline, para que
+    # se puedan leer con la misma función.
     par <- deg_run_parameters(rv)
     extra <- list(
       numerador = rv$contrast_num, denominador = rv$ref_level,
@@ -114,7 +114,7 @@ persist_deg_analysis <- function(rv, diagnostics = NULL, base_dir = NULL,
     writeLines(unname(lineas), file.path(dest, "deg_params.tsv"))
 
     # La tabla completa, no solo los significativos: recortarla impediria
-    # recalcular otros umbrales o rehacer el enriquecimiento mas tarde.
+    # recalcular otros umbrales o rehacer el enriquecimiento más tarde.
     utils::write.table(rv$results, file.path(dest, "resultados.tsv"),
                        sep = "\t", quote = FALSE, row.names = FALSE)
     if (!is.null(rv$meta)) {

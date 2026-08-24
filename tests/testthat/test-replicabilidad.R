@@ -1,7 +1,7 @@
 #' test-replicabilidad.R
-#' El panel de replicabilidad evalua los resultados del ajuste, asi que tiene que
+#' El panel de replicabilidad evalua los resultados del ajuste, así que tiene que
 #' reajustar EL MISMO modelo. Si remuestrea con otro diseño u otro contraste, el
-#' numero que devuelve no describe los resultados que el usuario esta mirando.
+#' número que devuelve no describe los resultados que el usuario está mirando.
 
 test_that("el bootstrap respeta la formula libre del diseño", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
@@ -16,8 +16,8 @@ test_that("el bootstrap respeta la formula libre del diseño", {
 
   expect_null(res$error)
   expect_true(res$n_ok >= 1L)
-  # Si la formula se hubiese ignorado, el ajuste habria sido ~ condition y el
-  # coeficiente testeado seria otro; al menos debe haber corrido sin fallar.
+  # Si la formula se hubiese ignorado, el ajuste habría sido ~ condition y el
+  # coeficiente testeado sería otro; al menos debe haber corrido sin fallar.
   expect_true(is.data.frame(res$per_boot))
 })
 
@@ -44,8 +44,8 @@ test_that("el bootstrap rechaza menos de 3 muestras por grupo", {
   res <- bootstrap_replicability(counts, meta, method = "DESeq2",
                                  ref_level = "ctrl", contrast_num = "trt",
                                  n_boot = 3L, seed = ANALYSIS_SEED)
-  # Con 2 por grupo el unico remuestreo con dos muestras distintas es el
-  # original: la correlacion saldria 1 sin haber medido nada.
+  # Con 2 por grupo el único remuestreo con dos muestras distintas es el
+  # original: la correlación saldría 1 sin haber medido nada.
   expect_false(is.null(res$error))
   expect_match(res$error, "3", fixed = TRUE)
 })
@@ -55,7 +55,7 @@ test_that("el contraste del bootstrap es el del ajuste, en ambos sentidos", {
   counts <- make_test_counts(n_genes = 150, n_per_group = 4)
   meta <- make_test_meta(counts)
 
-  # Invertir el contraste debe invertir el signo del estadistico de referencia.
+  # Invertir el contraste debe invertir el signo del estadístico de referencia.
   ab <- bootstrap_replicability(counts, meta, method = "DESeq2",
                                 ref_level = "ctrl", contrast_num = "trt",
                                 n_boot = 2L, seed = ANALYSIS_SEED)

@@ -1,15 +1,15 @@
 #' utils_batch.R
-#' Funciones puras (sin Shiny) para tratar la variacion no deseada: variables
-#' sustitutas (sva), ajuste de conteos (ComBat-seq) y eliminacion del efecto
+#' Funciones puras (sin Shiny) para tratar la variación no deseada: variables
+#' sustitutas (sva), ajuste de conteos (ComBat-seq) y eliminación del efecto
 #' batch para VISUALIZAR (limma::removeBatchEffect).
 #'
-#' La distincion que la app debe enseñar explicitamente (docs/REVISION_ESTADISTICA.md,
+#' La distinción que la app debe enseñar explicitamente (docs/REVISION_ESTADISTICA.md,
 #' B6), porque es una fuente clasica de error:
 #'
 #'   - Para TESTEAR, lo correcto es incluir el batch como covariable en el
 #'     diseño y dejar los conteos intactos. El modelo estima y descuenta el
 #'     efecto sin destruir la estructura de la varianza.
-#'   - Para VISUALIZAR (PCA, heatmap), se corrige la matriz, porque un grafico no
+#'   - Para VISUALIZAR (PCA, heatmap), se corrige la matriz, porque un gráfico no
 #'     puede "incluir una covariable".
 #'
 #' Corregir la matriz y luego testear sobre ella infla los falsos positivos: el
@@ -25,39 +25,39 @@
 #' @param counts matriz de conteos (genes x muestras)
 #' @param meta metadatos alineados con las columnas de counts
 #' @param full_formula formula del modelo de interes (p. ej. ~ condition)
-#' @param n_sv numero de variables sustitutas; NULL = lo estima sva
+#' @param n_sv número de variables sustitutas; NULL = lo estima sva
 #' @param min_residual_df grados de libertad residuales que se reservan. Cada
-#'   variable sustituta consume uno, y `num.sv` con el metodo de Leek tiende a
+#'   variable sustituta consume uno, y `num.sv` con el método de Leek tiende a
 #'   proponer tantas que el diseño se queda sin capacidad de estimar nada: con 12
-#'   muestras llego a proponer 9, que sumadas a la condicion dejan 1 g.l.
-#'   residual. Se usa el metodo "be" (por permutacion, mas conservador) y se
-#'   recorta ademas para respetar este minimo.
-#' @param seed semilla para `num.sv`. El metodo "be" estima el numero de
-#'   variables por PERMUTACION, asi que sin semilla el mismo input puede dar un
-#'   numero distinto entre ejecuciones y arrastrar con el todo el resultado del
-#'   analisis diferencial. `svaseq` en si es determinista dado `n.sv`.
+#'   muestras llego a proponer 9, que sumadas a la condición dejan 1 g.l.
+#'   residual. Se usa el método "be" (por permutación, más conservador) y se
+#'   recorta además para respetar este mínimo.
+#' @param seed semilla para `num.sv`. El método "be" estima el número de
+#'   variables por PERMUTACIÓN, así que sin semilla el mismo input puede dar un
+#'   número distinto entre ejecuciones y arrastrar con el todo el resultado del
+#'   análisis diferencial. `svaseq` en si es determinista dado `n.sv`.
 #' @return list(sv = matriz muestras x n_sv, n_sv, n_sv_estimated, error).
-#'   `n_sv = 0` con `sv = NULL` y `error = NULL` es un resultado VALIDO: sva no
+#'   `n_sv = 0` con `sv = NULL` y `error = NULL` es un resultado VÁLIDO: sva no
 #'   ha encontrado estructura latente. Quien llame debe continuar sin variables
 #'   sustitutas, no forzar una.
 estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
                                     n_sv = NULL, min_residual_df = 3L,
                                     seed = 1L) {
   if (!requireNamespace("sva", quietly = TRUE)) {
-    return(list(sv = NULL, n_sv = 0L, error = "sva no esta instalado."))
+    return(list(sv = NULL, n_sv = 0L, error = "sva no está instalado."))
   }
   out <- tryCatch({
     cm <- as.matrix(counts)
     # svaseq trabaja sobre datos no normalizados pero pide quitar los genes sin
-    # expresion, porque un gen constante no aporta y desestabiliza la SVD.
+    # expresión, porque un gen constante no aporta y desestabiliza la SVD.
     keep <- rowMeans(cm) > 1
     cm <- cm[keep, , drop = FALSE]
-    if (!nrow(cm)) stop("No quedan genes con expresion suficiente para sva.")
+    if (!nrow(cm)) stop("No quedan genes con expresión suficiente para sva.")
     mod  <- stats::model.matrix(full_formula, data = meta)
     mod0 <- stats::model.matrix(~ 1, data = meta)
     n_est <- if (is.null(n_sv) || !is.finite(n_sv) || n_sv < 1) {
       # `seed` se aplica de forma local: with_seed restaura el estado del RNG al
-      # salir, para no alterar cualquier otra aleatoriedad de la sesion.
+      # salir, para no alterar cualquier otra aleatoriedad de la sesión.
       tryCatch(
         withr::with_seed(seed, sva::num.sv(cm, mod, method = "be")),
         error = function(e) 0L)
@@ -68,13 +68,13 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
       stop(paste0("Con ", ncol(cm), " muestras y ", ncol(mod), " coeficientes no ",
                   "hay margen para variables sustitutas."))
     }
-    # Si sva estima 0, se devuelven 0. Forzar un minimo de 1 (lo que se hacia
+    # Si sva estima 0, se devuelven 0. Forzar un mínimo de 1 (lo que se hacía
     # antes) introduce una covariable espuria: consume un grado de libertad y
-    # puede absorber señal real de la condicion.
+    # puede absorber señal real de la condición.
     #
     # Nota: nada de `return()` dentro de este `tryCatch`, porque retornaria de la
-    # funcion entera y no del bloque; el valor del bloque es el de la ultima
-    # expresion evaluada.
+    # función entera y no del bloque; el valor del bloque es el de la última
+    # expresión evaluada.
     n <- min(as.integer(n_est), n_max)
     if (n < 1) {
       list(sv = NULL, n_sv = 0L, n_sv_estimated = as.integer(n_est), error = NULL)
@@ -93,7 +93,7 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
     if (grepl("singular|Lapack|dgesv", msg, ignore.case = TRUE)) {
       msg <- paste0("sva no ha podido estimar variables sustitutas con ",
                     ncol(counts), " muestras: el sistema queda singular. ",
-                    "Hacen falta mas muestras, o indica el batch a mano si lo ",
+                    "Hacen falta más muestras, o indica el batch a mano si lo ",
                     "conoces. (Detalle: ", msg, ")")
     }
     list(sv = NULL, n_sv = 0L, n_sv_estimated = NA_integer_, error = msg)
@@ -103,13 +103,13 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
 
 #' Ajusta los conteos con ComBat-seq.
 #'
-#' A diferencia de ComBat clasico, usa regresion binomial negativa y devuelve
+#' A diferencia de ComBat clasico, usa regresión binomial negativa y devuelve
 #' una matriz de conteos ENTERA, compatible con DESeq2/edgeR aguas abajo
-#' (Zhang, Parmigiani y Johnson, 2020). Aun asi, el uso recomendado es
+#' (Zhang, Parmigiani y Johnson, 2020). Aun así, el uso recomendado es
 #' visualizar: para testear, el batch va en el diseño.
 combat_seq_counts <- function(counts, batch, group = NULL) {
   if (!requireNamespace("sva", quietly = TRUE)) {
-    return(list(counts = NULL, error = "sva no esta instalado."))
+    return(list(counts = NULL, error = "sva no está instalado."))
   }
   out <- tryCatch({
     cm <- round(as.matrix(counts))
@@ -127,13 +127,13 @@ combat_seq_counts <- function(counts, batch, group = NULL) {
   out
 }
 
-#' Elimina el efecto batch de una matriz transformada, SOLO para graficos.
+#' Elimina el efecto batch de una matriz transformada, SOLO para gráficos.
 #'
-#' `design` preserva los efectos de interes: sin el, removeBatchEffect tambien
-#' se llevaria por delante la señal de la condicion.
+#' `design` preserva los efectos de interes: sin el, removeBatchEffect también
+#' se llevaría por delante la señal de la condición.
 remove_batch_for_plots <- function(mat, batch, design = NULL, covariates = NULL) {
   if (!requireNamespace("limma", quietly = TRUE)) {
-    return(list(mat = mat, error = "limma no esta instalado."))
+    return(list(mat = mat, error = "limma no está instalado."))
   }
   out <- tryCatch({
     m <- as.matrix(mat)

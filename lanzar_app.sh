@@ -2,11 +2,11 @@
 # Lanza SARA con el entorno de herramientas activo y en un puerto fijo, y abre
 # la interfaz en una ventana sin barra de direcciones ni pestanas.
 #
-# El PATH del entorno conda es lo que permite que la comprobacion de entorno de
+# El PATH del entorno conda es lo que permite que la comprobación de entorno de
 # la app encuentre las ocho herramientas del pipeline.
 #
 # Para cambiar como se abre la interfaz:
-#   SARA_UI=app        ventana de aplicacion, sin adornos (por defecto)
+#   SARA_UI=app        ventana de aplicación, sin adornos (por defecto)
 #   SARA_UI=navegador  pestana normal en el navegador de siempre
 #   SARA_UI=ninguno    no abre nada; se entra a mano por la URL
 #   SARA_UI_SIZE=1280,800   tamaño inicial de la ventana

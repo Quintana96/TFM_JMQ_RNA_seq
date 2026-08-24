@@ -2,11 +2,11 @@
 #' Funciones puras (sin Shiny) para construir y VALIDAR diseños experimentales
 #' arbitrarios a partir de una formula escrita por el usuario.
 #'
-#' Por que existe (docs/REVISION_ESTADISTICA.md, B5): la app solo generaba
+#' Por qué existe (docs/REVISION_ESTADISTICA.md, B5): la app solo generaba
 #' `~ condition` o `~ batch + condition`, con todo convertido a factor. Eso deja
 #' fuera casos muy comunes:
-#'   - diseños pareados (`~ subject + condition`), probablemente el diseño mas
-#'     frecuente que no se podia analizar, y el que mas potencia gana al
+#'   - diseños pareados (`~ subject + condition`), probablemente el diseño más
+#'     frecuente que no se podia analizar, y el que más potencia gana al
 #'     modelarse bien cuando hay pocas replicas;
 #'   - covariables continuas (edad, dosis, tiempo), que con `as.factor()` gastan
 #'     grados de libertad absurdamente;
@@ -19,7 +19,7 @@
 #' confusion perfecta entre dos covariables produce resultados que parecen
 #' correctos y no lo son.
 
-#' Columnas del samplesheet utilizables como terminos del diseño.
+#' Columnas del samplesheet utilizables como términos del diseño.
 design_candidate_vars <- function(meta) {
   if (is.null(meta) || !is.data.frame(meta)) return(character(0))
   setdiff(names(meta), c("sample_id"))
@@ -27,9 +27,9 @@ design_candidate_vars <- function(meta) {
 
 #' TRUE si la columna debe tratarse como covariable continua.
 #'
-#' Criterio: numerica y con mas de `min_levels` valores distintos. Una columna
-#' numerica con dos o tres valores (p. ej. dosis 0/1/2 o un batch codificado
-#' 1/2) casi siempre se quiere como factor, asi que se deja como factor.
+#' Criterio: numérica y con más de `min_levels` valores distintos. Una columna
+#' numérica con dos o tres valores (p. ej. dosis 0/1/2 o un batch codificado
+#' 1/2) casi siempre se quiere como factor, así que se deja como factor.
 is_continuous_var <- function(x, min_levels = 5L) {
   if (is.factor(x) || is.character(x) || is.logical(x)) return(FALSE)
   v <- suppressWarnings(as.numeric(x))
@@ -38,7 +38,7 @@ is_continuous_var <- function(x, min_levels = 5L) {
 }
 
 #' Prepara `meta` para el diseño: convierte a factor lo que no sea continuo.
-#' Devuelve tambien el tipo asignado a cada variable, para poder mostrarlo.
+#' Devuelve también el tipo asignado a cada variable, para poder mostrarlo.
 prepare_design_meta <- function(meta, vars = NULL, continuous = NULL) {
   if (is.null(meta)) return(NULL)
   vars <- vars %||% design_candidate_vars(meta)
@@ -66,7 +66,7 @@ prepare_design_meta <- function(meta, vars = NULL, continuous = NULL) {
 #'     (biyeccion). Son la misma variable con dos nombres.
 #'   - ANIDAMIENTO: cada nivel de A determina el de B, pero no al reves (p. ej.
 #'     cada sujeto pertenece a un solo batch, y cada batch tiene varios sujetos).
-#'     Es el caso mas frecuente en la practica y tambien rompe el rango.
+#'     Es el caso más frecuente en la práctica y también rompe el rango.
 #'
 #' @return lista de list(vars = c(a, b), kind = "confusion"|"anidamiento", detail)
 find_confounded_pairs <- function(meta, vars) {
@@ -110,10 +110,10 @@ confounded_pairs_text <- function(pairs) {
   paste(vapply(pairs, function(p) p$detail, character(1)), collapse = "; ")
 }
 
-#' Valida una formula de diseño contra el samplesheet SIN ajustar el modelo.
+#' Válida una formula de diseño contra el samplesheet SIN ajustar el modelo.
 #'
 #' Comprueba, en este orden:
-#'   1. que la formula sea sintacticamente valida y solo tenga lado derecho;
+#'   1. que la formula sea sintacticamente válida y solo tenga lado derecho;
 #'   2. que todas sus variables existan en el samplesheet;
 #'   3. que ninguna tenga NA en las muestras que se van a usar;
 #'   4. que `model.matrix()` se pueda construir;
@@ -131,7 +131,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
               var_types = character(0))
   txt <- trimws(as.character(formula_text %||% ""))
   if (!nzchar(txt)) {
-    res$errors <- "La formula esta vacia."
+    res$errors <- "La formula está vacia."
     return(res)
   }
   if (!startsWith(txt, "~")) txt <- paste0("~ ", txt)
@@ -141,7 +141,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
   }
   f <- tryCatch(stats::as.formula(txt), error = function(e) NULL)
   if (is.null(f) || length(f) != 2L) {
-    res$errors <- paste0("Formula no valida: '", txt, "'.")
+    res$errors <- paste0("Formula no válida: '", txt, "'.")
     return(res)
   }
   res$formula <- f
@@ -153,7 +153,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
   }
   missing <- setdiff(vars, names(meta))
   if (length(missing)) {
-    res$errors <- paste0("Estas columnas no estan en el samplesheet: ",
+    res$errors <- paste0("Estás columnas no están en el samplesheet: ",
                          paste(missing, collapse = ", "), ".")
     return(res)
   }
@@ -173,7 +173,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
     is.factor(m[[v]]) && nlevels(droplevels(m[[v]])) < 2
   }, logical(1))
   if (any(one_level)) {
-    res$errors <- paste0("Estas variables tienen un solo nivel: ",
+    res$errors <- paste0("Estás variables tienen un solo nivel: ",
                          paste(vars[one_level], collapse = ", "), ".")
     return(res)
   }
@@ -196,7 +196,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
                                        confounded_pairs_text(conf), ".") else ""
     res$errors <- paste0(
       "El diseño es singular: la matriz tiene ", ncol(mm), " coeficientes pero ",
-      "rango ", res$rank, ", asi que sus efectos no se pueden separar.", detail
+      "rango ", res$rank, ", así que sus efectos no se pueden separar.", detail
     )
     return(res)
   }
@@ -211,20 +211,20 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
   if (res$residual_df < 2) {
     res$warnings <- c(res$warnings, paste0(
       "Solo queda ", res$residual_df, " grado de libertad residual: la ",
-      "estimacion de la dispersion sera muy inestable."))
+      "estimación de la dispersion será muy inestable."))
   }
-  # Asociacion fuerte que no llega a romper el rango: conviene avisar igual.
+  # Asociación fuerte que no llega a romper el rango: conviene avisar igual.
   conf <- find_confounded_pairs(m, vars)
   if (length(conf)) {
     res$warnings <- c(res$warnings, paste0(
       "Variables fuertemente asociadas entre si: ", confounded_pairs_text(conf),
-      ". Sus efectos se estimaran con poca precision."))
+      ". Sus efectos se estimaran con poca precisión."))
   }
   res$ok <- TRUE
   res
 }
 
-#' Resumen legible de una validacion, para mostrar en la interfaz.
+#' Resumen legible de una validación, para mostrar en la interfaz.
 design_summary_text <- function(v) {
   if (is.null(v)) return(NULL)
   if (!isTRUE(v$ok)) return(paste(v$errors, collapse = " "))

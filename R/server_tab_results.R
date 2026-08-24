@@ -1,7 +1,7 @@
 #' server_tab_results.R
-#' Logica server de la Tab 3 (Resultados):
-#'   - renderUI("tab3_content") segun analysis_done o ejecuciones guardadas
-#'   - Selector de ejecucion, parametros inferidos, summary cacheado
+#' Lógica server de la Tab 3 (Resultados):
+#'   - renderUI("tab3_content") según analysis_done o ejecuciones guardadas
+#'   - Selector de ejecución, parámetros inferidos, summary cacheado
 #'   - Tablas DT, plots plotly, descargas (CSV y plotly_download)
 
 server_tab_results <- function(input, output, session, state) {
@@ -84,14 +84,14 @@ server_tab_results <- function(input, output, session, state) {
     if (is.null(r$table)) {
       return(div(class = "small text-muted",
                  paste("No se han podido identificar genes de rRNA. Los",
-                       "identificadores de la matriz no llevan informacion de tipo",
-                       "(p. ej. locus tags), asi que hace falta el fichero de",
-                       "anotacion de la ejecucion.")))
+                       "identificadores de la matriz no llevan información de tipo",
+                       "(p. ej. locus tags), así que hace falta el fichero de",
+                       "anotación de la ejecución.")))
     }
     tagList(
       div(class = "small text-muted mb-1",
           tags$b("Origen: "), r$source, "  ·  ", fmt_int(r$n_rrna_genes),
-          " genes de rRNA  ·  variacion entre muestras: ",
+          " genes de rRNA  ·  variación entre muestras: ",
           if (is.finite(r$spread)) paste0(round(100 * r$spread, 1), " puntos") else "—"),
       if (!is.null(r$alert)) div(class = "alert alert-warning py-2 px-2 small mb-1",
                                  icon("triangle-exclamation"), " ", r$alert) else NULL
@@ -100,7 +100,7 @@ server_tab_results <- function(input, output, session, state) {
 
   make_rrna_plot <- function(r) {
     if (is.null(r) || is.null(r$table)) {
-      return(plotly_message("Sin datos de rRNA para esta ejecucion."))
+      return(plotly_message("Sin datos de rRNA para esta ejecución."))
     }
     df <- r$table
     df$pct <- 100 * df$frac
@@ -130,16 +130,16 @@ server_tab_results <- function(input, output, session, state) {
     tl <- selected_fastqc_light()
     if (is.null(tl)) {
       return(div(class = "small text-muted",
-                 "Sin datos de FastQC en MultiQC para esta ejecucion."))
+                 "Sin datos de FastQC en MultiQC para esta ejecución."))
     }
     n_fail <- sum(tl$estado == "fail"); n_warn <- sum(tl$estado == "warn")
     div(class = "small text-muted mb-1",
         paste0(nrow(tl), " ficheros analizados  ·  ", n_fail, " con fallo critico  ·  ",
                n_warn, " con aviso. "),
         tags$span(paste("Umbrales de FastQC: aviso si el cuartil inferior de alguna",
-                        "posicion baja de 10 o la mediana de 25; fallo si bajan de 5",
+                        "posición baja de 10 o la mediana de 25; fallo si bajan de 5",
                         "y 20. El modulo de duplicados no cuenta para el veredicto:",
-                        "en RNA-seq de expresion los duplicados son señal.")))
+                        "en RNA-seq de expresión los duplicados son señal.")))
   })
 
   output$fastqc_light_table <- renderDT({
@@ -155,7 +155,7 @@ server_tab_results <- function(input, output, session, state) {
     dt_table(df, page_length = 10)
   })
 
-  # ── Saturacion de la libreria ─────────────────────────────────────────────
+  # ── Saturación de la libreria ─────────────────────────────────────────────
   selected_saturation <- reactive({
     p <- selected_result_params()
     d <- selected_result_dir()
@@ -173,7 +173,7 @@ server_tab_results <- function(input, output, session, state) {
     s <- selected_saturation()
     if (is.null(s) || is.null(s$veredicto)) {
       return(div(class = "small text-muted",
-                 "Hace falta una matriz de conteos para estimar la saturacion."))
+                 "Hace falta una matriz de conteos para estimar la saturación."))
     }
     v <- s$veredicto
     n_sat <- sum(v$saturada, na.rm = TRUE)
@@ -181,14 +181,14 @@ server_tab_results <- function(input, output, session, state) {
         paste0("Al 50 % de la profundidad se detecta de media el ",
                round(100 * mean(v$pct_al_50, na.rm = TRUE), 1),
                " % de los genes  ·  ", n_sat, " de ", nrow(v), " muestras saturadas. "),
-        tags$span(paste("Si la curva ya esta plana, secuenciar mas no aporta y el",
-                        "limite del experimento son las replicas, no la",
+        tags$span(paste("Si la curva ya está plana, secuenciar más no aporta y el",
+                        "límite del experimento son las replicas, no la",
                         "profundidad.")))
   })
 
   make_saturation_plot <- function(s) {
     if (is.null(s) || is.null(s$curva)) {
-      return(plotly_message("Sin datos para estimar la saturacion."))
+      return(plotly_message("Sin datos para estimar la saturación."))
     }
     df <- s$curva
     df$pct <- 100 * df$fraccion
@@ -207,8 +207,8 @@ server_tab_results <- function(input, output, session, state) {
     p <- selected_result_params()
     out_dir <- selected_result_dir()
     if (!length(p) || !nzchar(out_dir)) {
-      return(list(libs = data.frame(Mensaje = "Sin ejecucion seleccionada."),
-                  top = data.frame(Mensaje = "Sin ejecucion seleccionada.")))
+      return(list(libs = data.frame(Mensaje = "Sin ejecución seleccionada."),
+                  top = data.frame(Mensaje = "Sin ejecución seleccionada.")))
     }
     counts_tables(out_dir, p$tool %||% "")
   })
@@ -257,7 +257,7 @@ server_tab_results <- function(input, output, session, state) {
         div(style = "flex:1 1 auto;min-width:0;",
           selectizeInput(
             "selected_result_dir",
-            "Ejecucion guardada",
+            "Ejecución guardada",
             choices = choices,
             selected = selected_result_dir(),
             options = list(placeholder = 'Escribe para buscar...'),
@@ -271,14 +271,14 @@ server_tab_results <- function(input, output, session, state) {
       ),
       tags$div(style = "margin-top:6px;",
                tags$small(class = "text-muted",
-                          "Tambien puedes escribir para filtrar las ejecuciones guardadas."))
+                          "También puedes escribir para filtrar las ejecuciones guardadas."))
     )
   })
 
   output$multiqc_open_ui <- renderUI({
     href <- selected_multiqc_href()
     if (!nzchar(href)) {
-      return(tags$small(class = "text-muted", "MultiQC no disponible para esta ejecucion."))
+      return(tags$small(class = "text-muted", "MultiQC no disponible para esta ejecución."))
     }
     tags$a(
       href = href,
@@ -286,7 +286,7 @@ server_tab_results <- function(input, output, session, state) {
       rel = "noopener noreferrer",
       class = "btn btn-sm btn-primary",
       style = "align-self:flex-start;",
-      title = "Abrir el informe MultiQC de esta ejecucion en una nueva pestana",
+      title = "Abrir el informe MultiQC de esta ejecución en una nueva pestana",
       tagList(icon("up-right-from-square"), " Abrir MultiQC")
     )
   })
@@ -323,8 +323,8 @@ server_tab_results <- function(input, output, session, state) {
       return(ui_tab_results_empty())
     p <- selected_result_params()
     if (!length(p)) return(NULL)
-    # `p` viaja a la UI para que solo se monte la pestana de QC del metodo que
-    # realmente se uso: antes se montaban las dos y una salia siempre vacia.
+    # `p` viaja a la UI para que solo se monte la pestana de QC del método que
+    # realmente se uso: antes se montaban las dos y una salía siempre vacia.
     ui_tab_results_content(selected_result_summary(), p)
   })
 
@@ -462,7 +462,7 @@ server_tab_results <- function(input, output, session, state) {
       df[, full_cols] <- lapply(df[, full_cols, drop = FALSE], function(x) ifelse(is.na(x), 0, x))
       return(
         plotly::plot_ly(df, x = ~sample_id) |>
-          plotly::add_bars(y = ~unique_reads, name = "Unicas", marker = list(color = "#7BBF9A")) |>
+          plotly::add_bars(y = ~unique_reads, name = "Únicas", marker = list(color = "#7BBF9A")) |>
           plotly::add_bars(y = ~multimapped_reads, name = "Multimapeadas", marker = list(color = "#F6D58A")) |>
           plotly::add_bars(y = ~unmapped_reads, name = "No alineadas", marker = list(color = "#F4A6A6")) |>
           plotly::layout(
@@ -477,7 +477,7 @@ server_tab_results <- function(input, output, session, state) {
 
     fallback_cols <- c("mapped_reads", "unmapped_reads")
     if (!all(fallback_cols %in% names(df)) || all(is.na(as.matrix(df[, fallback_cols]))))
-      return(plotly_message("No se encontraron metricas suficientes para representar lecturas unicas, multimapeadas y no alineadas."))
+      return(plotly_message("No se encontraron metricas suficientes para representar lecturas únicas, multimapeadas y no alineadas."))
     df[, fallback_cols] <- lapply(df[, fallback_cols, drop = FALSE], function(x) ifelse(is.na(x), 0, x))
     plotly::plot_ly(df, x = ~sample_id) |>
       plotly::add_bars(y = ~mapped_reads, name = "Mapeadas (sin desglose multi)", marker = list(color = "#8BC9A6")) |>
@@ -501,7 +501,7 @@ server_tab_results <- function(input, output, session, state) {
     if (!has_real_rows(df)) return(plotly_message(df$Mensaje[1]))
     cols <- c("assigned_reads", "unassigned_reads")
     if (!all(cols %in% names(df)) || all(is.na(as.matrix(df[, cols]))))
-      return(plotly_message("No se encontraron metricas de asignacion genica para este analisis."))
+      return(plotly_message("No se encontraron metricas de asignación genica para este análisis."))
     df[, cols] <- lapply(df[, cols, drop = FALSE], function(x) ifelse(is.na(x), 0, x))
     plotly::plot_ly(df, x = ~sample_id) |>
       plotly::add_bars(y = ~assigned_reads, name = "Asignadas", marker = list(color = "#8BC9A6")) |>
@@ -516,18 +516,18 @@ server_tab_results <- function(input, output, session, state) {
   }
 
   align_qc_region_plot_obj <- function() {
-    plotly_message("No se encontraron metricas exonicas, intronicas o intergenicas para este analisis.")
+    plotly_message("No se encontraron metricas exonicas, intronicas o intergenicas para este análisis.")
   }
 
   align_qc_gene_body_plot_obj <- function() {
-    plotly_message("No se encontro cobertura 5'-3' del cuerpo genico para este analisis.")
+    plotly_message("No se encontro cobertura 5'-3' del cuerpo genico para este análisis.")
   }
 
   pseudo_qc_rate_plot_obj <- function() {
     df <- pseudo_qc_summary(selected_result_dir())
     if (!has_real_rows(df)) return(plotly_message(df$Mensaje[1]))
     if (!"pseudoalignment_rate" %in% names(df) || all(is.na(df$pseudoalignment_rate)))
-      return(plotly_message("No se encontro pseudoalignment_rate para este analisis."))
+      return(plotly_message("No se encontro pseudoalignment_rate para este análisis."))
     df$pseudoalignment_rate_pct <- 100 * df$pseudoalignment_rate
     plotly::plot_ly(
       df, x = ~sample_id, y = ~pseudoalignment_rate_pct,
@@ -552,7 +552,7 @@ server_tab_results <- function(input, output, session, state) {
     q <- pseudo_qc_quant_table(selected_result_dir())
     if (!has_real_rows(q)) return(plotly_message(q$Mensaje[1]))
     if (!all(c("TPM", "sample_id") %in% names(q)))
-      return(plotly_message("No se encontraron valores TPM para este analisis."))
+      return(plotly_message("No se encontraron valores TPM para este análisis."))
     q$TPM <- num_or_na(q$TPM)
     q$log_tpm <- log10(q$TPM + 1)
     plotly::plot_ly(
@@ -573,7 +573,7 @@ server_tab_results <- function(input, output, session, state) {
     df <- pseudo_qc_summary(selected_result_dir())
     if (!has_real_rows(df)) return(plotly_message(df$Mensaje[1]))
     if (!"transcripts_detected" %in% names(df) || all(is.na(df$transcripts_detected)))
-      return(plotly_message("No se pudo calcular el numero de transcritos detectados."))
+      return(plotly_message("No se pudo calcular el número de transcritos detectados."))
     plotly::plot_ly(
       df, x = ~sample_id, y = ~transcripts_detected,
       type = "bar", marker = list(color = "#7BBF9A"),
@@ -594,7 +594,7 @@ server_tab_results <- function(input, output, session, state) {
     q$TPM <- num_or_na(q$TPM)
     q$NumReads <- num_or_na(q$NumReads)
     keep <- is.finite(q$TPM) & is.finite(q$NumReads)
-    if (!any(keep)) return(plotly_message("No hay valores numericos validos de TPM y NumReads."))
+    if (!any(keep)) return(plotly_message("No hay valores numéricos válidos de TPM y NumReads."))
     q <- q[keep, , drop = FALSE]
     q$log_tpm <- log10(q$TPM + 1)
     q$log_reads <- log10(q$NumReads + 1)
@@ -668,7 +668,7 @@ server_tab_results <- function(input, output, session, state) {
       out <- if (has_real_rows(a) && has_real_rows(p)) rbind(a, p)
              else if (has_real_rows(a)) a
              else if (has_real_rows(p)) p
-             else message_df("No se detectaron alertas automaticas con los umbrales actuales.")
+             else message_df("No se detectaron alertas automáticas con los umbrales actuales.")
       write.csv(out, f, row.names = FALSE)
     }
   )

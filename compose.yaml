@@ -1,22 +1,22 @@
-# Despliegue local de la aplicacion.
+# Despliegue local de la aplicación.
 #
-# Reduce el arranque a `docker compose up`, y —mas importante para el
-# despliegue— deja escritos en un fichero versionado los montajes y los limites
-# de recursos, que de otro modo viven en la linea de comandos de quien la lanzo.
+# Reduce el arranque a `docker compose up`, y —más importante para el
+# despliegue— deja escritos en un fichero versionado los montajes y los límites
+# de recursos, que de otro modo viven en la línea de comandos de quien la lanzo.
 services:
   sara:
     build:
       context: .
       args:
         # Cambiar esta fecha cambia las versiones de CRAN de la imagen: es un
-        # parametro de reproducibilidad, no de conveniencia.
+        # parámetro de reproducibilidad, no de conveniencia.
         CRAN_SNAPSHOT: https://packagemanager.posit.co/cran/2026-08-20
     image: sara:1.0
     ports:
       - "3838:3838"
     volumes:
-      # Datos de entrada en SOLO LECTURA: la aplicacion no tiene ningun motivo
-      # para modificar los FASTQ, el genoma o la anotacion, y montarlos asi
+      # Datos de entrada en SOLO LECTURA: la aplicación no tiene ningun motivo
+      # para modificar los FASTQ, el genoma o la anotación, y montarlos así
       # elimina la posibilidad de que un fallo del pipeline los toque.
       - ./data:/data:ro
       # Resultados fuera de la imagen: sobreviven a `docker rm` y a reconstruir.
@@ -25,9 +25,9 @@ services:
       SARA_HOST: 0.0.0.0
       SARA_PORT: 3838
     # El pipeline se paraleliza con --THREADS. Ese valor debe ajustarse a los
-    # limites del CONTENEDOR, no a los nucleos de la maquina anfitriona: dentro
-    # del contenedor `nproc` sigue viendo los del host y sobresuscribir el limite
-    # ralentiza el analisis en lugar de acelerarlo.
+    # límites del CONTENEDOR, no a los nucleos de la maquina anfitriona: dentro
+    # del contenedor `nproc` sigue viendo los del host y sobresuscribir el límite
+    # ralentiza el análisis en lugar de acelerarlo.
     deploy:
       resources:
         limits:

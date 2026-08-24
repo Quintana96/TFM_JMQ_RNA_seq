@@ -15,13 +15,13 @@ read_exit_status <- function(out_dir) {
   as.list(stats::setNames(trimws(df$value), trimws(df$key)))
 }
 
-#' Infiere el estado de una ejecucion: "completado" / "error" / "incompleto" / "sin log".
+#' Infiere el estado de una ejecución: "completado" / "error" / "incompleto" / "sin log".
 #'
 #' Prioriza el fichero `exit_status.tsv` que escribe el workflow con un `trap
-#' EXIT`, porque es un dato explicito. El respaldo por texto del log queda para
+#' EXIT`, porque es un dato explícito. El respaldo por texto del log queda para
 #' ejecuciones anteriores a que ese fichero existiera, y es fragil por dos
 #' motivos: depende de una frase concreta en ingles, y clasifica como fallida
-#' cualquier ejecucion cuyo log contenga la palabra "Error", aunque venga de un
+#' cualquier ejecución cuyo log contenga la palabra "Error", aunque venga de un
 #' aviso inocuo de una herramienta.
 status_from_log <- function(out_dir) {
   st <- read_exit_status(out_dir)
@@ -31,15 +31,15 @@ status_from_log <- function(out_dir) {
   log_file <- file.path(out_dir, "workflow_live.log")
   if (!file.exists(log_file)) return("sin log")
   txt <- read_tail_text(log_file, max_bytes = 512000L)
-  if (grepl("Analysis completed successfully|Analisis finalizado OK", txt, ignore.case = TRUE))
+  if (grepl("Analysis completed successfully|Análisis finalizado OK", txt, ignore.case = TRUE))
     return("completado")
-  if (grepl("ERROR|Error \\(codigo|fallo en la linea", txt, ignore.case = TRUE))
+  if (grepl("ERROR|Error \\(código|fallo en la línea", txt, ignore.case = TRUE))
     return("error")
   "incompleto"
 }
 
 #' Versiones de las herramientas registradas por el workflow.
-#' @return data.frame(tool, version, path) o NULL.
+#' @return data.frame(tool, versión, path) o NULL.
 read_tool_versions <- function(out_dir) {
   f <- file.path(out_dir, "versions.tsv")
   if (!file.exists(f)) return(NULL)
@@ -56,12 +56,12 @@ read_input_checksums <- function(out_dir) {
            error = function(e) NULL)
 }
 
-#' Renderiza un badge HTML con el estado de una ejecucion.
+#' Renderiza un badge HTML con el estado de una ejecución.
 #'
-#' Usa las clases `.pill` de la hoja de estilos en lugar de colores en linea:
+#' Usa las clases `.pill` de la hoja de estilos en lugar de colores en línea:
 #' antes cada sitio que mostraba un estado lo pintaba con su propia paleta, de
 #' modo que el mismo "completado" se veia distinto en la portada, en las
-#' metricas y en la tabla de interpretacion.
+#' metricas y en la tabla de interpretación.
 status_badge <- function(status) {
   clase <- switch(status,
     completado = "pill pill-ok",
@@ -90,10 +90,10 @@ infer_read_type_from_dir <- function(out_dir) {
 
 #' Lee el run_params.tsv que deja workflow.sh en el directorio de salida.
 #' Devuelve una lista con lo que haya, o list() si el fichero no existe (las
-#' ejecuciones anteriores a su introduccion no lo tienen).
+#' ejecuciones anteriores a su introducción no lo tienen).
 #' @param filename fichero clave-valor a leer. El mismo formato lo usan
-#'   `run_params.tsv` (parametros del pipeline) y `deg_params.tsv` (parametros
-#'   de un analisis diferencial persistido), asi que comparten lector.
+#'   `run_params.tsv` (parámetros del pipeline) y `deg_params.tsv` (parámetros
+#'   de un análisis diferencial persistido), así que comparten lector.
 read_run_params_file <- function(out_dir, filename = "run_params.tsv") {
   f <- file.path(out_dir, filename)
   if (!file.exists(f)) return(list())
@@ -106,7 +106,7 @@ read_run_params_file <- function(out_dir, filename = "run_params.tsv") {
   stats::setNames(as.list(trimws(df$value)), trimws(df$key))
 }
 
-#' Ruta del fichero de anotacion de una ejecucion guardada, si se conoce.
+#' Ruta del fichero de anotación de una ejecución guardada, si se conoce.
 #' La necesitan tximport (para el mapa transcrito-gen) y la metrica de rRNA.
 annotation_file_for_run <- function(out_dir) {
   p <- read_run_params_file(out_dir)
@@ -114,8 +114,8 @@ annotation_file_for_run <- function(out_dir) {
   if (nzchar(af) && file.exists(af)) af else NULL
 }
 
-#' Infiere parametros de una run pasada solo a partir del directorio de salida.
-#' Util cuando el usuario abre una carpeta de outputs/ sin contexto de sesion.
+#' Infiere parámetros de una run pasada solo a partir del directorio de salida.
+#' Útil cuando el usuario abre una carpeta de outputs/ sin contexto de sesión.
 infer_result_params <- function(out_dir, workflow_path) {
   saved_params <- read_run_params_file(out_dir)
   tool <- if (dir.exists(file.path(out_dir, "03_alignments", "bowtie2"))) {
@@ -126,13 +126,13 @@ infer_result_params <- function(out_dir, workflow_path) {
     "kallisto"
   } else if (isTRUE(saved_params$tool %in% c("bowtie2", "salmon", "kallisto"))) {
     # La carpeta 03_alignments puede no estar: se borra para ahorrar espacio (los
-    # BAM son lo mas pesado de una ejecucion) o la ejecucion se copio sin ella.
-    # El workflow deja la herramienta escrita en run_params.tsv, asi que se
-    # respeta antes de darla por desconocida. Sin esto, una ejecucion con su
+    # BAM son lo más pesado de una ejecución) o la ejecución se copio sin ella.
+    # El workflow deja la herramienta escrita en run_params.tsv, así que se
+    # respeta antes de darla por desconocida. Sin esto, una ejecución con su
     # matriz de conteos intacta no se podia cargar.
     saved_params$tool
   } else if (file.exists(file.path(out_dir, "04_counts", "count_matrix.tsv"))) {
-    # Ultimo recurso: hay matriz por gen pero no consta como se genero. Se lee
+    # Último recurso: hay matriz por gen pero no consta como se genero. Se lee
     # igual que la de featureCounts, que es un TSV de genes x muestras.
     "bowtie2"
   } else {
@@ -160,19 +160,19 @@ infer_result_params <- function(out_dir, workflow_path) {
   )
 }
 
-# ── Metricas de coste de la ejecucion ───────────────────────────────────────
+# ── Metricas de coste de la ejecución ───────────────────────────────────────
 #
 # El workflow mide dos cosas que hacen falta para decidir si un conjunto de
 # datos cabe en el equipo que se tiene: cuanto tarda y cuanta memoria pide.
 #
-# Sobre la memoria: el dato util es el PICO, no un promedio ni un minimo. Un
+# Sobre la memoria: el dato útil es el PICO, no un promedio ni un mínimo. Un
 # promedio no dice nada —la mayor parte del tiempo el pipeline esta escribiendo
-# a disco— y el minimo seria el consumo en reposo. Lo que responde a "cuanta
-# RAM necesito" es el maximo que llego a ocupar el arbol de procesos.
+# a disco— y el mínimo sería el consumo en reposo. Lo que responde a "cuanta
+# RAM necesito" es el máximo que llego a ocupar el árbol de procesos.
 
 #' Metricas por paso que escribe el workflow.
 #'
-#' @return data.frame(paso, segundos, duracion, pico_rss_mb) o NULL.
+#' @return data.frame(paso, segundos, duración, pico_rss_mb) o NULL.
 read_run_metrics <- function(out_dir) {
   f <- file.path(out_dir, "metrics.tsv")
   if (!file.exists(f)) return(NULL)
@@ -183,7 +183,7 @@ read_run_metrics <- function(out_dir) {
   df
 }
 
-#' Duracion en segundos como texto legible.
+#' Duración en segundos como texto legible.
 fmt_duracion <- function(segundos) {
   s <- suppressWarnings(as.numeric(segundos))
   if (length(s) != 1L || is.na(s) || s < 0) return("—")
@@ -202,14 +202,14 @@ fmt_memoria <- function(mb) {
 
 # ── Herramientas del pipeline ───────────────────────────────────────────────
 #
-# El workflow comprueba en su primer paso que las ocho estan en el PATH y aborta
+# El workflow comprueba en su primer paso que las ocho están en el PATH y aborta
 # si falta alguna. Hasta ahora la interfaz no lo comprobaba, de modo que dejaba
-# lanzar una ejecucion condenada a fallar y el motivo quedaba enterrado en el
-# log: "Error (codigo 1)" arriba y la causa real veinte lineas mas abajo.
+# lanzar una ejecución condenada a fallar y el motivo quedaba enterrado en el
+# log: "Error (código 1)" arriba y la causa real veinte líneas más abajo.
 #
-# La causa habitual no es que falten instaladas, sino arrancar la aplicacion sin
+# La causa habitual no es que falten instaladas, sino arrancar la aplicación sin
 # activar el entorno donde viven. Por eso, cuando no se encuentran en el PATH se
-# buscan en los sitios donde conda las deja: poder decir "estan instaladas pero
+# buscan en los sitios donde conda las deja: poder decir "están instaladas pero
 # no en el PATH" ahorra el rato de comprobar si hay que instalar algo.
 
 #' Herramientas que exige cada estrategia, en el mismo orden en que las
@@ -222,7 +222,7 @@ herramientas_requeridas <- function(analysis_type = "alignment", tool = "bowtie2
   c(comunes, if (identical(tool, "kallisto")) "kallisto" else "salmon")
 }
 
-#' Entornos de conda donde buscar cuando una herramienta no esta en el PATH.
+#' Entornos de conda donde buscar cuando una herramienta no está en el PATH.
 entornos_conda_probables <- function() {
   bases <- c(Sys.getenv("CONDA_PREFIX", ""),
              path.expand("~/miniforge3/envs"), path.expand("~/miniconda3/envs"),
@@ -241,10 +241,10 @@ entornos_conda_probables <- function() {
 #' Estado de las herramientas del pipeline.
 #'
 #' @return list(faltan, encontradas_fuera, entorno). `faltan` son las que no
-#'   estan en el PATH; `entorno` es la ruta de un entorno que las contiene
+#'   están en el PATH; `entorno` es la ruta de un entorno que las contiene
 #'   todas, si existe, para poder decir exactamente que hacer.
 #' `necesarias` y `entornos` entran como argumentos con valor por defecto para
-#' poder probar la logica sin depender de que herramientas haya instaladas en la
+#' poder probar la lógica sin depender de que herramientas haya instaladas en la
 #' maquina donde corren los tests.
 comprobar_herramientas <- function(analysis_type = "alignment", tool = "bowtie2",
                                    entornos = entornos_conda_probables(),
@@ -261,14 +261,14 @@ comprobar_herramientas <- function(analysis_type = "alignment", tool = "bowtie2"
   list(faltan = faltan, entorno = entorno)
 }
 
-#' Mensaje de error para la lista de validacion, o NULL si esta todo.
+#' Mensaje de error para la lista de validación, o NULL si está todo.
 mensaje_herramientas <- function(estado) {
   if (!length(estado$faltan)) return(NULL)
   lista <- paste(estado$faltan, collapse = ", ")
   if (!is.null(estado$entorno)) {
     return(paste0(
       "Herramientas no encontradas en el PATH (", lista, "). ",
-      "Estan instaladas en ", estado$entorno, ", pero la aplicacion se ha ",
+      "Están instaladas en ", estado$entorno, ", pero la aplicación se ha ",
       "arrancado sin ese entorno activo: cierrala y usa lanzar_app.sh."))
   }
   paste0("Herramientas no encontradas (", lista,

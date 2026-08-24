@@ -1,24 +1,24 @@
 #!/usr/bin/env Rscript
 #' build_count_matrix.R
-#' Escribe la matriz de conteos por GEN de una ejecucion de salmon o kallisto.
+#' Escribe la matriz de conteos por GEN de una ejecución de salmon o kallisto.
 #'
 #' Uso:
-#'   Rscript scripts/build_count_matrix.R <output_dir> <tool> <destino.tsv> [anotacion]
+#'   Rscript scripts/build_count_matrix.R <output_dir> <tool> <destino.tsv> [anotación]
 #'
 #' No reimplementa nada: reutiliza `load_counts_from_workflow()`, que es la misma
-#' funcion que usa la aplicacion. Asi la matriz que queda en disco y la que la
-#' app analiza no pueden divergir — construirlas por caminos distintos seria una
+#' función que usa la aplicación. Así la matriz que queda en disco y la que la
+#' app analiza no pueden divergir — construirlas por caminos distintos sería una
 #' fuente garantizada de discrepancias.
 #'
-#' Vive en scripts/ y no en R/ a proposito: Shiny sourcea R/ entero al arrancar,
-#' y un fichero con codigo de nivel superior se ejecutaria al abrir la app.
+#' Vive en scripts/ y no en R/ a propósito: Shiny sourcea R/ entero al arrancar,
+#' y un fichero con código de nivel superior se ejecutaria al abrir la app.
 #'
-#' Codigos de salida: 0 matriz escrita; 1 error de uso o de entrada; 2 no se ha
+#' Códigos de salida: 0 matriz escrita; 1 error de uso o de entrada; 2 no se ha
 #' podido construir la matriz (el workflow continua, pero sin este artefacto).
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 3) {
-  cat("Uso: build_count_matrix.R <output_dir> <tool> <destino.tsv> [anotacion]\n",
+  cat("Uso: build_count_matrix.R <output_dir> <tool> <destino.tsv> [anotación]\n",
       file = stderr())
   quit(status = 1)
 }
@@ -28,7 +28,7 @@ dest       <- args[[3]]
 annotation <- if (length(args) >= 4 && nzchar(args[[4]])) args[[4]] else NULL
 
 if (!dir.exists(output_dir)) {
-  cat("No existe el directorio de la ejecucion: ", output_dir, "\n",
+  cat("No existe el directorio de la ejecución: ", output_dir, "\n",
       sep = "", file = stderr())
   quit(status = 1)
 }
@@ -38,7 +38,7 @@ if (!tool %in% c("salmon", "kallisto")) {
   quit(status = 1)
 }
 
-# La raiz del proyecto es el directorio padre de scripts/.
+# La raíz del proyecto es el directorio padre de scripts/.
 app_root <- normalizePath(file.path(dirname(
   sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1])), ".."),
   mustWork = FALSE)
@@ -74,7 +74,7 @@ utils::write.table(out, dest, sep = "\t", quote = FALSE, row.names = FALSE)
 cat("Matriz escrita: ", dest, " (", nrow(m), " genes x ", ncol(m), " muestras)\n",
     sep = "")
 if (!is.null(src)) {
-  cat("  Metodo: ", src$method %||% "—", "\n", sep = "")
+  cat("  Método: ", src$method %||% "—", "\n", sep = "")
   # Si el resumen a gen ha degradado a la via de respaldo hay que decirlo: la
   # matriz existe igualmente, pero no lleva los offsets de longitud efectiva.
   if (!isTRUE(src$ok)) cat("  AVISO: ", src$detail %||% "", "\n", sep = "")

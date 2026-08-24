@@ -2,19 +2,19 @@
 #' El FDR objetivo y el umbral del test se recalculan en vivo sobre el ajuste
 #' guardado, en lugar de exigir relanzar. La propiedad que hay que sostener es
 #' una y no admite matices: **reextraer tiene que dar exactamente lo mismo que
-#' reajustar**. Si no, la aplicacion muestra en vivo una tabla que ningun
-#' analisis reproduciria, que es peor que obligar a pulsar un boton.
+#' reajustar**. Si no, la aplicación muestra en vivo una tabla que ningun
+#' análisis reproduciría, que es peor que obligar a pulsar un boton.
 #'
 #' El riesgo concreto que estos tests vigilan es el contrario al que resuelven:
 #' que alguien "optimice" la reextraccion recortando la tabla ya calculada al
-#' nuevo umbral. Eso seria un filtro post hoc y la lista no tendria la FDR que
+#' nuevo umbral. Eso sería un filtro post hoc y la lista no tendría la FDR que
 #' declara (McCarthy y Smyth, 2009).
 
-#' Matriz con señal conocida Y cola de baja expresion.
+#' Matriz con señal conocida Y cola de baja expresión.
 #'
 #' La cola no es decorativa: el filtrado independiente de DESeq2 descarta genes
 #' poco expresados, y sin ellos no descarta ninguno, de modo que cambiar `alpha`
-#' no cambiaria nada y el test de mas abajo pasaria por el motivo equivocado.
+#' no cambiaría nada y el test de más abajo pasaria por el motivo equivocado.
 #' Una matriz real siempre tiene esa cola.
 datos_con_senal <- function(n_genes = 1500, n_de = 200, seed = 11) {
   withr::with_seed(seed, {
@@ -27,7 +27,7 @@ datos_con_senal <- function(n_genes = 1500, n_de = 200, seed = 11) {
       if (j > 4) mu[seq_len(n_de)] <- mu[seq_len(n_de)] * 2.5
       stats::rnbinom(n_genes, mu = mu, size = 10)
     }, numeric(n_genes))
-    # Los genes de señal son los primeros, que estan en la parte expresada.
+    # Los genes de señal son los primeros, que están en la parte expresada.
     rownames(m) <- sprintf("g%05d", seq_len(n_genes))
     colnames(m) <- sprintf("s%d", seq_len(n_s))
     list(counts = m,
@@ -50,7 +50,7 @@ for (motor in c("DESeq2", "edgeR", "limma-voom")) {
     ajuste <- ajusta(d, motor, fdr = 0.05, lfc = 0)
     skip_if(is.null(ajuste$table), "el motor no ha producido tabla en este entorno")
 
-    # Referencia: reajuste completo con los parametros nuevos.
+    # Referencia: reajuste completo con los parámetros nuevos.
     referencia <- ajusta(d, motor, fdr = 0.01, lfc = 1)
     # Candidato: reextraccion desde el ajuste anterior.
     reex <- deg_reextract(ajuste$fit, fdr = 0.01, lfc_threshold = 1)
@@ -72,15 +72,15 @@ test_that("cambiar el FDR cambia que genes son EVALUABLES, no solo el corte", {
   a01 <- deg_reextract(ajuste$fit, fdr = 0.01)$table
 
   # Esta es la diferencia entre reextraer y recolorear: el filtrado independiente
-  # de DESeq2 elige el umbral de expresion que maximiza los significativos AL
-  # NIVEL PEDIDO, asi que con alpha distinto el conjunto de genes con padj es
-  # otro. Un simple recorte de la tabla no podria producir esto.
+  # de DESeq2 elige el umbral de expresión que maximiza los significativos AL
+  # NIVEL PEDIDO, así que con alpha distinto el conjunto de genes con padj es
+  # otro. Un simple recorte de la tabla no podría producir esto.
   expect_false(identical(is.na(a05$padj), is.na(a01$padj)))
   # Y los p-valores sin ajustar no cambian: el modelo es el mismo.
   expect_equal(a05$pvalue, a01$pvalue)
 })
 
-test_that("el umbral del test entra en el modelo, no recorta la tabla despues", {
+test_that("el umbral del test entra en el modelo, no recorta la tabla después", {
   skip_if_not_installed("DESeq2")
   d <- datos_con_senal()
   ajuste <- ajusta(d, "DESeq2", fdr = 0.05, lfc = 0)
@@ -89,10 +89,10 @@ test_that("el umbral del test entra en el modelo, no recorta la tabla despues", 
   sin <- deg_reextract(ajuste$fit, fdr = 0.05, lfc_threshold = 0)$table
   con <- deg_reextract(ajuste$fit, fdr = 0.05, lfc_threshold = 1)$table
 
-  # Mismo numero de filas: no se ha filtrado nada, se ha testeado otra hipotesis.
+  # Mismo número de filas: no se ha filtrado nada, se ha testeado otra hipótesis.
   expect_equal(nrow(sin), nrow(con))
   # Los p-valores cambian porque cambia H0. Si solo se hubiera recortado la
-  # tabla, serian identicos: es la comprobacion que distingue las dos cosas.
+  # tabla, serían idénticos: es la comprobación que distingue las dos cosas.
   comunes <- !is.na(sin$pvalue) & !is.na(con$pvalue)
   expect_false(isTRUE(all.equal(sin$pvalue[comunes], con$pvalue[comunes])))
 })
@@ -133,8 +133,8 @@ test_that("el encogido se reutiliza y no se recalcula en cada reextraccion", {
   skip_if(identical(ajuste$shrink, "ninguno"))
 
   reex <- deg_reextract(ajuste$fit, fdr = 0.01)
-  # El encogido depende del COEFICIENTE, no del nivel de significacion, asi que
-  # la columna tiene que ser la misma. Recalcularlo costaria mas que el propio
+  # El encogido depende del COEFICIENTE, no del nivel de significacion, así que
+  # la columna tiene que ser la misma. Recalcularlo costaría más que el propio
   # ajuste (6,4 s frente a 5,1 s medidos sobre 20.000 genes).
   expect_equal(reex$table$log2FC_shrunk, ajuste$table$log2FC_shrunk)
   expect_equal(reex$shrink, ajuste$shrink)
@@ -145,31 +145,31 @@ test_that("las tres guardas de la reextraccion deciden bien", {
   p2 <- list(fdr = 0.01, lfc_threshold = 0, use_ihw = FALSE, outliers = "na")
   fit <- list(engine = "estatico", table = data.frame())
 
-  # Cambio real y ajuste al dia: se reextrae.
+  # Cambio real y ajuste al día: se reextrae.
   expect_true(deg_reextract_needed(fit, p2, p, stale = FALSE))
   # Sin cambio: no se toca nada (ni se escribe en el registro de auditoria).
   expect_false(deg_reextract_needed(fit, p, p, stale = FALSE))
   # Sin ajuste guardado: nada que reutilizar.
   expect_false(deg_reextract_needed(NULL, p2, p, stale = FALSE))
-  # Ajuste desactualizado: abstenerse. Reextraer aqui daria una tabla que no
+  # Ajuste desactualizado: abstenerse. Reextraer aquí daría una tabla que no
   # corresponde a ningun modelo y taparia el aviso de "relanza".
   expect_false(deg_reextract_needed(fit, p2, p, stale = TRUE))
-  # Primera extraccion (aun no hay parametros previos).
+  # Primera extracción (aun no hay parámetros previos).
   expect_true(deg_reextract_needed(fit, p, NULL, stale = FALSE))
 })
 
-# ── Integracion en el grafo reactivo ────────────────────────────────────────
+# ── Integración en el grafo reactivo ────────────────────────────────────────
 #
 # Lo anterior comprueba que la reextraccion calcula bien. Esto comprueba lo que
 # el usuario ve: que mover el FDR actualiza la tabla sin repetir el ajuste, y
-# que cuando el ajuste SI se ha quedado obsoleto la aplicacion lo dice en vez de
+# que cuando el ajuste SI se ha quedado obsoleto la aplicación lo dice en vez de
 # recalcular sobre un modelo que ya no corresponde.
 
 # Nota sobre los avisos: `testServer` vuelca todas las salidas en cada
 # `setInputs`, de modo que dibuja el volcano y el MA. Con un fixture que tiene
-# cola de baja expresion, plotly avisa "Ignoring N observations" por los genes
-# sin padj. Es un aviso del dibujo, no del codigo bajo prueba, y no se silencia
-# a proposito: taparlo con suppressWarnings() esconderia tambien los que si
+# cola de baja expresión, plotly avisa "Ignoring N observations" por los genes
+# sin padj. Es un aviso del dibujo, no del código bajo prueba, y no se silencia
+# a propósito: taparlo con suppressWarnings() esconderia también los que si
 # importan.
 
 servidor_deg_con_ajuste <- function(d, ajuste, tmp, firma = NULL) {
@@ -226,7 +226,7 @@ test_that("mover el FDR recalcula la tabla sin repetir el ajuste", {
   })
 })
 
-test_that("el umbral del test tambien es un control en vivo", {
+test_that("el umbral del test también es un control en vivo", {
   skip_if_not_installed("DESeq2")
   d <- datos_con_senal()
   ajuste <- ajusta(d, "DESeq2", fdr = 0.05, lfc = 0)
@@ -244,8 +244,8 @@ test_that("el umbral del test tambien es un control en vivo", {
     session$elapse(400)
 
     expect_equal(st$deg_rv$lfc_threshold, 1)
-    # Los p-valores CAMBIAN porque cambia la hipotesis nula. Si solo se hubiera
-    # recortado la tabla serian los mismos: es la diferencia entre reextraer y
+    # Los p-valores CAMBIAN porque cambia la hipótesis nula. Si solo se hubiera
+    # recortado la tabla serían los mismos: es la diferencia entre reextraer y
     # filtrar a posteriori.
     expect_false(isTRUE(all.equal(p_antes, st$deg_rv$results$pvalue)))
   })
@@ -261,7 +261,7 @@ test_that("con el ajuste desactualizado se avisa y no se reextrae", {
   withr::local_dir(tmp)
 
   # Firma que no puede coincidir con la que produce la interfaz: simula haber
-  # cambiado un parametro que define el ajuste (motor, diseño, prefiltrado...).
+  # cambiado un parámetro que define el ajuste (motor, diseño, prefiltrado...).
   firma_vieja <- list(metodo = "otro-motor-cualquiera")
 
   shiny::testServer(servidor_deg_con_ajuste(d, ajuste, tmp, firma = firma_vieja), {
@@ -274,7 +274,7 @@ test_that("con el ajuste desactualizado se avisa y no se reextrae", {
     expect_true(grepl("otro ajuste", as.character(output$deg_stale_warning$html)))
 
     # ...y mover el FDR no toca la tabla: reextraer de un ajuste que ya no
-    # corresponde daria un resultado de aspecto normal y sin modelo detras.
+    # corresponde daría un resultado de aspecto normal y sin modelo detrás.
     session$setInputs(deg_fdr_target = 0.01)
     session$elapse(400)
     expect_identical(st$deg_rv$results, tabla_antes)

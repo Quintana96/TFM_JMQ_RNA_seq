@@ -3,9 +3,9 @@
 
 #' Diccionario de DataTables en español.
 #'
-#' Se define en local y no por URL: la version oficial se descarga de un CDN, y
-#' una app que puede correr sin conexion no debe quedarse con los textos en
-#' ingles (o peor, sin tabla) por no alcanzarlo. Va aqui, en el unico wrapper de
+#' Se define en local y no por URL: la versión oficial se descarga de un CDN, y
+#' una app que puede correr sin conexión no debe quedarse con los textos en
+#' ingles (o peor, sin tabla) por no alcanzarlo. Va aquí, en el único wrapper de
 #' tablas, para que traducirlas sea un solo punto de cambio.
 DT_ES <- list(
   processing = "Procesando...",
@@ -18,7 +18,7 @@ DT_ES <- list(
   zeroRecords = "No se han encontrado resultados",
   emptyTable = "Sin datos disponibles en la tabla",
   paginate = list(first = "Primera", previous = "Anterior",
-                  `next` = "Siguiente", last = "Ultima"),
+                  `next` = "Siguiente", last = "Última"),
   aria = list(sortAscending = ": activar para ordenar de forma ascendente",
               sortDescending = ": activar para ordenar de forma descendente")
 )
@@ -48,7 +48,7 @@ fastqc_table <- function(out_dir) {
   fq[, keep, drop = FALSE]
 }
 
-#' Tabla de metricas de alineamiento o cuantificacion segun la tool
+#' Tabla de metricas de alineamiento o cuantificación según la tool
 alignment_table <- function(out_dir, tool) {
   if (identical(tool, "salmon")) {
     df <- salmon_stats(out_dir)
@@ -70,7 +70,7 @@ alignment_table <- function(out_dir, tool) {
     keep <- names(df)
   } else {
     df <- featurecounts_stats(out_dir)
-    if (is.null(df)) return(message_df("No se encontraron metricas de alineamiento/cuantificacion."))
+    if (is.null(df)) return(message_df("No se encontraron metricas de alineamiento/cuantificación."))
     keep <- names(df)
   }
   df <- df[, keep, drop = FALSE]
@@ -82,7 +82,7 @@ counts_tables <- function(out_dir, tool) {
   counts <- tryCatch(load_counts_from_workflow(out_dir, tool, annotation_file = annotation_file_for_run(out_dir)), error = function(e) NULL)
   if (is.null(counts) || !length(counts)) {
     return(list(
-      libs = data.frame(Mensaje = "No se pudo cargar una matriz de conteos util."),
+      libs = data.frame(Mensaje = "No se pudo cargar una matriz de conteos útil."),
       top = data.frame(Mensaje = "Sin conteos disponibles.")
     ))
   }
@@ -127,7 +127,7 @@ important_artifacts <- function(out_dir) {
   )
 }
 
-#' Devuelve las ultimas n lineas del workflow_live.log de una run
+#' Devuelve las últimas n líneas del workflow_live.log de una run
 log_tail_text <- function(out_dir, n = 140) {
   f <- file.path(out_dir, "workflow_live.log")
   if (!file.exists(f)) return("No se encontro workflow_live.log.")

@@ -28,9 +28,9 @@ prepare_uploaded_input_file <- function(upload, output_dir, prefix = NULL, optio
     dest_name <- paste0(prefix, "_", dest_name)
   }
   dest_path <- file.path(upload_dir, dest_name)
-  # Decision: copiar por defecto. Solo saltamos la copia si destino existe Y
+  # Decisión: copiar por defecto. Solo saltamos la copia si destino existe Y
   # tanto el tamaño como el hash MD5 coinciden con el origen. Cualquier fallo
-  # en la comparacion fuerza copia (mas seguro que asumir igualdad).
+  # en la comparación fuerza copia (más seguro que asumir igualdad).
   should_copy <- TRUE
   if (file.exists(dest_path)) {
     same_size <- tryCatch(
@@ -57,7 +57,7 @@ prepare_uploaded_input_file <- function(upload, output_dir, prefix = NULL, optio
 #' Directorio base de outputs (relativo al working dir)
 outputs_base_dir <- function() file.path(getwd(), "outputs")
 
-#' Etiqueta segura para una run: <fecha>_<analisis>_<tool>
+#' Etiqueta segura para una run: <fecha>_<análisis>_<tool>
 safe_run_label <- function(analysis_type, tool, time = Sys.time()) {
   analysis <- if (identical(analysis_type, "alignment")) "alineamiento" else "pseudoalineamiento"
   paste(format(time, "%Y%m%d_%H%M%S"), analysis, tool, sep = "_")
@@ -77,7 +77,7 @@ create_run_output_dir <- function(base_dir, analysis_type, tool) {
   normalizePath(out, mustWork = TRUE)
 }
 
-#' Lista carpetas de resultados ordenadas por mtime (mas reciente primero)
+#' Lista carpetas de resultados ordenadas por mtime (más reciente primero)
 list_result_dirs <- function(base_dir) {
   if (!dir.exists(base_dir)) return(character(0))
   dirs <- list.dirs(base_dir, recursive = FALSE, full.names = TRUE)

@@ -1,8 +1,8 @@
 # El resumen del paso 2 no puede contradecir al comando que se ejecuta.
 #
-# Habia una copia de la configuracion tomada al pulsar "Continuar", y el resumen
+# Había una copia de la configuración tomada al pulsar "Continuar", y el resumen
 # la usaba. Bastaba con cambiar algo en el paso 1 y volver por la barra de
-# navegacion —sin pasar otra vez por "Continuar"— para que el resumen dijese
+# navegación —sin pasar otra vez por "Continuar"— para que el resumen dijese
 # "Single-end" mientras el comando llevaba "--READ_TYPE pe". Un resumen que
 # miente sobre lo que va a correr es peor que no tener resumen.
 
@@ -10,7 +10,7 @@ test_that("el resumen sigue al tipo de lectura actual, no al validado", {
   srv <- function(input, output, session) {
     state <- new.env(parent = emptyenv())
     state$process_unlocked <- shiny::reactiveVal(TRUE)
-    # La foto se tomo cuando la configuracion decia otra cosa: solo debe aportar
+    # La foto se tomo cuando la configuración decía otra cosa: solo debe aportar
     # la carpeta de salida.
     state$config_snap <- shiny::reactiveVal(list(output_dir = "/salida/validada"))
 
@@ -26,7 +26,7 @@ test_that("el resumen sigue al tipo de lectura actual, no al validado", {
       effective_genome_file     = shiny::reactive(""),
       effective_annotation      = shiny::reactive("")
     )
-    # Se reproduce la construccion del resumen, que es la parte que fallaba.
+    # Se reproduce la construcción del resumen, que es la parte que fallaba.
     output$resumen <- shiny::renderText({
       snap <- state$config_snap()
       paste(read_type_label(shared$effective_read_type()),
@@ -48,7 +48,7 @@ test_that("el resumen sigue al tipo de lectura actual, no al validado", {
     expect_match(output$resumen, "^Paired-end \\|")
 
     # La carpeta de salida SI viene de la foto: se crea al validar y moverla
-    # despues dejaria los resultados en un sitio distinto del anunciado.
+    # después dejaría los resultados en un sitio distinto del anunciado.
     expect_match(output$resumen, "/salida/validada$")
   })
 })
@@ -66,7 +66,7 @@ test_that("sin foto se usa la carpeta de salida actual", {
   shiny::testServer(srv, { expect_equal(output$dir, "/salida/actual") })
 })
 
-test_that("read_type_label no invierte los terminos", {
+test_that("read_type_label no invierte los términos", {
   # Parece obvio, pero era una de las dos explicaciones posibles del sintoma y
   # descartarla costo tiempo.
   expect_equal(read_type_label("se"), "Single-end")

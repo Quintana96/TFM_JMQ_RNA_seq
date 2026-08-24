@@ -1,16 +1,16 @@
 #' test-matriz-conteos.R
 #' La matriz de conteos es el entregable principal que queda en disco tras una
-#' ejecucion. Para salmon y kallisto se escribia con SOLO la cabecera, asi que
+#' ejecución. Para salmon y kallisto se escribía con SOLO la cabecera, así que
 #' quien se llevaba la carpeta obtenia un fichero corrupto presentado como el
 #' resultado del pipeline.
 #'
-#' El test es autocontenido: genera una anotacion y unas cuantificaciones
-#' sinteticas, porque data/ esta en .gitignore y no puede asumirse presente.
+#' El test es autocontenido: genera una anotación y unas cuantificaciones
+#' sinteticas, porque data/ está en .gitignore y no puede asumirse presente.
 
-#' Escribe un GFF minimo con la misma convencion que la anotacion de E. coli:
-#' CDS con ID = "cds-<accession>.<version>" y Parent = "gene-<locus_tag>".
+#' Escribe un GFF mínimo con la misma convencion que la anotación de E. coli:
+#' CDS con ID = "cds-<accession>.<versión>" y Parent = "gene-<locus_tag>".
 #' Esa convencion es justo la que rompia a tximport con ignoreTxVersion = TRUE,
-#' porque el corte por el primer punto confunde una version de Ensembl con un
+#' porque el corte por el primer punto confunde una versión de Ensembl con un
 #' accession de GenBank.
 write_mini_gff <- function(path, n_genes = 40) {
   lt  <- sprintf("b%04d", seq_len(n_genes))
@@ -23,7 +23,7 @@ write_mini_gff <- function(path, n_genes = 40) {
     "chr\tRefSeq\tCDS\t%d\t%d\t.\t+\t0\tID=cds-%s;Parent=gene-%s;locus_tag=%s;protein_id=%s",
     seq(1, by = 1000, length.out = n_genes),
     seq(900, by = 1000, length.out = n_genes), acc, lt, lt, acc)
-  writeLines(c("##gff-version 3", gene_rows, cds_rows), path)
+  writeLines(c("##gff-versión 3", gene_rows, cds_rows), path)
   list(locus_tags = lt, tx_ids = paste0("cds-", acc))
 }
 
@@ -71,15 +71,15 @@ test_that("las cuantificaciones de salmon se resumen a una matriz por gen real",
   expect_match(src$method, "tximport", fixed = TRUE)
 })
 
-test_that("sin anotacion utilizable la degradacion es explicita, no silenciosa", {
+test_that("sin anotación utilizable la degradación es explícita, no silenciosa", {
   skip_if_not(requireNamespace("tximport", quietly = TRUE), "tximport no instalado")
   root <- withr::local_tempdir()
   ann <- write_mini_gff(file.path(root, "anot.gff"))
   write_fake_salmon(root, ann$tx_ids)
 
-  # Anotacion que no corresponde al transcriptoma cuantificado.
+  # Anotación que no corresponde al transcriptoma cuantificado.
   otro <- file.path(root, "otra.gff")
-  writeLines(c("##gff-version 3",
+  writeLines(c("##gff-versión 3",
                "chr\tRefSeq\tCDS\t1\t100\t.\t+\t0\tID=cds-XXX.1;Parent=gene-zzz;locus_tag=zzz"),
              otro)
 
@@ -91,7 +91,7 @@ test_that("sin anotacion utilizable la degradacion es explicita, no silenciosa",
   expect_true(nzchar(src$detail))
 })
 
-test_that("el script de linea de comandos escribe la matriz y falla limpiamente", {
+test_that("el script de línea de comandos escribe la matriz y falla limpiamente", {
   skip_if_not(requireNamespace("tximport", quietly = TRUE), "tximport no instalado")
   root <- withr::local_tempdir()
   gff <- file.path(root, "anot.gff")
@@ -112,7 +112,7 @@ test_that("el script de linea de comandos escribe la matriz y falla limpiamente"
   expect_gt(nrow(tab), 1)                 # no solo la cabecera
   expect_true("gene_id" %in% names(tab))
 
-  # Herramienta no soportada: codigo de salida de error de uso, sin escribir nada.
+  # Herramienta no soportada: código de salida de error de uso, sin escribir nada.
   dest2 <- file.path(root, "no.tsv")
   st2 <- system2("Rscript", c(shQuote(script), shQuote(root), "bowtie2",
                               shQuote(dest2), shQuote(gff)),

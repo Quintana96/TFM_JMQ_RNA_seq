@@ -1,7 +1,7 @@
 #' test-reactome.R
-#' Reactome añade dos cosas que las otras colecciones no tenian y que son las que
+#' Reactome añade dos cosas que las otras colecciones no tenían y que son las que
 #' pueden fallar en silencio: un catalogo CERRADO de organismos (no hay
-#' procariotas) y una TRADUCCION de identificadores a ENTREZID. Un fallo en la
+#' procariotas) y una TRADUCCIÓN de identificadores a ENTREZID. Un fallo en la
 #' primera devuelve una tabla vacia que parece "sin enriquecimiento"; uno en la
 #' segunda devuelve un resultado calculado sobre una fraccion de los genes sin
 #' que se note.
@@ -12,13 +12,13 @@ test_that("el organismo de Reactome se deduce del OrgDb, y para procariotas no e
   expect_equal(reactome_organism_for_orgdb("org.Sc.sgd.db"), "yeast")
 
   # E. coli es el organismo del dataset de ejemplo de la app: Reactome no lo
-  # cubre, y decirlo es mas util que devolver una tabla vacia.
+  # cubre, y decirlo es más útil que devolver una tabla vacia.
   expect_null(reactome_organism_for_orgdb("org.EcK12.eg.db"))
   expect_null(reactome_organism_for_orgdb(NULL))
   expect_null(reactome_organism_for_orgdb(""))
 })
 
-test_that("todo organismo deducido de un OrgDb esta en el catalogo de Reactome", {
+test_that("todo organismo deducido de un OrgDb está en el catalogo de Reactome", {
   # Si las dos listas se separan, el selector ofreceria un organismo que
   # enrichPathway rechaza.
   orgdbs <- c("org.Hs.eg.db", "org.Mm.eg.db", "org.Rn.eg.db", "org.Dr.eg.db",
@@ -39,7 +39,7 @@ test_that("un organismo fuera del catalogo se rechaza con un mensaje accionable"
   expect_true(grepl("ReactomePA|Reactome no cubre", res$error))
 })
 
-test_that("sin genes o sin OrgDb la degradacion es explicita", {
+test_that("sin genes o sin OrgDb la degradación es explícita", {
   expect_true(nzchar(run_enrichment_reactome(character(0))$error))
 
   tr <- translate_to_entrez(c("TP53", "BRCA1"), OrgDb = NULL, keyType = "SYMBOL")
@@ -51,14 +51,14 @@ test_that("sin genes o sin OrgDb la degradacion es explicita", {
   expect_equal(tr$mapping$n_mapped, 0L)
 })
 
-test_that("con IDs ya en ENTREZID la traduccion es la identidad y no pierde genes", {
+test_that("con IDs ya en ENTREZID la traducción es la identidad y no pierde genes", {
   ids <- c("7157", "672", "324")
   tr <- translate_to_entrez(ids, OrgDb = NULL, keyType = "ENTREZID")
 
   expect_setequal(tr$ids, ids)
   expect_null(tr$error)
   expect_equal(tr$mapping$rate, 1)
-  # `back` permite deshacer la traduccion al mostrar los resultados.
+  # `back` permite deshacer la traducción al mostrar los resultados.
   expect_equal(unname(tr$back[ids]), ids)
 })
 
@@ -82,24 +82,24 @@ test_that("un ranking vacio no rompe el GSEA de Reactome", {
   expect_true(nzchar(res$error))
 })
 
-test_that("el informe recibe una etiqueta legible de la coleccion, no el codigo", {
+test_that("el informe recibe una etiqueta legible de la coleccion, no el código", {
   expect_equal(enrich_collection_label("REACTOME"), "Reactome")
-  expect_equal(enrich_collection_label("BP"), "GO: procesos biologicos")
+  expect_equal(enrich_collection_label("BP"), "GO: procesos biológicos")
   expect_equal(enrich_collection_label("GMT"), "Gene sets propios (GMT)")
   expect_equal(enrich_collection_label("KEGG"), "KEGG")
-  # Un codigo desconocido se muestra tal cual antes que romper el informe.
+  # Un código desconocido se muestra tal cual antes que romper el informe.
   expect_equal(enrich_collection_label("XYZ"), "XYZ")
 })
 
 test_that("los genes de una ruta se piden a reactome.db, no a la red", {
   # Con reactome.db instalado devuelve ENTREZIDs; sin el, un error que nombra el
-  # paquete que falta. En ninguno de los dos casos se consulta una API en linea,
+  # paquete que falta. En ninguno de los dos casos se consulta una API en línea,
   # que es la diferencia operativa con KEGG.
   tg <- gsea_term_genes("R-HSA-68886", ont = "REACTOME")   # M Phase
   if (requireNamespace("reactome.db", quietly = TRUE)) {
     # Exigir genes de verdad, no "genes o un error": aceptar las dos cosas
     # convierte el test en uno que no puede fallar, y de hecho no fallo cuando
-    # la consulta devolvia vacio por un argumento mal pasado. La consecuencia
+    # la consulta devolvía vacio por un argumento mal pasado. La consecuencia
     # visible era un running score plano sobre un conjunto que si existe.
     expect_null(tg$error)
     expect_gt(length(tg$genes), 50)

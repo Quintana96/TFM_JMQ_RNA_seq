@@ -1,8 +1,8 @@
 #' server_tab_config.R
-#' Logica server de la Tab 1 (Configuracion):
-#'   - Seleccion de directorio FASTQ (shinyFiles)
-#'   - Deteccion de muestras (cached) y preview
-#'   - Validacion (errores, checklist)
+#' Lógica server de la Tab 1 (Configuración):
+#'   - Selección de directorio FASTQ (shinyFiles)
+#'   - Detección de muestras (cached) y preview
+#'   - Validación (errores, checklist)
 #'   - Boton "Continuar al procesamiento"
 #'   - Carga de matriz de conteos externa (modo "load")
 #'
@@ -12,7 +12,7 @@
 server_tab_config <- function(input, output, session, state) {
   output$workflow_path_text <- renderText({ state$workflow_path })
 
-  # ── UI dinamica: label genoma/transcriptoma ────────────────────────────────
+  # ── UI dinámica: label genoma/transcriptoma ────────────────────────────────
   output$genome_label_ui <- renderUI({
     if (isTRUE(input$analysis_type == "alignment"))
       fileInput("genome_file_upload", "Genoma de referencia (FASTA)",
@@ -22,17 +22,17 @@ server_tab_config <- function(input, output, session, state) {
                 accept = c(".fa", ".fasta", ".fna", ".gz"), multiple = FALSE)
   })
 
-  # ── Seleccion del directorio de FASTQ ──────────────────────────────────────
+  # ── Selección del directorio de FASTQ ──────────────────────────────────────
   #
   # El dialogo del sistema es el camino principal: se abre donde el usuario
-  # quiera, sin raices ni arbol web que aprender. Cuando no se puede abrir
+  # quiera, sin raices ni árbol web que aprender. Cuando no se puede abrir
   # —dentro de un contenedor o sin escritorio— se cae al selector de shinyFiles,
   # que sigue funcionando aunque el servidor este en otra maquina.
   #
   # Lo que se muestra y lo que consume el resto de la pestana es SIEMPRE el
   # campo de texto: el dialogo se limita a rellenarlo. Con dos fuentes de verdad
-  # (el dialogo y el campo) habria que decidir cual gana cada vez que difieren,
-  # y esa decision no tiene una respuesta buena.
+  # (el dialogo y el campo) habría que decidir cual gana cada vez que difieren,
+  # y esa decisión no tiene una respuesta buena.
   usar_dialogo_nativo <- isTRUE(dialogo_nativo_disponible())
 
   output$input_dir_btn_ui <- renderUI({
@@ -58,7 +58,7 @@ server_tab_config <- function(input, output, session, state) {
 
   observeEvent(input$input_dir_nativo_btn, {
     # Se parte de lo que ya haya escrito para no obligar a volver a navegar
-    # desde el principio al corregir una seleccion.
+    # desde el principio al corregir una selección.
     actual <- validar_directorio(input$input_dir_texto)$ruta
     ruta <- elegir_directorio_nativo(
       titulo = "Selecciona la carpeta con los FASTQ",
@@ -84,7 +84,7 @@ server_tab_config <- function(input, output, session, state) {
     paste0(state$outputs_dir, "/<fecha_hora>_<tipo>_<herramienta>")
   })
 
-  # ── Deteccion de muestras: debounce + cache compartido ─────────────────────
+  # ── Detección de muestras: debounce + cache compartido ─────────────────────
   input_dir_debounced <- debounce(reactive(input_dir_val()), 600)
   samples_eff <- reactive({
     detect_samples(input_dir_debounced(), input$read_type %||% "pe")
@@ -138,9 +138,9 @@ server_tab_config <- function(input, output, session, state) {
   # ── Validaciones ──────────────────────────────────────────────────────────
 
   # Las ocho herramientas del pipeline. El workflow ya las comprueba en su
-  # primer paso y aborta si falta alguna, pero para entonces la ejecucion ya
-  # esta lanzada y el motivo queda enterrado en el log: arriba se lee "Error
-  # (codigo 1)" y la causa aparece veinte lineas mas abajo. Comprobarlo aqui
+  # primer paso y aborta si falta alguna, pero para entonces la ejecución ya
+  # está lanzada y el motivo queda enterrado en el log: arriba se lee "Error
+  # (código 1)" y la causa aparece veinte líneas más abajo. Comprobarlo aquí
   # convierte eso en una frase antes de empezar.
   estado_herramientas <- reactive({
     comprobar_herramientas(input$analysis_type %||% "alignment", effective_tool())
@@ -174,8 +174,8 @@ server_tab_config <- function(input, output, session, state) {
       af <- if (!is.null(input$annotation_file_upload) && nrow(input$annotation_file_upload) > 0)
         input$annotation_file_upload$datapath
       else ""
-      if (!nzchar(af))            errs <- c(errs, "Anotacion GFF/GTF: campo vacio.")
-      else if (!file.exists(af))  errs <- c(errs, "Anotacion GFF/GTF: no existe.")
+      if (!nzchar(af))            errs <- c(errs, "Anotación GFF/GTF: campo vacio.")
+      else if (!file.exists(af))  errs <- c(errs, "Anotación GFF/GTF: no existe.")
     }
     if (isTRUE(input$analysis_type == "pseudo") &&
         identical(input$pseudo_tool %||% "salmon", "kallisto") &&
@@ -183,9 +183,9 @@ server_tab_config <- function(input, output, session, state) {
       fl <- input$fragment_length %||% NA_real_
       fsd <- input$fragment_sd %||% NA_real_
       if (is.na(fl) || fl <= 0)
-        errs <- c(errs, "Kallisto single-end: longitud media de fragmento invalida.")
+        errs <- c(errs, "Kallisto single-end: longitud media de fragmento inválida.")
       if (is.na(fsd) || fsd <= 0)
-        errs <- c(errs, "Kallisto single-end: desviacion estandar de fragmento invalida.")
+        errs <- c(errs, "Kallisto single-end: desviación estandar de fragmento inválida.")
     }
     if (!dir.exists(state$outputs_dir))
       errs <- c(errs, paste0("No se pudo acceder a la carpeta de salidas: ", state$outputs_dir))
@@ -216,8 +216,8 @@ server_tab_config <- function(input, output, session, state) {
       "Directorio FASTQ"      = if (dir_ok) "ok" else "missing",
       "Muestras detectadas"   = if (samples_ok) "ok" else "missing",
       "Genoma/transcriptoma"  = genome_ok,
-      "Anotacion"             = annot_status,
-      "Validacion"            = valid_ok
+      "Anotación"             = annot_status,
+      "Validación"            = valid_ok
     )
   })
 
@@ -225,7 +225,7 @@ server_tab_config <- function(input, output, session, state) {
     items <- checklist_status()
     # El estado se transmite por texto Y por color, no solo por color: un
     # circulo de color no lo distingue quien tiene daltonismo ni lo anuncia un
-    # lector de pantalla. El aria-label lo deja explicito.
+    # lector de pantalla. El aria-label lo deja explícito.
     tags$ul(class = "checklist",
       lapply(names(items), function(nm) {
         st  <- as.character(items[[nm]])
@@ -255,7 +255,7 @@ server_tab_config <- function(input, output, session, state) {
     else                           shinyjs::enable("btn_to_processing")
   })
 
-  # ── Herramienta y anotacion efectivas (compartidas) ────────────────────────
+  # ── Herramienta y anotación efectivas (compartidas) ────────────────────────
   effective_tool <- reactive({
     if (isTRUE(input$analysis_type == "alignment")) "bowtie2"
     else input$pseudo_tool %||% "salmon"
@@ -303,19 +303,19 @@ server_tab_config <- function(input, output, session, state) {
     samps <- samples_eff()
     run_output_dir <- create_run_output_dir(state$outputs_dir, input$analysis_type, effective_tool())
     state$pending_output_dir(run_output_dir)
-    # Solo el directorio de salida, y a proposito.
+    # Solo el directorio de salida, y a propósito.
     #
-    # Antes se guardaba aqui una copia completa de la configuracion y la pestana
+    # Antes se guardaba aquí una copia completa de la configuración y la pestana
     # de procesamiento la usaba para su resumen. El problema es que esa copia
-    # dejaba de valer en cuanto se cambiaba algo en el paso 1 y se volvia por la
-    # barra de navegacion: el resumen seguia mostrando lo validado mientras el
+    # dejaba de valer en cuanto se cambiaba algo en el paso 1 y se volvía por la
+    # barra de navegación: el resumen seguía mostrando lo validado mientras el
     # comando se armaba con los valores nuevos. Ahora el resumen lee los mismos
-    # reactivos que el comando, y lo unico que necesita conservarse es la
-    # carpeta de salida, que se crea justo aqui y no debe moverse despues.
+    # reactivos que el comando, y lo único que necesita conservarse es la
+    # carpeta de salida, que se crea justo aquí y no debe moverse después.
     state$config_snap(list(output_dir = run_output_dir))
     state$log_text(paste(
-      ts_log("=== Configuracion validada ==="),
-      ts_log(paste("Analisis:", input$analysis_type, "/", effective_tool())),
+      ts_log("=== Configuración validada ==="),
+      ts_log(paste("Análisis:", input$analysis_type, "/", effective_tool())),
       ts_log(paste("Muestras:", length(samps))),
       ts_log(paste("Entrada:", input_dir_val())),
       ts_log(paste("Salida:",  run_output_dir)), "",
@@ -410,11 +410,11 @@ server_tab_config <- function(input, output, session, state) {
     workflow_cmd              = workflow_cmd
   )
 
-  # ── Aviso de anotacion con splicing frente a bowtie2 (B10) ─────────────────
+  # ── Aviso de anotación con splicing frente a bowtie2 (B10) ─────────────────
   # `bowtie2` no es splice-aware: sobre un procariota es correcto porque no hay
   # intrones, pero sobre un eucariota pierde las lecturas que cruzan uniones
-  # exon-exon y subestima los conteos de forma sistematica. En lugar de preguntar
-  # al usuario por el organismo, se deduce de la anotacion que acaba de cargar.
+  # exon-exon y subestima los conteos de forma sistemática. En lugar de preguntar
+  # al usuario por el organismo, se deduce de la anotación que acaba de cargar.
   splice_check <- reactive({
     if (!isTRUE(input$analysis_type == "alignment")) return(NULL)
     af <- effective_annotation()
@@ -427,14 +427,14 @@ server_tab_config <- function(input, output, session, state) {
     if (is.null(s) || !isTRUE(s$spliced)) return(NULL)
     div(class = "alert alert-warning py-2 px-3 small mb-2",
         icon("triangle-exclamation"),
-        tags$b(" La anotacion describe genes con splicing y bowtie2 no es splice-aware."),
+        tags$b(" La anotación describe genes con splicing y bowtie2 no es splice-aware."),
         tags$div(
           class = "mt-1",
           paste0("El ", round(100 * s$frac, 1), " % de los genes con exones anotados ",
-                 "tiene mas de uno (", fmt_int(s$n_genes_multiexon), " de ",
+                 "tiene más de uno (", fmt_int(s$n_genes_multiexon), " de ",
                  fmt_int(s$n_genes_with_exons), "). bowtie2 no alinea lecturas que ",
-                 "cruzan uniones exon-exon, asi que los conteos quedaran ",
-                 "subestimados de forma sistematica, y mas en los genes con mas ",
+                 "cruzan uniones exon-exon, así que los conteos quedaran ",
+                 "subestimados de forma sistemática, y más en los genes con más ",
                  "intrones.")),
         tags$div(class = "mt-1",
                  tags$b("Que hacer: "),
@@ -453,8 +453,8 @@ server_tab_config <- function(input, output, session, state) {
          depth = max(1, input$pw_depth %||% 20))
   })
 
-  # Estimacion de los parametros a partir de la matriz cargada. Pedir el CV y la
-  # profundidad "a ojo" es la parte mas fragil del calculo, y la diferencia no es
+  # Estimación de los parámetros a partir de la matriz cargada. Pedir el CV y la
+  # profundidad "a ojo" es la parte más fragil del cálculo, y la diferencia no es
   # cosmetica: sobre datos reales, los valores por defecto (cv 0,4, profundidad
   # 20) y los medidos sobre la misma matriz dan potencias muy distintas.
   pw_estimated <- reactiveVal(NULL)
@@ -462,16 +462,16 @@ server_tab_config <- function(input, output, session, state) {
     cm <- state$data_rv$count_matrix
     if (is.null(cm) || !length(cm)) {
       showNotification(paste0(
-        "No hay ninguna matriz de conteos cargada en esta sesion. Carga una en ",
-        "esta pestana o analiza una ejecucion guardada, y vuelve a pulsar."),
+        "No hay ninguna matriz de conteos cargada en esta sesión. Carga una en ",
+        "esta pestana o analiza una ejecución guardada, y vuelve a pulsar."),
         type = "warning", duration = 12)
       return()
     }
-    withProgress(message = "Estimando parametros de los datos...", value = 0.4, {
+    withProgress(message = "Estimando parámetros de los datos...", value = 0.4, {
       est <- estimate_power_params(cm, NULL)
     })
     if (is.null(est) || !is.finite(est$cv %||% NA_real_)) {
-      showNotification("No se han podido estimar los parametros de estos datos.",
+      showNotification("No se han podido estimar los parámetros de estos datos.",
                        type = "error", duration = 10)
       return()
     }
@@ -486,7 +486,7 @@ server_tab_config <- function(input, output, session, state) {
   output$pw_estimate_note <- renderUI({
     e <- pw_estimated()
     if (is.null(e)) {
-      return(HTML(paste("Con una matriz cargada, el CV biologico y la profundidad",
+      return(HTML(paste("Con una matriz cargada, el CV biológico y la profundidad",
                         "se miden en lugar de suponerse.")))
     }
     HTML(paste0("Medidos sobre la matriz cargada: CV = ", round(e$cv, 3),
@@ -509,8 +509,8 @@ server_tab_config <- function(input, output, session, state) {
         tags$div(class = "small mt-1", i$detail),
         if (!is.na(need$n)) tags$div(
           class = "small mt-1",
-          tags$b("Para potencia 0,8 harian falta "), ceiling(need$n),
-          " replicas por grupo con estos parametros.") else NULL)
+          tags$b("Para potencia 0,8 harían falta "), ceiling(need$n),
+          " replicas por grupo con estos parámetros.") else NULL)
   })
 
   output$pw_curve <- plotly::renderPlotly({
@@ -528,8 +528,8 @@ server_tab_config <- function(input, output, session, state) {
         shapes = list(
           list(type = "line", xref = "paper", x0 = 0, x1 = 1, y0 = 0.8, y1 = 0.8,
                line = list(dash = "dash", color = "#7BBF9A")),
-          # Referencia empirica de Schurch et al.: 6 replicas como minimo
-          # razonable, con independencia de lo que diga el calculo.
+          # Referencia empirica de Schurch et al.: 6 replicas como mínimo
+          # razonable, con independencia de lo que diga el cálculo.
           list(type = "line", x0 = 6, x1 = 6, yref = "paper", y0 = 0, y1 = 1,
                line = list(dash = "dot", color = "#F4A6A6"))),
         annotations = list(

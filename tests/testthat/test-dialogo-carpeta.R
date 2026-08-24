@@ -1,13 +1,13 @@
 # Dialogo nativo para elegir carpeta (R/utils_dialogos.R).
 #
 # No se abre ninguna ventana: se comprueba que la ruta devuelta se interpreta
-# bien y, sobre todo, que CANCELAR no se confunde con un fallo. Es el caso mas
-# frecuente despues de elegir, y tratarlo como error llenaria la interfaz de
+# bien y, sobre todo, que CANCELAR no se confunde con un fallo. Es el caso más
+# frecuente después de elegir, y tratarlo como error llenaria la interfaz de
 # avisos por pulsar el boton de cerrar.
 
 test_that("una ruta elegida se devuelve limpia y normalizada", {
   d <- withr::local_tempdir()
-  # macOS devuelve las carpetas con barra final y un salto de linea.
+  # macOS devuelve las carpetas con barra final y un salto de línea.
   falso <- function(...) structure(paste0(d, "/"), status = 0L)
   expect_equal(elegir_directorio_nativo(ejecutar = falso),
                normalizePath(d, mustWork = FALSE))
@@ -25,13 +25,13 @@ test_that("cancelar devuelve NULL y no un error", {
 })
 
 test_that("una ruta que ya no existe no se da por buena", {
-  # Entre que se elige y se lee puede haberse borrado, y devolverla haria que el
-  # pipeline fallase mucho mas adelante con un error mucho menos claro.
+  # Entre que se elige y se lee puede haberse borrado, y devolverla haría que el
+  # pipeline fallase mucho más adelante con un error mucho menos claro.
   fantasma <- function(...) structure("/no/existe/esta/carpeta", status = 0L)
   expect_null(elegir_directorio_nativo(ejecutar = fantasma))
 })
 
-test_that("un fallo del propio dialogo se traga sin romper la aplicacion", {
+test_that("un fallo del propio dialogo se traga sin romper la aplicación", {
   expect_null(elegir_directorio_nativo(ejecutar = function(...) stop("sin escritorio")))
   expect_null(elegir_directorio_nativo(ejecutar = function(...) warning("nada")))
 })
@@ -54,7 +54,7 @@ test_that("el punto de partida cae al home cuando no sirve", {
 
 # ── Ruta escrita o pegada a mano ────────────────────────────────────────────
 
-test_that("una carpeta valida se acepta y se normaliza", {
+test_that("una carpeta válida se acepta y se normaliza", {
   d <- withr::local_tempdir()
   v <- validar_directorio(d)
   expect_null(v$error)
@@ -77,14 +77,14 @@ test_that("se quitan las comillas que deja arrastrar una carpeta al terminal", {
 
 test_that("el campo vacio no es un error, pero una ruta mala si lo explica", {
   # Vacio es el estado inicial: marcarlo en rojo antes de que el usuario escriba
-  # nada seria un reproche por no haber empezado.
+  # nada sería un reproche por no haber empezado.
   v <- validar_directorio("")
   expect_null(v$error); expect_equal(v$ruta, "")
   expect_null(validar_directorio(NULL)$error)
 
   expect_match(validar_directorio("/no/existe/nada")$error, "no existe")
 
-  # Un fichero no es una carpeta, y decirlo asi ahorra el "pero si existe".
+  # Un fichero no es una carpeta, y decirlo así ahorra el "pero si existe".
   f <- withr::local_tempfile(); file.create(f)
   v2 <- validar_directorio(f)
   expect_equal(v2$ruta, "")
@@ -92,7 +92,7 @@ test_that("el campo vacio no es un error, pero una ruta mala si lo explica", {
 })
 
 test_that("dentro de un contenedor no se ofrece el dialogo", {
-  # No hay escritorio: ofrecer el boton solo llevaria a una aplicacion
+  # No hay escritorio: ofrecer el boton solo llevaría a una aplicación
   # congelada esperando una ventana que nunca va a aparecer. Se cae entonces al
   # selector de shinyFiles, que si funciona con el servidor en otra maquina.
   expect_false(dialogo_nativo_disponible(contenedor = TRUE, grafico = TRUE))
@@ -100,7 +100,7 @@ test_that("dentro de un contenedor no se ofrece el dialogo", {
 
 test_that("en un escritorio de verdad si se ofrece", {
   # En macOS y Windows siempre hay forma; en Linux depende de zenity o kdialog,
-  # asi que ahi se comprueba solo que la respuesta es coherente consigo misma.
+  # así que ahí se comprueba solo que la respuesta es coherente consigo misma.
   disponible <- dialogo_nativo_disponible(contenedor = FALSE, grafico = TRUE)
   expect_type(disponible, "logical")
   if (Sys.info()[["sysname"]] == "Darwin") {
@@ -108,8 +108,8 @@ test_that("en un escritorio de verdad si se ofrece", {
   }
 })
 
-test_that("sin entorno grafico en Linux no se ofrece", {
+test_that("sin entorno gráfico en Linux no se ofrece", {
   skip_if(Sys.info()[["sysname"]] == "Darwin" || .Platform$OS.type == "windows",
-          "macOS y Windows siempre tienen escritorio cuando hay sesion")
+          "macOS y Windows siempre tienen escritorio cuando hay sesión")
   expect_false(dialogo_nativo_disponible(contenedor = FALSE, grafico = FALSE))
 })

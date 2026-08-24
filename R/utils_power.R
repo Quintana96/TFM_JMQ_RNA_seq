@@ -1,38 +1,38 @@
 #' utils_power.R
-#' Calculo de potencia y tamaño muestral a priori para RNA-seq.
+#' Cálculo de potencia y tamaño muestral a priori para RNA-seq.
 #'
-#' Por que existe (docs/REVISION_ESTADISTICA.md, B8): el tamaño muestral es el
-#' determinante mas fuerte de la calidad del resultado y ningun componente de la
-#' app orientaba sobre el. Schurch et al. (2016), con 48 replicas por condicion
-#' en levadura, concluyeron que hacen falta >= 6 replicas por condicion para
-#' deteccion robusta y >= 12 para capturar la mayoria de los DEG a todos los
+#' Por qué existe (docs/REVISION_ESTADISTICA.md, B8): el tamaño muestral es el
+#' determinante más fuerte de la calidad del resultado y ningun componente de la
+#' app orientaba sobre el. Schurch et al. (2016), con 48 replicas por condición
+#' en levadura, concluyeron que hacen falta >= 6 replicas por condición para
+#' detección robusta y >= 12 para capturar la mayoria de los DEG a todos los
 #' fold-changes; con 3 replicas, 9 de 11 herramientas recuperaban solo el 20-40 %
 #' de los genes que se detectan con 42.
 #'
-#' LIMITACION QUE HAY QUE MOSTRAR, no esconder: la revision en Briefings in
-#' Bioinformatics concluye que ninguna herramienta de calculo de tamaño muestral
+#' LIMITACIÓN QUE HAY QUE MOSTRAR, no esconder: la revisión en Briefings in
+#' Bioinformatics concluye que ninguna herramienta de cálculo de tamaño muestral
 #' es fiable cuando se exigen efectos pequeños y potencias altas, porque no se
-#' pueden fijar parametros razonables a partir de datos piloto limitados. El
-#' resultado es una orientacion, no una garantia.
+#' pueden fijar parámetros razonables a partir de datos piloto limitados. El
+#' resultado es una orientación, no una garantía.
 
-#' Referencias empiricas de Schurch et al. (2016), para contrastar con el calculo.
+#' Referencias empiricas de Schurch et al. (2016), para contrastar con el cálculo.
 POWER_REFERENCE_NOTE <- paste(
   "Referencia empirica (Schurch et al., RNA 2016, con 48 replicas en levadura):",
-  ">= 6 replicas por condicion para deteccion robusta, >= 12 para capturar la",
+  ">= 6 replicas por condición para detección robusta, >= 12 para capturar la",
   "mayoria de los DEG a todos los fold-changes. Con 3 replicas se recupera",
   "tipicamente entre el 20 % y el 40 % de lo detectable."
 )
 
-#' Estima los parametros de potencia A PARTIR de la matriz cargada.
+#' Estima los parámetros de potencia A PARTIR de la matriz cargada.
 #'
-#' Pedir el coeficiente de variacion y la profundidad "a ojo" es la parte mas
-#' fragil del calculo: son justo los valores que el usuario no conoce, y de los
+#' Pedir el coeficiente de variación y la profundidad "a ojo" es la parte más
+#' fragil del cálculo: son justo los valores que el usuario no conoce, y de los
 #' que depende todo el resultado. Si hay una matriz de conteos cargada, ambos se
 #' pueden medir en lugar de adivinarse:
 #'
-#'   - `cv` es la raiz cuadrada de la dispersion biologica comun (BCV) que
-#'     estima edgeR, que es exactamente la definicion del coeficiente de
-#'     variacion biologico que espera RNASeqPower.
+#'   - `cv` es la raíz cuadrada de la dispersion biológica comun (BCV) que
+#'     estima edgeR, que es exactamente la definición del coeficiente de
+#'     variación biológico que espera RNASeqPower.
 #'   - `depth` es la mediana de conteos por gen entre los genes expresados; usar
 #'     la media la infla por unos pocos genes muy expresados.
 #'
@@ -52,7 +52,7 @@ estimate_power_params <- function(counts, meta = NULL) {
       } else NULL
       y <- edgeR::DGEList(counts = cm, group = grupo)
       keep <- edgeR::filterByExpr(y, group = grupo)
-      # El metodo `[` de DGEList no admite `drop`.
+      # El método `[` de DGEList no admite `drop`.
       if (sum(keep) > 50) y <- y[keep, ]
       y <- norm_lib_sizes(y)
       design <- if (!is.null(grupo)) {
@@ -61,7 +61,7 @@ estimate_power_params <- function(counts, meta = NULL) {
         matrix(1, ncol(y), 1)
       }
       y <- edgeR::estimateDisp(y, design, robust = TRUE)
-      # BCV = sqrt(dispersion comun); es el CV biologico.
+      # BCV = sqrt(dispersion comun); es el CV biológico.
       cv <- sqrt(y$common.dispersion %||% NA_real_)
     }
     n_grp <- if (!is.null(meta) && "condition" %in% names(meta)) {
@@ -77,14 +77,14 @@ estimate_power_params <- function(counts, meta = NULL) {
 #' Potencia para un tamaño muestral dado, via RNASeqPower.
 #'
 #' @param n replicas por grupo
-#' @param cv coeficiente de variacion biologico (0,1 lineas celulares; 0,4 humano)
-#' @param effect fold-change minimo a detectar (escala lineal, p. ej. 2)
+#' @param cv coeficiente de variación biológico (0,1 líneas celulares; 0,4 humano)
+#' @param effect fold-change mínimo a detectar (escala lineal, p. ej. 2)
 #' @param depth profundidad media por gen (conteos)
 #' @param alpha nivel de significacion por test
 #' @return list(power, error)
 power_for_n <- function(n, cv = 0.4, effect = 2, depth = 20, alpha = 0.05) {
   if (!requireNamespace("RNASeqPower", quietly = TRUE)) {
-    return(list(power = NA_real_, error = "RNASeqPower no esta instalado."))
+    return(list(power = NA_real_, error = "RNASeqPower no está instalado."))
   }
   out <- tryCatch({
     p <- RNASeqPower::rnapower(depth = depth, n = n, cv = cv,
@@ -98,7 +98,7 @@ power_for_n <- function(n, cv = 0.4, effect = 2, depth = 20, alpha = 0.05) {
 n_for_power <- function(power = 0.8, cv = 0.4, effect = 2, depth = 20,
                        alpha = 0.05) {
   if (!requireNamespace("RNASeqPower", quietly = TRUE)) {
-    return(list(n = NA_real_, error = "RNASeqPower no esta instalado."))
+    return(list(n = NA_real_, error = "RNASeqPower no está instalado."))
   }
   out <- tryCatch({
     v <- RNASeqPower::rnapower(depth = depth, cv = cv, effect = effect,
@@ -121,23 +121,23 @@ power_curve <- function(n_range = 2:20, cv = 0.4, effect = 2, depth = 20,
   df
 }
 
-#' Interpretacion del resultado, cruzando el calculo con la referencia empirica.
+#' Interpretación del resultado, cruzando el cálculo con la referencia empirica.
 #'
-#' El calculo puede decir que 3 replicas bastan para un fold-change de 4 y ser
+#' El cálculo puede decir que 3 replicas bastan para un fold-change de 4 y ser
 #' formalmente correcto, mientras la evidencia empirica dice que con 3 replicas
 #' se recupera una fraccion pequeña de los DEG reales. Conviene decir las dos
 #' cosas.
 interpret_power <- function(n, power) {
   if (is.na(power)) {
     return(list(level = "desconocida", label = "No se ha podido calcular",
-                detail = "Revisa los parametros introducidos."))
+                detail = "Revisa los parámetros introducidos."))
   }
   pct <- round(100 * power, 1)
   if (n < 6) {
     return(list(level = "aviso",
       label = paste0("Potencia estimada ", pct, " % con n = ", n),
-      detail = paste("Aunque el calculo salga favorable, con menos de 6 replicas",
-                     "por condicion la evidencia empirica es desfavorable.",
+      detail = paste("Aunque el cálculo salga favorable, con menos de 6 replicas",
+                     "por condición la evidencia empirica es desfavorable.",
                      POWER_REFERENCE_NOTE)))
   }
   if (power >= 0.8) {

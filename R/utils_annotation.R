@@ -1,24 +1,24 @@
 #' utils_annotation.R
-#' Funciones puras (sin Shiny) para extraer del GFF/GTF de anotacion lo que el
-#' analisis necesita: el mapa transcrito -> gen para tximport y los genes de
+#' Funciones puras (sin Shiny) para extraer del GFF/GTF de anotación lo que el
+#' análisis necesita: el mapa transcrito -> gen para tximport y los genes de
 #' rRNA para la metrica de QC.
 #'
 #' Criterio de identificadores: el workflow llama a
-#' `featureCounts -t gene -g locus_tag`, asi que la ruta de alineamiento produce
+#' `featureCounts -t gene -g locus_tag`, así que la ruta de alineamiento produce
 #' IDs de gen = locus_tag. Para que las dos rutas (alineamiento y
 #' pseudoalineamiento) den los MISMOS identificadores, el gen canonico de
-#' `tx2gene` es tambien el locus_tag.
+#' `tx2gene` es también el locus_tag.
 
-#' Cache de la anotacion parseada.
+#' Cache de la anotación parseada.
 #'
 #' Parsear el GFF es CARO: 7 segundos para los 9.523 features de E. coli, y un
 #' GTF humano es dos ordenes de magnitud mayor. Cuatro funciones distintas lo
-#' necesitan (`tx2gene`, longitudes de gen, deteccion de splicing, genes de
-#' rRNA), invocadas desde cuatro puntos de la aplicacion, asi que sin cache el
-#' mismo fichero se parseaba cuatro veces por sesion como minimo, y de nuevo en
-#' cada invalidacion reactiva.
+#' necesitan (`tx2gene`, longitudes de gen, detección de splicing, genes de
+#' rRNA), invocadas desde cuatro puntos de la aplicación, así que sin cache el
+#' mismo fichero se parseaba cuatro veces por sesión como mínimo, y de nuevo en
+#' cada invalidación reactiva.
 #'
-#' Se guarda una sola entrada: el patron de uso es una anotacion por ejecucion, y
+#' Se guarda una sola entrada: el patron de uso es una anotación por ejecución, y
 #' el data.frame de un GTF humano ocupa cientos de MB. La clave incluye mtime y
 #' tamaño para que un fichero modificado se vuelva a leer.
 .annotation_cache <- new.env(parent = emptyenv())
@@ -60,7 +60,7 @@ first_present <- function(df, cands) {
   rep(NA_character_, nrow(df))
 }
 
-#' Construye el mapa transcrito -> gen a partir de la anotacion.
+#' Construye el mapa transcrito -> gen a partir de la anotación.
 #'
 #' El problema real no es leer el GFF, es que los nombres de los transcritos que
 #' produce salmon/kallisto son los encabezados del FASTA de transcriptoma, y esos
@@ -68,15 +68,15 @@ first_present <- function(df, cands) {
 #' Ensembl Bacteria...). Por eso NO se adivina una convencion: se emite una fila
 #' por cada ALIAS plausible del transcrito, y luego
 #' `pick_tx2gene_for_quant()` elige el subconjunto que de verdad casa con los
-#' identificadores del fichero de cuantificacion.
+#' identificadores del fichero de cuantificación.
 #'
 #' @return data.frame(TXNAME, GENEID, alias_type) o NULL
 build_tx2gene_from_annotation <- function(path, tx_types = NULL) {
   df <- read_annotation_features(path)
   if (is.null(df) || !nrow(df) || !"type" %in% names(df)) return(NULL)
   types <- as.character(df$type)
-  # Features que representan un transcrito. En procariotas el analisis se hace
-  # tipicamente a nivel de CDS; se incluyen tambien los RNA no codificantes.
+  # Features que representan un transcrito. En procariotas el análisis se hace
+  # tipicamente a nivel de CDS; se incluyen también los RNA no codificantes.
   tx_types <- tx_types %||% c("CDS", "mRNA", "transcript", "ncRNA", "rRNA",
                               "tRNA", "tmRNA", "antisense_RNA", "RNase_P_RNA",
                               "SRP_RNA", "exon")
@@ -100,11 +100,11 @@ build_tx2gene_from_annotation <- function(path, tx_types = NULL) {
     out[[col]] <- data.frame(TXNAME = v[ok], GENEID = gene_id[ok],
                              alias_type = col, stringsAsFactors = FALSE)
     # Variantes que producen los distintos pipelines: sin el prefijo "cds-"/
-    # "rna-", y sin el sufijo de version.
+    # "rna-", y sin el sufijo de versión.
     #
-    # Las variantes se generan AQUI en lugar de delegar en
+    # Las variantes se generan AQUÍ en lugar de delegar en
     # `tximport(ignoreTxVersion = TRUE)` porque ese flag corta por el primer
-    # punto y no distingue una version de Ensembl de un accession de GenBank:
+    # punto y no distingue una versión de Ensembl de un accession de GenBank:
     # con IDs como "cds-AAC73112.1" (donde el ".1" es parte del accession)
     # descarta el 99 % de los transcritos en silencio. Generando los alias
     # explicitamente, `pick_tx2gene_for_quant()` elige el que de verdad casa y
@@ -131,7 +131,7 @@ build_tx2gene_from_annotation <- function(path, tx_types = NULL) {
 #'
 #' Devuelve el mapa filtrado y la tasa de emparejamiento, para que la interfaz
 #' pueda decir "8.412 de 8.500 transcritos mapeados (99 %)" o avisar de que la
-#' anotacion no corresponde al transcriptoma usado.
+#' anotación no corresponde al transcriptoma usado.
 pick_tx2gene_for_quant <- function(tx2gene, quant_tx_ids) {
   if (is.null(tx2gene) || !nrow(tx2gene) || !length(quant_tx_ids)) {
     return(list(tx2gene = NULL, rate = NA_real_, n_matched = 0L,
@@ -155,12 +155,12 @@ pick_tx2gene_for_quant <- function(tx2gene, quant_tx_ids) {
        n_tx = length(ids), alias_type = best$at)
 }
 
-#' Longitud de cada gen segun la anotacion, indexada por el identificador que usa
+#' Longitud de cada gen según la anotación, indexada por el identificador que usa
 #' la matriz de conteos (locus_tag).
 #'
 #' Para genes con varios exones se suma la longitud de los exones, que es la
 #' longitud efectiva que ve el contaje; para el resto se usa la del propio
-#' feature. La necesita el diagnostico de sesgo de longitud (B3c).
+#' feature. La necesita el diagnóstico de sesgo de longitud (B3c).
 gene_lengths_from_annotation <- function(path) {
   df <- read_annotation_features(path)
   if (is.null(df) || !nrow(df) || !".width" %in% names(df)) return(NULL)
@@ -188,13 +188,13 @@ gene_lengths_from_annotation <- function(path) {
   out[is.finite(out) & out > 0]
 }
 
-#' Detecta si la anotacion describe genes con splicing (varios exones por gen).
+#' Detecta si la anotación describe genes con splicing (varios exones por gen).
 #'
-#' Por que importa (docs/REVISION_ESTADISTICA.md, B10): `bowtie2` NO es
+#' Por qué importa (docs/REVISION_ESTADISTICA.md, B10): `bowtie2` NO es
 #' splice-aware. Sobre un procariota es correcto porque no hay intrones, pero
 #' aplicar la misma ruta a un eucariota subestima sistematicamente los conteos en
 #' las uniones exon-exon, y nada en la app lo advertia. Se detecta de la propia
-#' anotacion en lugar de preguntar al usuario por el organismo: si los genes
+#' anotación en lugar de preguntar al usuario por el organismo: si los genes
 #' tienen varios exones, la ruta de alineamiento con bowtie2 no es adecuada.
 #'
 #' @return list(spliced, n_genes_multiexon, n_genes_with_exons, frac, error)
@@ -203,7 +203,7 @@ detect_spliced_annotation <- function(path, min_frac = 0.1) {
               frac = NA_real_, error = NULL)
   df <- read_annotation_features(path)
   if (is.null(df) || !nrow(df) || !"type" %in% names(df)) {
-    out$error <- "No se ha podido leer la anotacion."
+    out$error <- "No se ha podido leer la anotación."
     return(out)
   }
   types <- as.character(df$type)
@@ -231,11 +231,11 @@ detect_spliced_annotation <- function(path, min_frac = 0.1) {
   out
 }
 
-#' Identificadores de genes de rRNA segun la anotacion.
+#' Identificadores de genes de rRNA según la anotación.
 #'
 #' Se recogen por dos vias (`type == "rRNA"` y `gene_biotype == "rRNA"`) y se
 #' devuelven todos los alias, porque la matriz de conteos puede usar locus_tag o
-#' nombre de gen segun como se generase.
+#' nombre de gen según como se generase.
 rrna_ids_from_annotation <- function(path) {
   df <- read_annotation_features(path)
   if (is.null(df) || !nrow(df)) return(character(0))
@@ -262,28 +262,28 @@ rrna_ids_from_annotation <- function(path) {
   unique(c(ids, sub("^(gene|rna)-", "", ids)))
 }
 
-# ── Traduccion de identificadores entre atributos de la anotacion ───────────
+# ── Traducción de identificadores entre atributos de la anotación ───────────
 #
 # El pipeline llama a `featureCounts -g locus_tag`, de modo que la matriz de
 # conteos viene con locus tags (BW25113_RS00005). Ningun OrgDb los conoce: el
 # enriquecimiento sobre la matriz tal cual mapea el 0 %. Y no se arregla
-# pidiendole a featureCounts que agrupe por `gene`, porque ese atributo no esta
+# pidiendole a featureCounts que agrupe por `gene`, porque ese atributo no está
 # en todos los registros del GTF y la herramienta aborta.
 #
-# La anotacion SI relaciona los dos: es la unica fuente que sabe que
-# BW25113_RS00005 es thrL. Por eso la traduccion se hace con el GTF y no con el
-# OrgDb, y por eso vive aqui y no en utils_enrich.R.
+# La anotación SI relaciona los dos: es la única fuente que sabe que
+# BW25113_RS00005 es thrL. Por eso la traducción se hace con el GTF y no con el
+# OrgDb, y por eso vive aquí y no en utils_enrich.R.
 #
 # Se traduce en el enriquecimiento, no al cargar la matriz: la tabla DEG, los
-# informes y el script exportado conservan asi los identificadores que el
+# informes y el script exportado conservan así los identificadores que el
 # pipeline produjo realmente, que es lo que hace el resultado reproducible.
 
-#' Atributos del GFF/GTF que pueden identificar un gen, de mas a menos
-#' especifico. `gene_id` primero porque es el que featureCounts escribe.
+#' Atributos del GFF/GTF que pueden identificar un gen, de más a menos
+#' específico. `gene_id` primero porque es el que featureCounts escribe.
 ANNOTATION_ID_ATTRS <- c("gene_id", "locus_tag", "old_locus_tag", "gene",
                          "protein_id", "transcript_id")
 
-#' Atributos utiles como destino de una traduccion, con su etiqueta.
+#' Atributos útiles como destino de una traducción, con su etiqueta.
 ANNOTATION_TARGET_ATTRS <- c(
   "gene"          = "Simbolo del gen (gene)",
   "locus_tag"     = "Locus tag (locus_tag)",
@@ -291,7 +291,7 @@ ANNOTATION_TARGET_ATTRS <- c(
   "protein_id"    = "Identificador de proteina (protein_id)"
 )
 
-#' Que atributos de la anotacion estan realmente poblados.
+#' Que atributos de la anotación están realmente poblados.
 #' Devuelve los nombres de columna con al menos un valor no vacio.
 annotation_available_attrs <- function(path, candidatos = NULL) {
   df <- read_annotation_features(path)
@@ -304,14 +304,14 @@ annotation_available_attrs <- function(path, candidatos = NULL) {
   }, logical(1))]
 }
 
-#' Deduce a que atributo de la anotacion corresponden unos identificadores.
+#' Deduce a que atributo de la anotación corresponden unos identificadores.
 #'
 #' Compara la lista contra cada atributo candidato y se queda con el de mayor
-#' cobertura. Se prefiere deducirlo a preguntarlo: el usuario no tiene por que
+#' cobertura. Se prefiere deducirlo a preguntarlo: el usuario no tiene por qué
 #' saber con que `-g` se lanzo featureCounts, y equivocarse produce una
-#' traduccion silenciosamente vacia.
+#' traducción silenciosamente vacia.
 #'
-#' @return list(attr, rate, tabla) o NULL si no se pudo leer la anotacion.
+#' @return list(attr, rate, tabla) o NULL si no se pudo leer la anotación.
 detect_annotation_keytype <- function(ids, path) {
   df <- read_annotation_features(path)
   if (is.null(df) || !nrow(df)) return(NULL)
@@ -331,7 +331,7 @@ detect_annotation_keytype <- function(ids, path) {
                           stringsAsFactors = FALSE))
 }
 
-#' Mapa de traduccion entre dos atributos de la anotacion.
+#' Mapa de traducción entre dos atributos de la anotación.
 #'
 #' Cuando un mismo valor de origen apunta a varios de destino se queda con el
 #' primero: en un GTF eso ocurre porque el gen tiene varias filas (gene, CDS,
@@ -348,7 +348,7 @@ annotation_id_map <- function(path, from, to) {
   stats::setNames(d[!dup], o[!dup])
 }
 
-#' Traduce identificadores con la anotacion.
+#' Traduce identificadores con la anotación.
 #'
 #' La forma del valor devuelto imita la de `translate_to_entrez()` para que el
 #' enriquecimiento pueda encadenar las dos traducciones sin casos especiales.
@@ -367,14 +367,14 @@ translate_ids_with_annotation <- function(ids, path, from = NULL, to = "gene") {
 
   if (!length(ids)) return(vacio("Lista de genes vacia."))
   df <- read_annotation_features(path)
-  if (is.null(df)) return(vacio("No se pudo leer la anotacion."))
+  if (is.null(df)) return(vacio("No se pudo leer la anotación."))
   if (!to %in% names(df)) {
-    return(vacio(paste0("La anotacion no trae el atributo '", to, "'.")))
+    return(vacio(paste0("La anotación no trae el atributo '", to, "'.")))
   }
   if (is.null(from)) {
     det <- detect_annotation_keytype(ids, path)
     if (is.null(det) || det$rate == 0) {
-      return(vacio(paste0("Ningun atributo de la anotacion reconoce estos ",
+      return(vacio(paste0("Ningun atributo de la anotación reconoce estos ",
                           "identificadores.")))
     }
     from <- det$attr
@@ -389,7 +389,7 @@ translate_ids_with_annotation <- function(ids, path, from = NULL, to = "gene") {
   }
   mapa <- annotation_id_map(path, from, to)
   if (!length(mapa)) return(vacio(paste0("No hay correspondencia entre '", from,
-                                         "' y '", to, "' en la anotacion."), from))
+                                         "' y '", to, "' en la anotación."), from))
   tr <- unname(mapa[ids])
   ok <- !is.na(tr) & nzchar(tr)
   if (!any(ok)) return(vacio(paste0("Ningun identificador se pudo traducir de '",
@@ -398,7 +398,7 @@ translate_ids_with_annotation <- function(ids, path, from = NULL, to = "gene") {
   # Varios identificadores de origen pueden caer en el mismo destino (en E. coli
   # son ~50 simbolos repartidos entre parologos y fragmentos anotados por
   # separado). Se conserva el primero y se cuenta cuantos se perdieron, porque
-  # un enriquecimiento con genes duplicados infla el recuento de los terminos
+  # un enriquecimiento con genes duplicados infla el recuento de los términos
   # que los contienen.
   dup <- duplicated(traducidos)
   list(
@@ -415,7 +415,7 @@ translate_ids_with_annotation <- function(ids, path, from = NULL, to = "gene") {
 #'
 #' Cuando dos identificadores de origen caen en el mismo destino se conserva el
 #' de mayor valor absoluto. Es el criterio "max" que usa el GSEA original al
-#' colapsar sondas a genes: quedarse con el primero seria arbitrario, y
+#' colapsar sondas a genes: quedarse con el primero sería arbitrario, y
 #' promediar diluye la señal que el test busca.
 translate_ranking_with_annotation <- function(ranked, path, from = NULL, to = "gene") {
   tr <- translate_ids_with_annotation(names(ranked), path, from = from, to = to)

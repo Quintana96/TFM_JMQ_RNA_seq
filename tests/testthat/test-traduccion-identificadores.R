@@ -1,17 +1,17 @@
-# Traduccion de identificadores con la anotacion (R/utils_annotation.R).
+# Traducción de identificadores con la anotación (R/utils_annotation.R).
 #
 # El pipeline llama a `featureCounts -g locus_tag`, de modo que la matriz de
-# conteos trae locus tags y ningun OrgDb los conoce. La anotacion es la unica
+# conteos trae locus tags y ningun OrgDb los conoce. La anotación es la única
 # fuente que relaciona BW25113_RS00005 con thrL. Sin traducir, el
-# enriquecimiento mapea el 0 % y devuelve "sin terminos", que no se distingue
+# enriquecimiento mapea el 0 % y devuelve "sin términos", que no se distingue
 # de la ausencia de señal.
 
-# Un GTF minimo con los mismos atributos que el de RefSeq, para no depender de
+# Un GTF mínimo con los mismos atributos que el de RefSeq, para no depender de
 # ningun fichero externo.
 gtf_de_prueba <- function() {
   filas <- c(
-    # Comentario al estilo de los GTF de RefSeq. Un '##gff-version 3' haria que
-    # rtracklayer avisara de que la version no cuadra con la extension .gtf.
+    # Comentario al estilo de los GTF de RefSeq. Un '##gff-versión 3' haría que
+    # rtracklayer avisara de que la versión no cuadra con la extensión .gtf.
     '#!genome-build ASM75055v1',
     'chr\tRefSeq\tgene\t1\t100\t.\t+\t.\tgene_id "LT_001"; locus_tag "LT_001"; old_locus_tag "OLD_1"; gene "aaaA";',
     'chr\tRefSeq\tCDS\t1\t100\t.\t+\t0\tgene_id "LT_001"; locus_tag "LT_001"; gene "aaaA"; protein_id "WP_1";',
@@ -41,12 +41,12 @@ test_that("se deduce el atributo al que corresponden unos identificadores", {
   d2 <- detect_annotation_keytype(c("aaaA", "bbbB"), gtf)
   expect_equal(d2$attr, "gene")
 
-  # Identificadores que no estan en ninguna columna: cobertura cero, no error.
+  # Identificadores que no están en ninguna columna: cobertura cero, no error.
   d3 <- detect_annotation_keytype(c("NADA_1", "NADA_2"), gtf)
   expect_equal(d3$rate, 0)
 })
 
-test_that("la traduccion respeta los genes sin simbolo y colapsa los repetidos", {
+test_that("la traducción respeta los genes sin simbolo y colapsa los repetidos", {
   skip_if_not(HAS_RTRACKLAYER, "falta rtracklayer")
   gtf <- gtf_de_prueba()
 
@@ -69,8 +69,8 @@ test_that("traducir a lo mismo es la identidad y no pierde genes", {
   tr <- translate_ids_with_annotation(ids, gtf, from = "locus_tag", to = "locus_tag")
   expect_equal(tr$ids, ids)
   expect_equal(tr$mapping$rate, 1)
-  # Sin este caso, un usuario que pide traducir a lo que ya tiene perderia
-  # LT_004, que no tiene simbolo, sin ninguna razon.
+  # Sin este caso, un usuario que pide traducir a lo que ya tiene perdería
+  # LT_004, que no tiene simbolo, sin ninguna razón.
 })
 
 test_that("los errores explican la causa en vez de devolver una lista vacia", {
@@ -86,7 +86,7 @@ test_that("los errores explican la causa en vez de devolver una lista vacia", {
                "No se pudo leer")
 })
 
-test_that("el ranking conserva el valor mas extremo al colapsar y queda ordenado", {
+test_that("el ranking conserva el valor más extremo al colapsar y queda ordenado", {
   skip_if_not(HAS_RTRACKLAYER, "falta rtracklayer")
   gtf <- gtf_de_prueba()
 
@@ -99,13 +99,13 @@ test_that("el ranking conserva el valor mas extremo al colapsar y queda ordenado
   expect_equal(unname(r$ranked[["aaaA"]]), 1.5)
   # LT_004 no tiene simbolo: se pierde aunque sea el valor mayor.
   expect_false("LT_004" %in% names(r$ranked))
-  # GSEA recorre el ranking en orden: si la traduccion lo desordena, el NES no
+  # GSEA recorre el ranking en orden: si la traducción lo desordena, el NES no
   # corresponde a la curva que dibuja el running score.
   expect_false(is.unsorted(rev(r$ranked)))
   expect_equal(r$mapping$n_colapsados, 1L)
 })
 
-test_that("solo se ofrecen como destino los atributos que la anotacion trae", {
+test_that("solo se ofrecen como destino los atributos que la anotación trae", {
   skip_if_not(HAS_RTRACKLAYER, "falta rtracklayer")
   attrs <- annotation_available_attrs(gtf_de_prueba(),
                                       names(ANNOTATION_TARGET_ATTRS))
@@ -113,12 +113,12 @@ test_that("solo se ofrecen como destino los atributos que la anotacion trae", {
   expect_equal(annotation_available_attrs("/no/existe.gtf"), character(0))
 })
 
-test_that("el informe registra la traduccion, y tambien su ausencia", {
+test_that("el informe registra la traducción, y también su ausencia", {
   rv <- list(
     results = data.frame(gene = c("a", "b"), log2FC = c(1, -1), padj = c(0.01, 0.02)),
     method = "DESeq2", fdr = 0.05, contrast = "Galio vs Control",
     enrich = list(
-      enfoque = "ORA (sobre-representacion)", ontologia = "GO: Procesos biologicos",
+      enfoque = "ORA (sobre-representación)", ontologia = "GO: Procesos biológicos",
       keytype = "SYMBOL", n_lista = 1502L, n_universo = 3289L, n_terminos = 15L,
       traduccion = "gene_id -> gene (1502 de 1535, 97.9 %; 7 colapsados)",
       anotacion_traduccion = "/ruta/anotacion.gtf",
@@ -126,12 +126,12 @@ test_that("el informe registra la traduccion, y tambien su ausencia", {
       metrica = NA, simplify = FALSE, direccional = FALSE, simbolos = TRUE))
 
   h <- build_deg_report_html(rv)
-  expect_true(grepl("Traduccion de IDs", h, fixed = TRUE))
+  expect_true(grepl("Traducción de IDs", h, fixed = TRUE))
   expect_true(grepl("gene_id -&gt; gene", h, fixed = TRUE))
   expect_true(grepl("anotacion.gtf", h, fixed = TRUE))
 
   # Y sin traducir tiene que DECIRLO, no callar: un informe que no menciona la
-  # traduccion no permite saber si los identificadores del enriquecimiento son
+  # traducción no permite saber si los identificadores del enriquecimiento son
   # los de la matriz o unos traducidos, que es justo lo que hay que reproducir.
   rv$enrich$traduccion <- NA_character_
   rv$enrich$anotacion_traduccion <- NA_character_

@@ -274,14 +274,14 @@ rnaseq_app/
 ├── server.R                 # Server principal: instancia state y delega en módulos
 ├── workflow.sh              # Pipeline Bash (QC → trimming → índice → alineamiento → conteos)
 ├── requirements.sh          # Comprueba e instala todas las dependencias
-├── Dockerfile               # Imagen de ejecucion autocontenida (dos etapas)
-├── compose.yaml             # Despliegue local: puertos, volumenes y limites
+├── Dockerfile               # Imagen de ejecución autocontenida (dos etapas)
+├── compose.yaml             # Despliegue local: puertos, volumenes y límites
 ├── docker/                  # Todo lo relativo al contenedor
-│   ├── environment.yml      #   Herramientas del pipeline, con version fijada
+│   ├── environment.yml      #   Herramientas del pipeline, con versión fijada
 │   ├── install_r_packages.R #   Paquetes de R + registro de versiones
 │   ├── entrypoint.sh        #   Comprueba el entorno y arranca la app
 │   ├── verify.sh            #   Verifica la imagen (tests dentro del contenedor)
-│   └── README.md            #   Construccion, montajes y limitaciones
+│   └── README.md            #   Construcción, montajes y limitaciones
 ├── BRCA_exp_matrix-1.tsv    # Matriz de ejemplo (datos TCGA-BRCA)
 ├── clinical_info_TCGA-BRCA.tsv # Metadatos clínicos de ejemplo
 └── R/                       # Módulos auto-sourced por Shiny
@@ -297,7 +297,7 @@ rnaseq_app/
     ├── utils_qc.R           # Métricas QC, alertas, gráficos Plotly de calidad
     ├── utils_deg.R          # Análisis DEG: DESeq2 / edgeR / limma-voom
     ├── utils_enrich.R       # Enriquecimiento GO / KEGG / Reactome / GMT (ORA y GSEA)
-    ├── utils_diag.R         # Diagnosticos post-ajuste y distribucion de la expresion
+    ├── utils_diag.R         # Diagnósticos post-ajuste y distribución de la expresión
     │
     ├── ui_helpers.R         # Helpers UI: botones de descarga, headers con CSV/Plotly
     ├── ui_tab_home.R        # UI del Tab 0 (portada: pasos y estado de la sesión)

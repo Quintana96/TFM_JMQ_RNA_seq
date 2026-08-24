@@ -1,5 +1,5 @@
 #' global.R
-#' Librerias, opciones globales, constantes y tema de la aplicacion.
+#' Librerias, opciones globales, constantes y tema de la aplicación.
 #' Se sourcea automaticamente por Shiny antes de app.R / ui.R / server.R.
 
 library(shiny)
@@ -28,10 +28,10 @@ HAS_ORGECDB         <- pkg_ok("org.EcK12.eg.db")
 
 #' OrgDb instalados en el sistema, para el selector de organismo.
 #'
-#' La app tenia el OrgDb cableado a org.EcK12.eg.db, de modo que con datos de
+#' La app tenía el OrgDb cableado a org.EcK12.eg.db, de modo que con datos de
 #' cualquier otro organismo el enriquecimiento GO no podia funcionar aunque su
-#' paquete de anotacion estuviera instalado: el mapeo salia del 0 % y la app
-#' avisaba, correctamente, de algo que no tenia forma de arreglar desde la
+#' paquete de anotación estuviera instalado: el mapeo salía del 0 % y la app
+#' avisaba, correctamente, de algo que no tenía forma de arreglar desde la
 #' interfaz. Se detectan al arrancar y se ofrecen todos.
 available_orgdbs <- function() {
   pkgs <- tryCatch(rownames(utils::installed.packages()), error = function(e) character(0))
@@ -50,12 +50,12 @@ orgdb_label <- function(pkg) {
   etiqueta <- unname(conocidos[pkg])
   ifelse(is.na(etiqueta), pkg, paste0(etiqueta, " (", pkg, ")"))
 }
-# Encogido de log2FC (lfcShrink). apeglm es la opcion recomendada por la
+# Encogido de log2FC (lfcShrink). apeglm es la opción recomendada por la
 # vinieta de DESeq2; ashr sirve de alternativa. Sin ninguno de los dos se cae a
 # type = "normal".
 HAS_APEGLM          <- pkg_ok("apeglm")
 HAS_ASHR            <- pkg_ok("ashr")
-# Fase 2: GSEA, ponderacion de hipotesis y segunda estimacion de pi0. La interfaz
+# Fase 2: GSEA, ponderación de hipótesis y segunda estimación de pi0. La interfaz
 # oculta las opciones cuyo paquete falta, en lugar de ofrecerlas y fallar.
 HAS_FGSEA           <- pkg_ok("fgsea")
 # Reactome como tercera coleccion de enriquecimiento. Necesita los DOS paquetes:
@@ -65,16 +65,16 @@ HAS_FGSEA           <- pkg_ok("fgsea")
 HAS_REACTOMEPA      <- pkg_ok("ReactomePA") && pkg_ok("reactome.db")
 HAS_IHW             <- pkg_ok("IHW")
 HAS_QVALUE          <- pkg_ok("qvalue")
-# Fase 3: variacion no deseada y lectura de la anotacion. rtracklayer es lo que
+# Fase 3: variación no deseada y lectura de la anotación. rtracklayer es lo que
 # permite construir el mapa transcrito-gen que necesita tximport.
 HAS_SVA             <- pkg_ok("sva")
 HAS_RTRACKLAYER     <- pkg_ok("rtracklayer")
-# Calculo de potencia a priori.
+# Cálculo de potencia a priori.
 HAS_RNASEQPOWER     <- pkg_ok("RNASeqPower")
-# Graficos de red y distribucion del enriquecimiento (barras, cnet, emap, upset
+# Gráficos de red y distribución del enriquecimiento (barras, cnet, emap, upset
 # y ridge), los del esquema del pipeline. enrichplot los dibuja, pero delega el
 # upset en ggupset y el ridge en ggridges: sin ellos esas dos vistas fallan en
-# tiempo de ejecucion, no al cargar, asi que se comprueban aqui.
+# tiempo de ejecución, no al cargar, así que se comprueban aquí.
 HAS_ENRICHPLOT      <- pkg_ok("enrichplot") && pkg_ok("ggupset") && pkg_ok("ggridges")
 # pathview pinta los log2FC sobre el diagrama oficial de una ruta KEGG. Se
 # ADJUNTA, no solo se carga: internamente llama a data(bods) sin declarar el
@@ -86,13 +86,13 @@ HAS_PATHVIEW        <- pkg_ok("pathview")
 
 
 #' @section Determinismo
-#' Semilla unica de todo lo estocastico del analisis: el numero de variables
-#' sustitutas de `sva::num.sv` (metodo "be", por permutacion), el remuestreo del
-#' panel de replicabilidad, las permutaciones del analisis de conjuntos de genes
-#' y las miniaturas simuladas de los diagnosticos.
+#' Semilla única de todo lo estocastico del análisis: el número de variables
+#' sustitutas de `sva::num.sv` (método "be", por permutación), el remuestreo del
+#' panel de replicabilidad, las permutaciones del análisis de conjuntos de genes
+#' y las miniaturas simuladas de los diagnósticos.
 #'
 #' Se centraliza para que el informe pueda declararla: una semilla fija que no
-#' se registra no sirve de nada, porque quien reproduzca el analisis no sabe
+#' se registra no sirve de nada, porque quien reproduzca el análisis no sabe
 #' cual era. Todos los usos van por `withr::with_seed()`, que restaura el estado
 #' del RNG al salir y evita que fijar la semilla en un sitio altere la
 #' aleatoriedad de cualquier otro.
@@ -103,21 +103,21 @@ ANALYSIS_SEED <- 1L
 #' @section Paleta accesible
 #' Colores de la codificacion "significativo / no significativo" en volcano y MA.
 #'
-#' El par anterior (verde #7BBF9A sobre gris #C0C0C0) tenia luminosidades muy
+#' El par anterior (verde #7BBF9A sobre gris #C0C0C0) tenía luminosidades muy
 #' parecidas, de modo que con protanopia o deuteranopia —en torno al 8 % de los
 #' hombres— los dos grupos resultaban casi indistinguibles. Se usa el par
 #' azul/naranja de la paleta de Okabe-Ito, diseñada para ser distinguible con
-#' las formas habituales de daltonismo y que ademas conserva contraste al
+#' las formas habituales de daltonismo y que además conserva contraste al
 #' imprimir en escala de grises.
 DEG_SIG_COLORS <- c("Significativo" = "#0072B2", "No significativo" = "#E69F00")
 
-#' Estados del checklist de configuracion. El color NO viaja solo: cada estado
-#' lleva tambien un simbolo y un texto, porque el color por si mismo no es un
+#' Estados del checklist de configuración. El color NO viaja solo: cada estado
+#' lleva también un simbolo y un texto, porque el color por si mismo no es un
 #' canal accesible ni lo lee un lector de pantalla.
 #'
 #' `nivel` es el modificador de la pildora (`.pill-ok`, `.pill-warn`,
-#' `.pill-bad`), en lugar de un color literal: asi el checklist, los estados de
-#' la portada y los badges de ejecucion comparten exactamente la misma paleta.
+#' `.pill-bad`), en lugar de un color literal: así el checklist, los estados de
+#' la portada y los badges de ejecución comparten exactamente la misma paleta.
 CHECKLIST_STATES <- list(
   ok       = list(nivel = "ok",   simbolo = "OK",       etiqueta = "completo"),
   optional = list(nivel = "warn", simbolo = "OPCIONAL", etiqueta = "opcional"),
@@ -153,7 +153,7 @@ qc_thresholds <- list(
 #' valores pastel muy claros (#BEE8C8 y similares). Bootstrap deriva de esos
 #' colores el fondo de los botones y el de las alertas, de modo que un boton
 #' primario y uno de peligro quedaban casi igual de claros y la accion principal
-#' no destacaba sobre las secundarias. Aqui los colores de marca son los tonos
+#' no destacaba sobre las secundarias. Aquí los colores de marca son los tonos
 #' saturados —que si contrastan como fondo de boton— y Bootstrap genera por su
 #' cuenta las versiones claras que usan las alertas, en lugar de fijarlas a mano.
 app_theme <- bs_theme(
@@ -178,11 +178,11 @@ app_theme <- bs_theme(
 #'
 #' Regla de la que se ha partido: el color solo aparece cuando significa algo.
 #'
-#' La version anterior pintaba las cabeceras de las tarjetas con
+#' La versión anterior pintaba las cabeceras de las tarjetas con
 #' `.card:nth-of-type(3n + 1)`, `(3n + 2)` y `(3n)`, es decir, azul, naranja o
-#' lavanda segun la POSICION de la tarjeta en el DOM. El color no decia nada del
-#' contenido, cambiaba al añadir o quitar una tarjeta, y hacia que dos vistas con
-#' las mismas tarjetas en distinto orden se vieran distintas. Lo mismo ocurria
+#' lavanda según la POSICIÓN de la tarjeta en el DOM. El color no decía nada del
+#' contenido, cambiaba al añadir o quitar una tarjeta, y hacía que dos vistas con
+#' las mismas tarjetas en distinto orden se vieran distintas. Lo mismo ocurría
 #' con `.metric-card:nth-child(n)`. Ahora la cabecera es una sola y el color de
 #' las metricas lo fija un modificador semantico (`is-ok`, `is-warn`, `is-bad`).
 app_css <- HTML("

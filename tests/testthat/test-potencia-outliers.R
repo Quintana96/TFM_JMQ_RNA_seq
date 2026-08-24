@@ -1,6 +1,6 @@
 #' test-potencia-outliers.R
 #' Dos decisiones que la app dejaba fuera del alcance del usuario: que hacer con
-#' los outliers de Cook, y de donde salen los parametros del calculo de potencia.
+#' los outliers de Cook, y de donde salen los parámetros del cálculo de potencia.
 
 test_that("estimate_power_params mide el CV y la profundidad de los datos", {
   skip_if_not(requireNamespace("edgeR", quietly = TRUE), "edgeR no instalado")
@@ -16,7 +16,7 @@ test_that("estimate_power_params mide el CV y la profundidad de los datos", {
   expect_equal(p$n_por_grupo, 4)
 })
 
-test_that("los parametros medidos cambian la potencia frente a los supuestos", {
+test_that("los parámetros medidos cambian la potencia frente a los supuestos", {
   skip_if_not(requireNamespace("edgeR", quietly = TRUE), "edgeR no instalado")
   skip_if_not(requireNamespace("RNASeqPower", quietly = TRUE), "RNASeqPower no instalado")
   counts <- make_test_counts(n_genes = 400, n_per_group = 4)
@@ -25,8 +25,8 @@ test_that("los parametros medidos cambian la potencia frente a los supuestos", {
 
   medida <- power_for_n(4, cv = p$cv, effect = 2, depth = p$depth)$power
   supuesta <- power_for_n(4, cv = 0.4, effect = 2, depth = 20)$power
-  # No se exige una direccion concreta, solo que la diferencia sea material:
-  # adivinar estos dos valores cambia la conclusion del calculo.
+  # No se exige una dirección concreta, solo que la diferencia sea material:
+  # adivinar estos dos valores cambia la conclusión del cálculo.
   expect_true(is.finite(medida) && is.finite(supuesta))
   expect_gt(abs(medida - supuesta), 0.05)
 })
@@ -56,7 +56,7 @@ test_that("el tratamiento de outliers de Cook cambia el resultado", {
   expect_lte(sum(is.na(keep$table$padj)), sum(is.na(na$table$padj)))
 })
 
-test_that("el modo de outliers se valida", {
+test_that("el modo de outliers se válida", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   counts <- make_test_counts(n_genes = 100, n_per_group = 3)
   meta <- make_test_meta(counts)

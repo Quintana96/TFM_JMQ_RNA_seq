@@ -1,7 +1,7 @@
 #' testthat.R
-#' Lanzador de la bateria de tests.
+#' Lanzador de la batería de tests.
 #'
-#' La app no es un paquete de R, asi que no se usa `test_check()`. Desde la raiz
+#' La app no es un paquete de R, así que no se usa `test_check()`. Desde la raíz
 #' del proyecto:
 #'
 #'   Rscript tests/testthat.R
@@ -13,7 +13,7 @@ library(testthat)
 
 test_dir_path <- if (dir.exists("tests/testthat")) "tests/testthat" else "testthat"
 if (!dir.exists(test_dir_path)) {
-  stop("Ejecuta este script desde la raiz del proyecto: Rscript tests/testthat.R")
+  stop("Ejecuta este script desde la raíz del proyecto: Rscript tests/testthat.R")
 }
 
 testthat::test_dir(test_dir_path, reporter = "summary", stop_on_failure = TRUE)

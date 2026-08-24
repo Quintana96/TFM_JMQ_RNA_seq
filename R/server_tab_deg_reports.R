@@ -1,9 +1,9 @@
 #' server_tab_deg_reports.R
-#' Replicabilidad, comparacion de metodos y reproducibilidad (items 20, 21 y 23).
+#' Replicabilidad, comparación de métodos y reproducibilidad (items 20, 21 y 23).
 #'
 #' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
-#' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
-#' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
+#' fichero original llego a 1.608 líneas en una única función. NO se usa
+#' moduleServer(): igual que el resto de la aplicación, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
 #'
 #' `ctx` es el contexto compartido del modulo (un environment, como `state`, para
@@ -11,7 +11,7 @@
 #' y contiene los reactivos que varias partes necesitan.
 
 server_tab_deg_reports <- function(input, output, session, state, ctx) {
-  # ── Sugerencia de metodo segun el tamaño muestral (item 21) ────────────────
+  # ── Sugerencia de método según el tamaño muestral (item 21) ────────────────
 
   # ── Replicabilidad por bootstrap (item 20) ─────────────────────────────────
   boot_rv <- reactiveVal(NULL)
@@ -20,27 +20,27 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
     req(state$deg_rv$results, state$deg_rv$counts, state$deg_rv$meta)
     n_boot <- input$deg_boot_n %||% 20
     # Swish trabaja sobre replicas inferenciales y a nivel de transcrito, no
-    # sobre la matriz de conteos: run_deg() ni siquiera lo acepta como motor, asi
+    # sobre la matriz de conteos: run_deg() ni siquiera lo acepta como motor, así
     # que el remuestreo moriria en match.arg con un error incomprensible.
     if (identical(state$deg_rv$method, "Swish")) {
       showNotification(paste0(
-        "El bootstrap de replicabilidad no esta disponible para Swish: remuestrea ",
+        "El bootstrap de replicabilidad no está disponible para Swish: remuestrea ",
         "la matriz de conteos, y Swish parte de las replicas inferenciales de la ",
         "cuantificacion."), type = "warning", duration = 14)
       boot_rv(NULL); return()
     }
     withProgress(message = "Estimando replicabilidad...", value = 0, {
-      # TODOS los parametros salen del estado del ajuste, no de la interfaz. Los
-      # selectores siguen vivos despues de ajustar, asi que leerlos aqui podia
+      # TODOS los parámetros salen del estado del ajuste, no de la interfaz. Los
+      # selectores siguen vivos después de ajustar, así que leerlos aquí podia
       # medir la replicabilidad de un contraste o un diseño distintos de los que
-      # produjeron los resultados que se estan evaluando.
+      # produjeron los resultados que se están evaluando.
       #
-      # Limite conocido: si el diseño incluye variables sustitutas, el remuestreo
+      # Límite conocido: si el diseño incluye variables sustitutas, el remuestreo
       # reutiliza las SV estimadas sobre los datos COMPLETOS en lugar de
-      # reestimarlas en cada remuestreo. Reestimarlas seria lo correcto en
+      # reestimarlas en cada remuestreo. Reestimarlas sería lo correcto en
       # sentido estricto, pero sva falla a menudo sobre submuestras y el coste se
       # multiplica por n_boot. Reutilizarlas tiende a dar una replicabilidad algo
-      # OPTIMISTA, que es la direccion menos peligrosa para un aviso.
+      # OPTIMISTA, que es la dirección menos peligrosa para un aviso.
       res <- bootstrap_replicability(
         state$deg_rv$counts, state$deg_rv$meta,
         method = state$deg_rv$method %||% "DESeq2",
@@ -76,14 +76,14 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
         tags$b(r$interpretation$label),
         tags$div(class = "small mt-1", r$interpretation$detail),
         tags$div(class = "small mt-1 text-muted",
-                 paste0(r$n_ok, " remuestreos validos",
+                 paste0(r$n_ok, " remuestreos válidos",
                         if (r$n_failed > 0) paste0(", ", r$n_failed, " descartados") else "",
                         "  ·  top-N = ", r$top_n)))
   })
 
   output$deg_boot_table <- renderDT({
     r <- boot_rv()
-    if (is.null(r)) return(dt_table(message_df("Sin estimacion de replicabilidad.")))
+    if (is.null(r)) return(dt_table(message_df("Sin estimación de replicabilidad.")))
     df <- r$summary
     for (nm in c("q1", "mediana", "q3")) df[[nm]] <- round(df[[nm]], 4)
     dt_table(df, page_length = 5)
@@ -91,7 +91,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
 
   output$deg_boot_plot <- plotly::renderPlotly({
     r <- boot_rv()
-    if (is.null(r)) return(plotly_message("Sin estimacion de replicabilidad."))
+    if (is.null(r)) return(plotly_message("Sin estimación de replicabilidad."))
     pb <- r$per_boot
     plotly::plot_ly() |>
       plotly::add_markers(x = pb$boot, y = pb$spearman, name = "Spearman",
@@ -111,7 +111,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
       )
   })
 
-  # ── Comparacion entre metodos (item 21) ────────────────────────────────────
+  # ── Comparación entre métodos (item 21) ────────────────────────────────────
   compare_rv <- reactiveVal(NULL)
 
   observe({
@@ -126,22 +126,22 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
     req(state$deg_rv$results, state$deg_rv$counts, state$deg_rv$meta)
     other <- input$deg_compare_method %||% ""
     if (!nzchar(other)) {
-      showNotification("Elige un metodo con el que comparar.", type = "warning"); return()
+      showNotification("Elige un método con el que comparar.", type = "warning"); return()
     }
     # Comparar contra Swish cruzaria identificadores de TRANSCRITO con
     # identificadores de GEN, dando un solapamiento de 0 que parece un resultado
     # y no lo es.
     if (identical(state$deg_rv$method, "Swish")) {
       showNotification(paste0(
-        "La comparacion entre metodos no esta disponible con Swish: sus ",
-        "resultados son por transcrito y los del resto por gen, asi que el ",
-        "solapamiento no seria interpretable."), type = "warning", duration = 14)
+        "La comparación entre métodos no está disponible con Swish: sus ",
+        "resultados son por transcrito y los del resto por gen, así que el ",
+        "solapamiento no sería interpretable."), type = "warning", duration = 14)
       compare_rv(NULL); return()
     }
     withProgress(message = paste0("Corriendo ", other, "..."), value = 0.4, {
       # Mismo criterio que el bootstrap: el contraste y el diseño son los del
       # ajuste, no los que tengan los selectores en este instante. De lo
-      # contrario se compararian dos analisis distintos entre si.
+      # contrario se compararian dos análisis distintos entre si.
       r2 <- tryCatch(run_deg(
         state$deg_rv$counts, state$deg_rv$meta, method = other,
         ref_level = state$deg_rv$ref_level, contrast_num = state$deg_rv$contrast_num,
@@ -165,7 +165,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
   output$deg_compare_summary <- renderUI({
     o <- compare_rv()
     if (is.null(o)) return(div(class = "small text-muted",
-                              "Elige un metodo y pulsa 'Comparar'."))
+                              "Elige un método y pulsa 'Comparar'."))
     div(class = "small",
         tags$b(paste0(o$name_a, " vs ", o$name_b, ": ")),
         paste0(fmt_int(o$n_common), " genes en comun; ", fmt_int(o$only_a),
@@ -176,7 +176,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
 
   output$deg_compare_plot <- plotly::renderPlotly({
     o <- compare_rv()
-    if (is.null(o)) return(plotly_message("Sin comparacion."))
+    if (is.null(o)) return(plotly_message("Sin comparación."))
     df <- data.frame(
       cat = c(paste0("Solo ", o$name_a), "En ambos", paste0("Solo ", o$name_b)),
       n = c(o$only_a, o$n_common, o$only_b), stringsAsFactors = FALSE)
@@ -202,7 +202,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
   })
 
   output$deg_script_preview <- renderText({
-    if (is.null(state$deg_rv$results)) return("Lanza primero un analisis DEG.")
+    if (is.null(state$deg_rv$results)) return("Lanza primero un análisis DEG.")
     build_deg_r_script(state$deg_rv) %||% "—"
   })
 
@@ -210,20 +210,20 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
     filename = function() paste0("informe_deg_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html"),
     content = function(f) {
       h <- build_deg_report_html(state$deg_rv, report_diagnostics())
-      writeLines(h %||% "<html><body><p>Sin analisis DEG.</p></body></html>", f)
+      writeLines(h %||% "<html><body><p>Sin análisis DEG.</p></body></html>", f)
     }
   )
   output$download_deg_script <- downloadHandler(
     filename = function() paste0("analisis_deg_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".R"),
     content = function(f) {
-      writeLines(build_deg_r_script(state$deg_rv) %||% "# Sin analisis DEG.", f)
+      writeLines(build_deg_r_script(state$deg_rv) %||% "# Sin análisis DEG.", f)
     }
   )
 
   # ── Tabla de correspondencia de la seudonimizacion ────────────────────────
-  # Se descarga APARTE del informe y de los resultados a proposito: es lo unico
-  # que permite volver a los identificadores reales, asi que exportarla tiene que
-  # ser una decision deliberada y no un efecto colateral de descargar el informe.
+  # Se descarga APARTE del informe y de los resultados a propósito: es lo único
+  # que permite volver a los identificadores reales, así que exportarla tiene que
+  # ser una decisión deliberada y no un efecto colateral de descargar el informe.
   output$deg_pseudonym_ui <- renderUI({
     m <- state$deg_rv$pseudonym_map
     if (is.null(m) || !nrow(m)) return(NULL)
@@ -232,9 +232,9 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
           icon("user-shield"),
           tags$b(" Identificadores seudonimizados: "), nrow(m), " muestras. ",
           "Los entregables llevan los alias. Esto es seudonimizacion, no ",
-          "anonimizacion: existe una tabla de correspondencia, asi que los datos ",
-          "siguen siendo datos personales a efectos del RGPD. Ten en cuenta ademas ",
-          "que los propios niveles de expresion permiten inferir genotipos ",
+          "anonimizacion: existe una tabla de correspondencia, así que los datos ",
+          "siguen siendo datos personales a efectos del RGPD. Ten en cuenta además ",
+          "que los propios niveles de expresión permiten inferir genotipos ",
           "(Schadt et al., Nature Genetics 2012), de modo que renombrar las ",
           "columnas reduce la exposicion accidental pero no anonimiza la matriz."),
       downloadButton("download_pseudonym_map",

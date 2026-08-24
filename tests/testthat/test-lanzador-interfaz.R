@@ -1,7 +1,7 @@
 # Apertura de la interfaz en una ventana sin adornos de navegador
 # (R/utils_launch.R).
 #
-# Nada de esto lanza un navegador de verdad: se comprueba la DECISION —que modo
+# Nada de esto lanza un navegador de verdad: se comprueba la DECISIÓN —que modo
 # se elige y con que argumentos— porque es donde un cambio silencioso rompe el
 # arranque en un sitio (el contenedor) sin que se note en el otro.
 
@@ -12,16 +12,16 @@ test_that("el modo se lee del entorno y tolera un valor sin sentido", {
   # Sinonimos en ingles, porque es lo que se teclea sin pensar.
   withr::local_envvar(c(SARA_UI = "browser"));  expect_equal(modo_de_apertura(), "navegador")
   withr::local_envvar(c(SARA_UI = "none"));     expect_equal(modo_de_apertura(), "ninguno")
-  # Mayusculas y espacios sobrantes no deberian cambiar nada.
+  # Mayusculas y espacios sobrantes no deberían cambiar nada.
   withr::local_envvar(c(SARA_UI = "  APP  "));  expect_equal(modo_de_apertura(), "app")
-  # Un valor invalido cae al comportamiento por defecto en lugar de fallar: el
-  # arranque de la aplicacion no puede depender de una errata en una variable.
+  # Un valor inválido cae al comportamiento por defecto en lugar de fallar: el
+  # arranque de la aplicación no puede depender de una errata en una variable.
   withr::local_envvar(c(SARA_UI = "azul"))
   expect_true(modo_de_apertura() %in% c("app", "ninguno"))
 })
 
 test_that("dentro de un contenedor no se intenta abrir nada", {
-  # Es la unica decision con consecuencias reales: en la imagen de contenedor no
+  # Es la única decisión con consecuencias reales: en la imagen de contenedor no
   # hay escritorio, y lanzar un navegador solo ensucia el log de arranque con un
   # error que nadie puede resolver.
   withr::local_envvar(c(SARA_UI = ""))
@@ -29,12 +29,12 @@ test_that("dentro de un contenedor no se intenta abrir nada", {
   expect_identical(lanzador_de_interfaz(modo = "ninguno"), FALSE)
 })
 
-test_that("sin entorno grafico tampoco", {
+test_that("sin entorno gráfico tampoco", {
   withr::local_envvar(c(SARA_UI = ""))
   expect_equal(modo_de_apertura(contenedor = FALSE, grafico = FALSE), "ninguno")
 })
 
-test_that("una peticion explicita gana sobre la deteccion automatica", {
+test_that("una peticion explícita gana sobre la detección automática", {
   # Quien pone SARA_UI=app sabe lo que quiere, aunque estemos en un contenedor:
   # puede haber reenvio de X11 o un navegador dentro de la imagen.
   withr::local_envvar(c(SARA_UI = "app"))
@@ -55,7 +55,7 @@ test_that("sin navegador compatible se avisa y se cae al de siempre", {
   expect_false(abrir_ventana_de_aplicacion("http://127.0.0.1:1", navegador = NULL))
 
   # El lanzador no puede quedarse callado: sin ventana y sin mensaje, el usuario
-  # se queda mirando una terminal sin saber que la aplicacion ya esta servida.
+  # se queda mirando una terminal sin saber que la aplicación ya está servida.
   llamada <- NULL
   local_mocked_bindings(browseURL = function(url, ...) { llamada <<- url; invisible() },
                         .package = "utils")
@@ -102,7 +102,7 @@ test_that("el navegador se lanza sin esperarlo", {
   expect_false(espera)
 })
 
-test_that("la deteccion de contenedor no emite avisos fuera de Linux", {
+test_that("la detección de contenedor no emite avisos fuera de Linux", {
   # readLines() sobre /proc/1/cgroup avisa cuando el fichero no existe, y ese
   # aviso acababa en la consola en cada arranque en macOS.
   expect_silent(en_contenedor())

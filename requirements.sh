@@ -75,24 +75,24 @@ required_bioc <- c(
   "tximport",
   "clusterProfiler",
   # apeglm implementa el encogido de log2FC que la app usa por defecto en
-  # DESeq2 (lfcShrink). Sin el, los log2FC de genes de baja expresion salen
-  # sesgados hacia valores exagerados.
+  # DESeq2 (lfcShrink). Sin el, los log2FC de genes de baja expresión salen
+  # sesgados hacía valores exagerados.
   "apeglm",
   # fgsea es el backend de GSEA (clusterProfiler::gseGO / gseKEGG).
   "fgsea"
 )
-# Opcionales: si no estan, la app advierte pero no falla.
+# Opcionales: si no están, la app advierte pero no falla.
 optional_bioc <- c(
-  "org.EcK12.eg.db",  # anotacion GO/KEGG de E. coli K12
+  "org.EcK12.eg.db",  # anotación GO/KEGG de E. coli K12
   "ashr",             # alternativa a apeglm para lfcShrink
-  "IHW",              # ponderacion de hipotesis por baseMean (mas potencia que BH)
+  "IHW",              # ponderación de hipótesis por baseMean (más potencia que BH)
   "sva",              # variables sustitutas y ComBat-seq
-  "qvalue",           # segunda estimacion de pi0 en los diagnosticos
+  "qvalue",           # segunda estimación de pi0 en los diagnósticos
   "rtracklayer",      # lectura del GFF/GTF para tx2gene y genes de rRNA
-  "RNASeqPower",      # calculo de potencia a priori
+  "RNASeqPower",      # cálculo de potencia a priori
   "ReactomePA",       # enriquecimiento sobre rutas de Reactome
   "reactome.db",      # conjuntos de Reactome (necesario para el running score)
-  "enrichplot",       # barras, red gen-concepto, mapa de terminos, upset y ridge
+  "enrichplot",       # barras, red gen-concepto, mapa de términos, upset y ridge
   "pathview"          # log2FC pintados sobre el diagrama oficial de la ruta KEGG
 )
 installed <- rownames(installed.packages())

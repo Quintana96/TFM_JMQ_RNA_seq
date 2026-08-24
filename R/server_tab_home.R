@@ -1,13 +1,13 @@
 #' server_tab_home.R
-#' Logica server de la portada (Tab 0):
+#' Lógica server de la portada (Tab 0):
 #'   - estado de cada uno de los cuatro pasos;
-#'   - resumen de la sesion;
-#'   - navegacion desde las tarjetas.
+#'   - resumen de la sesión;
+#'   - navegación desde las tarjetas.
 #'
-#' Se registra DESPUES de server_tab_config, porque lee `state$shared`, que esa
-#' funcion rellena al final. Aun asi todos los accesos van protegidos: el
-#' contenido de la portada se renderiza antes de la primera invalidacion de
-#' cualquier reactivo de configuracion.
+#' Se registra DESPUÉS de server_tab_config, porque lee `state$shared`, que esa
+#' función rellena al final. Aun así todos los accesos van protegidos: el
+#' contenido de la portada se renderiza antes de la primera invalidación de
+#' cualquier reactivo de configuración.
 
 server_tab_home <- function(input, output, session, state) {
 
@@ -17,7 +17,7 @@ server_tab_home <- function(input, output, session, state) {
     result_choices(state$outputs_dir)
   })
 
-  #' Numero de muestras detectadas en la configuracion actual, o NA.
+  #' Número de muestras detectadas en la configuración actual, o NA.
   detected_samples <- reactive({
     f <- state$shared$samples_eff
     if (is.null(f)) return(NA_integer_)
@@ -52,7 +52,7 @@ server_tab_home <- function(input, output, session, state) {
     if (isTRUE(state$data_rv$counts_ready) && identical(state$data_rv$source, "uploaded"))
       return(list(level = "ok", label = "MATRIZ CARGADA", cta = "Explorar"))
     if (n > 0) list(level = "ok",
-                    label = paste0(n, " EJECUCION", if (n == 1) "" else "ES"),
+                    label = paste0(n, " EJECUCIÓN", if (n == 1) "" else "ES"),
                     cta = "Explorar")
     else list(level = "neutral", label = "SIN RESULTADOS", cta = "Explorar")
   })
@@ -69,12 +69,12 @@ server_tab_home <- function(input, output, session, state) {
     else list(level = "neutral", label = "SIN DATOS", cta = "Analizar")
   })
 
-  #' Aviso contextual: una sola frase que dice cual es el siguiente paso util.
-  #' Sustituye a que el usuario deduzca por si mismo por que un boton esta gris.
+  #' Aviso contextual: una sola frase que dice cual es el siguiente paso útil.
+  #' Sustituye a que el usuario deduzca por si mismo por qué un boton está gris.
   home_hint <- reactive({
     if (isTRUE(state$proc_rv$running))
       return(div(class = "alert alert-info mb-0 py-2", icon("spinner"),
-                 " Hay un workflow en ejecucion. Puedes seguirlo en el paso 2."))
+                 " Hay un workflow en ejecución. Puedes seguirlo en el paso 2."))
     if (!is.null(state$deg_rv$results)) return(NULL)
     if (isTRUE(state$data_rv$counts_ready) || length(saved_runs()))
       return(div(class = "alert alert-secondary mb-0 py-2", icon("circle-info"),
@@ -92,7 +92,7 @@ server_tab_home <- function(input, output, session, state) {
 
     # La matriz puede haber entrado por dos caminos distintos: la pestana 1
     # (state$data_rv) o directamente la pestana 4 (state$deg_rv$counts). Mirar
-    # solo el primero hacia que el resumen dijera "sin matriz" con un analisis
+    # solo el primero hacía que el resumen dijera "sin matriz" con un análisis
     # DEG ya ajustado en pantalla.
     cm <- state$data_rv$count_matrix %||% state$deg_rv$counts
 
@@ -101,7 +101,7 @@ server_tab_home <- function(input, output, session, state) {
              uploaded = "Matriz subida", workflow = "Workflow", "Workflow")
     } else if (!is.null(state$deg_rv$counts)) {
       switch(input$deg_source %||% "current",
-             saved = "Ejecucion guardada", upload = "Matriz subida", "Ejecucion actual")
+             saved = "Ejecución guardada", upload = "Matriz subida", "Ejecución actual")
     } else "—"
 
     tiles <- list(
@@ -119,13 +119,13 @@ server_tab_home <- function(input, output, session, state) {
 
     ui_tab_home_content(
       steps = list(
-        config  = list(pill = status_pill(cfg$label, cfg$level, paste("Configuracion:", cfg$label)),
+        config  = list(pill = status_pill(cfg$label, cfg$level, paste("Configuración:", cfg$label)),
                        cta = cfg$cta),
         process = list(pill = status_pill(prc$label, prc$level, paste("Procesamiento:", prc$label)),
                        cta = prc$cta),
         results = list(pill = status_pill(res$label, res$level, paste("Resultados:", res$label)),
                        cta = res$cta),
-        deg     = list(pill = status_pill(deg$label, deg$level, paste("Expresion diferencial:", deg$label)),
+        deg     = list(pill = status_pill(deg$label, deg$level, paste("Expresión diferencial:", deg$label)),
                        cta = deg$cta)
       ),
       tiles = tiles,
@@ -133,7 +133,7 @@ server_tab_home <- function(input, output, session, state) {
     )
   })
 
-  # ── Navegacion desde las tarjetas ───────────────────────────────────────────
+  # ── Navegación desde las tarjetas ───────────────────────────────────────────
   nav_to <- function(btn, target) {
     observeEvent(input[[btn]], {
       updateNavbarPage(session, "main_nav", selected = target)
@@ -145,8 +145,8 @@ server_tab_home <- function(input, output, session, state) {
   nav_to("home_go_deg",     "tab_deg")
 
   # No hay observer de vuelta a la portada: la navbar ya tiene su pestana
-  # "Inicio", asi que un boton adicional seria una segunda via para lo mismo.
-  # Antes existia un `observeEvent(input$btn_home, ...)` que ningun control
+  # "Inicio", así que un boton adicional sería una segunda via para lo mismo.
+  # Antes existía un `observeEvent(input$btn_home, ...)` que ningun control
   # disparaba (el `btn_home` no se declaraba en ninguna parte de la interfaz).
 
   invisible(NULL)

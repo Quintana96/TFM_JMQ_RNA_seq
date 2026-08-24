@@ -1,13 +1,13 @@
-#' test-ejecucion-guardada.R
-#' Una ejecucion guardada debe poder cargarse aunque ya no conserve la carpeta
-#' 03_alignments. Los BAM y los indices son lo mas pesado de una ejecucion y es
+#' test-ejecución-guardada.R
+#' Una ejecución guardada debe poder cargarse aunque ya no conserve la carpeta
+#' 03_alignments. Los BAM y los índices son lo más pesado de una ejecución y es
 #' habitual borrarlos para ahorrar espacio; la matriz de conteos, que es lo que
-#' el analisis diferencial necesita, sobrevive.
+#' el análisis diferencial necesita, sobrevive.
 #'
 #' Antes la herramienta se deducia UNICAMENTE de la existencia de
-#' 03_alignments/<tool>/, asi que sin esa carpeta la ejecucion quedaba como
-#' "desconocida" y la matriz no se cargaba, con el mensaje generico de que no
-#' habia matriz de conteos.
+#' 03_alignments/<tool>/, así que sin esa carpeta la ejecución quedaba como
+#' "desconocida" y la matriz no se cargaba, con el mensaje genérico de que no
+#' había matriz de conteos.
 
 crear_run <- function(root, con_run_params = TRUE, con_alignments = FALSE,
                       tool = "bowtie2") {
@@ -26,7 +26,7 @@ crear_run <- function(root, con_run_params = TRUE, con_alignments = FALSE,
   root
 }
 
-test_that("una ejecucion con 03_alignments se infiere como siempre", {
+test_that("una ejecución con 03_alignments se infiere como siempre", {
   root <- withr::local_tempdir()
   crear_run(root, con_run_params = FALSE, con_alignments = TRUE, tool = "salmon")
   p <- infer_result_params(root, "workflow.sh")
@@ -45,7 +45,7 @@ test_that("sin 03_alignments se respeta la herramienta de run_params.tsv", {
   expect_equal(nrow(cm), 50)
 })
 
-test_that("con solo la matriz de conteos la ejecucion sigue siendo utilizable", {
+test_that("con solo la matriz de conteos la ejecución sigue siendo utilizable", {
   root <- withr::local_tempdir()
   crear_run(root, con_run_params = FALSE, con_alignments = FALSE)
   p <- infer_result_params(root, "workflow.sh")

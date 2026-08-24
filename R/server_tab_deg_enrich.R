@@ -2,8 +2,8 @@
 #' Enriquecimiento funcional y GSEA de la pestana 4 (items 13 y 14, B3).
 #'
 #' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
-#' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
-#' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
+#' fichero original llego a 1.608 líneas en una única función. NO se usa
+#' moduleServer(): igual que el resto de la aplicación, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
 #'
 #' `ctx` es el contexto compartido del modulo (un environment, como `state`, para
@@ -14,24 +14,24 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   # ── Enriquecimiento ────────────────────────────────────────────────────────
   enrich_rv <- reactiveVal(NULL)
   enrich_mapping_rv <- reactiveVal(NULL)
-  # Contexto del ultimo GSEA (ranking y parametros). Lo necesita el running
+  # Contexto del último GSEA (ranking y parámetros). Lo necesita el running
   # score: la tabla de resultados no contiene el ranking, y recalcularlo al
-  # vuelo daria una curva que no corresponde al NES mostrado si el usuario ha
+  # vuelo daría una curva que no corresponde al NES mostrado si el usuario ha
   # tocado la metrica entretanto.
   gsea_ctx_rv <- reactiveVal(NULL)
   compare_rv <- reactiveVal(NULL)
   # El objeto S4 del enriquecimiento (enrichResult / gseaResult). La tabla no
-  # basta para los graficos de red: no conserva ni la pertenencia gen-termino ni
+  # basta para los gráficos de red: no conserva ni la pertenencia gen-término ni
   # el ranking. Ver R/utils_enrich_plots.R.
   enrich_obj_rv <- reactiveVal(NULL)
-  # Resultado de la traduccion de identificadores del ultimo calculo, para
+  # Resultado de la traducción de identificadores del último cálculo, para
   # poder decir cuantos genes se perdieron por el camino.
   enrich_traduccion_rv <- reactiveVal(NULL)
 
   # OrgDb elegido en la interfaz. Estaba cableado a org.EcK12.eg.db, de modo que
   # con datos de otro organismo el enriquecimiento GO no podia funcionar aunque
-  # su paquete estuviera instalado: el mapeo salia del 0 % y la app avisaba,
-  # correctamente, de algo que el usuario no tenia forma de arreglar.
+  # su paquete estuviera instalado: el mapeo salía del 0 % y la app avisaba,
+  # correctamente, de algo que el usuario no tenía forma de arreglar.
   deg_orgdb <- reactive({
     sel <- input$deg_orgdb %||% ""
     if (nzchar(sel) && sel %in% ORGDBS_DISPONIBLES) return(sel)
@@ -40,7 +40,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   })
 
   # keyType seleccionable, poblado con los keytypes reales del OrgDb. Antes
-  # estaba fijado a "SYMBOL" en el codigo, lo que con locus tags de E. coli
+  # estaba fijado a "SYMBOL" en el código, lo que con locus tags de E. coli
   # (b0001) daba un mapeo casi nulo sin ningun aviso.
   observe({
     kt <- orgdb_keytypes(deg_orgdb())
@@ -50,12 +50,12 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                       selected = isolate(input$deg_go_keytype) %||% preferred)
   })
 
-  # ── Anotacion con la que traducir identificadores ──────────────────────────
+  # ── Anotación con la que traducir identificadores ──────────────────────────
   # La matriz de conteos viene con los identificadores que el pipeline produjo
   # (locus tags, si se lanzo con `featureCounts -g locus_tag`), y ningun OrgDb
-  # los conoce. La anotacion es lo unico que sabe a que simbolo corresponde cada
-  # uno. Se busca donde este: primero la de la ejecucion elegida, y si no la de
-  # la sesion o la que se haya subido en la pestana de configuracion.
+  # los conoce. La anotación es lo único que sabe a que simbolo corresponde cada
+  # uno. Se busca donde este: primero la de la ejecución elegida, y si no la de
+  # la sesión o la que se haya subido en la pestana de configuración.
   deg_annotation_path <- reactive({
     src <- input$deg_source %||% "current"
     if (identical(src, "saved")) {
@@ -66,8 +66,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       }
     }
     # `state` es un environment, no una clase: sus campos pueden faltar. Y la
-    # anotacion es opcional por contrato —esta funcion devuelve NULL cuando no
-    # hay ninguna—, asi que un estado incompleto tiene que dar NULL y no un
+    # anotación es opcional por contrato —esta función devuelve NULL cuando no
+    # hay ninguna—, así que un estado incompleto tiene que dar NULL y no un
     # error que tumbe el resto de la pestana.
     if (is.function(state$run_params_rv)) {
       af <- state$run_params_rv()$annotation_file %||% ""
@@ -78,7 +78,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     NULL
   })
 
-  # Atributos que la anotacion trae realmente: no tiene sentido ofrecer
+  # Atributos que la anotación trae realmente: no tiene sentido ofrecer
   # `protein_id` como destino si el GTF no lo lleva.
   deg_annotation_attrs <- reactive({
     path <- deg_annotation_path()
@@ -87,10 +87,10 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   })
 
   observe({
-    # Depende tambien de la casilla, y no por capricho: mientras el
-    # conditionalPanel esta oculto, updateSelectInput() llega a un elemento que
+    # Depende también de la casilla, y no por capricho: mientras el
+    # conditionalPanel está oculto, updateSelectInput() llega a un elemento que
     # el cliente aun no ha terminado de inicializar y las opciones se pierden.
-    # El sintoma es un selector vacio justo despues de marcar la casilla. Al
+    # El sintoma es un selector vacio justo después de marcar la casilla. Al
     # depender de ella, las opciones se reenvian en el momento en que se muestra.
     input$deg_translate_ids
     attrs <- deg_annotation_attrs()
@@ -106,8 +106,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                                  else if ("gene" %in% attrs) "gene" else attrs[1])
   })
 
-  # Diagnostico ANTES de calcular: dice si la traduccion hace falta y si va a
-  # funcionar. Sin esto, el unico sintoma de unos identificadores equivocados es
+  # Diagnóstico ANTES de calcular: dice si la traducción hace falta y si va a
+  # funcionar. Sin esto, el único sintoma de unos identificadores equivocados es
   # un enriquecimiento vacio, que no se distingue de la ausencia de señal.
   deg_translate_diag <- reactive({
     path <- deg_annotation_path()
@@ -122,22 +122,22 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     path <- deg_annotation_path()
     if (is.null(path)) {
       return(div(class = "small text-muted",
-                 paste("Sin anotacion disponible. Se toma de la ejecucion elegida,",
+                 paste("Sin anotación disponible. Se toma de la ejecución elegida,",
                        "o de la que subas en el paso 1.")))
     }
     d <- deg_translate_diag()
-    if (is.null(d)) return(div(class = "small text-muted", "Anotacion cargada."))
+    if (is.null(d)) return(div(class = "small text-muted", "Anotación cargada."))
     if (d$det$rate < 0.5) {
       return(div(class = "alert alert-warning py-1 px-2 small mb-0",
                  icon("triangle-exclamation"), " ",
-                 sprintf(paste("La anotacion no reconoce estos identificadores",
+                 sprintf(paste("La anotación no reconoce estos identificadores",
                                "(el mejor atributo, '%s', cubre el %.0f %%).",
-                               "Comprueba que es la misma anotacion con la que se",
+                               "Comprueba que es la misma anotación con la que se",
                                "contaron los genes."),
                          d$det$attr, 100 * d$det$rate)))
     }
     div(class = "small text-muted",
-        sprintf("Los identificadores de la matriz son '%s' (%.0f %% de cobertura en la anotacion).",
+        sprintf("Los identificadores de la matriz son '%s' (%.0f %% de cobertura en la anotación).",
                 d$det$attr, 100 * d$det$rate))
   })
 
@@ -171,9 +171,9 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     updateSelectInput(session, "deg_reactome_organism", selected = org)
   })
 
-  # ── Parametros de la interfaz ──────────────────────────────────────────────
-  # Un unico punto de lectura para que el boton de calcular y el de comparar no
-  # puedan divergir en los parametros que usan.
+  # ── Parámetros de la interfaz ──────────────────────────────────────────────
+  # Un único punto de lectura para que el boton de calcular y el de comparar no
+  # puedan divergir en los parámetros que usan.
   num_or <- function(x, default) {
     v <- suppressWarnings(as.numeric(x %||% NA))
     if (length(v) != 1L || is.na(v)) default else v
@@ -184,8 +184,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     org_code <- trimws(input$deg_kegg_organism %||% "eco")
     if (!nzchar(org_code)) org_code <- "eco"
     # Reactome tiene su propio catalogo de organismos, con nombres distintos a
-    # los codigos de tres letras de KEGG. Se resuelve aqui, en el unico punto de
-    # lectura de parametros, para que `org_code` signifique siempre "el organismo
+    # los códigos de tres letras de KEGG. Se resuelve aquí, en el único punto de
+    # lectura de parámetros, para que `org_code` signifique siempre "el organismo
     # de la coleccion seleccionada" y ni el ORA ni el GSEA puedan divergir.
     if (identical(ont, "REACTOME")) {
       org_code <- input$deg_reactome_organism %||% "human"
@@ -199,8 +199,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                     else input$deg_go_keytype %||% "SYMBOL",
       # El selector de KEGG declara lo que KEGG espera recibir; este declara lo
       # que son los identificadores de la matriz. Son cosas distintas y hasta
-      # ahora solo se leia el primero, de modo que no habia forma de decirle a la
-      # aplicacion que los genes venian en simbolos.
+      # ahora solo se leía el primero, de modo que no había forma de decirle a la
+      # aplicación que los genes venian en simbolos.
       from_keytype = input$deg_go_keytype %||% "SYMBOL",
       # setReadable necesita OrgDb: no aplica a KEGG ni a conjuntos propios.
       readable    = isTRUE(input$deg_enrich_readable) && !ont %in% c("KEGG", "GMT"),
@@ -213,8 +213,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       # eps = 0 pide a fgsea el p-valor exacto del multilevel en lugar de
       # truncarlo en 1e-10, donde todos los conjuntos muy significativos empatan.
       eps         = if (isTRUE(input$deg_gsea_eps_exact)) 0 else 1e-10,
-      # Traduccion de identificadores con la anotacion. Va aqui, en el unico
-      # punto de lectura, para que el ORA, el GSEA y la comparacion entre ambos
+      # Traducción de identificadores con la anotación. Va aquí, en el único
+      # punto de lectura, para que el ORA, el GSEA y la comparación entre ambos
       # no puedan usar espacios de identificadores distintos.
       traducir    = isTRUE(input$deg_translate_ids) && !is.null(deg_annotation_path()),
       annot_path  = deg_annotation_path(),
@@ -225,7 +225,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     )
   }
 
-  # ── Ejecucion ──────────────────────────────────────────────────────────────
+  # ── Ejecución ──────────────────────────────────────────────────────────────
   #' Corre el ORA de la ontologia seleccionada sobre una lista de genes.
   ora_runner <- function(p) {
     function(genes) {
@@ -249,8 +249,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     }
   }
 
-  #' Ejecuta un enfoque (ORA o GSEA) con los parametros dados.
-  #' Devuelve el list(table, error, mapping) de utils_enrich mas, en GSEA, el
+  #' Ejecuta un enfoque (ORA o GSEA) con los parámetros dados.
+  #' Devuelve el list(table, error, mapping) de utils_enrich más, en GSEA, el
   #' ranking usado.
   enrich_compute <- function(p, approach) {
     if (identical(p$ont, "GMT") && is.null(p$term2gene)) {
@@ -267,7 +267,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                                    rk$error %||% "—")))
       }
       # El ranking se traduce entero antes de ordenar conjuntos: traducir
-      # despues obligaria a reordenar y el NES dejaria de corresponder a la
+      # después obligaría a reordenar y el NES dejaría de corresponder a la
       # curva que dibuja el running score.
       if (isTRUE(p$traducir)) {
         trk <- translate_ranking_with_annotation(rk$ranked, p$annot_path,
@@ -289,8 +289,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       return(res)
     }
     # La lista del ORA sale del FDR con el que se AJUSTO el modelo, no de los
-    # filtros de la tarjeta 6: esos son de visualizacion y no recortan el
-    # universo, asi que dejarlos entrar aqui cambiaba el enriquecimiento al
+    # filtros de la tarjeta 6: esos son de visualización y no recortan el
+    # universo, así que dejarlos entrar aquí cambiaba el enriquecimiento al
     # mover un deslizador declarado cosmetico.
     df <- ctx$deg_significant()
     if (is.null(df) || !nrow(df)) {
@@ -314,7 +314,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       tu <- translate_ids_with_annotation(p$universe, p$annot_path,
                                           from = tr$from, to = p$translate_to)
       p$universe <- if (length(tu$ids)) tu$ids else NULL
-      # El ORA direccional parte la tabla en tres, asi que la traduccion tiene
+      # El ORA direccional parte la tabla en tres, así que la traducción tiene
       # que ir en la columna, no en el vector: se reetiqueta df$gene.
       mapa <- annotation_id_map(p$annot_path, tr$from, p$translate_to)
       nuevos <- unname(mapa[as.character(df$gene)])
@@ -328,16 +328,16 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     res <- if (isTRUE(p$directional)) run_ora_directional(df, runner)
            else runner(unique(as.character(df$gene)))
     res$n_lista <- nrow(df)
-    # La tasa que importa comunicar es la de la traduccion cuando la hay: es la
-    # que explica por que la lista encogio.
+    # La tasa que importa comunicar es la de la traducción cuando la hay: es la
+    # que explica por qué la lista encogio.
     if (!is.null(traduccion)) res$traduccion <- traduccion
     res
   }
 
   observeEvent(input$deg_run_enrich_btn, {
     req(state$deg_rv$results)
-    # El enriquecimiento tarda entre segundos y un minuto largo (mas con
-    # simplify(), que calcula similitud semantica entre todos los terminos, con
+    # El enriquecimiento tarda entre segundos y un minuto largo (más con
+    # simplify(), que calcula similitud semantica entre todos los términos, con
     # el ORA direccional, que lo corre tres veces, y con eps = 0, que sustituye
     # el p-valor truncado por el exacto). Sin feedback la app parece colgada y el
     # usuario vuelve a pulsar, encolando ejecuciones.
@@ -353,7 +353,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
           rk_check$ties_frac > 0.01) {
         showNotification(
           paste0("El ", round(100 * rk_check$ties_frac, 1), " % de los genes comparte ",
-                 "valor en el ranking. GSEA no resuelve los empates, asi que su ",
+                 "valor en el ranking. GSEA no resuelve los empates, así que su ",
                  "orden interno es arbitrario; considera usar la metrica 'stat'."),
           type = "warning", duration = 16
         )
@@ -372,12 +372,12 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
     enrich_mapping_rv(res$mapping)
     enrich_traduccion_rv(res$traduccion %||% res$ranking$traduccion)
-    # Un mapeo bajo hace el resultado no interpretable, asi que se avisa aunque
-    # el enriquecimiento haya devuelto terminos.
+    # Un mapeo bajo hace el resultado no interpretable, así que se avisa aunque
+    # el enriquecimiento haya devuelto términos.
     mp <- res$mapping
     if (!is.null(mp) && !is.na(mp$rate %||% NA) && mp$rate < 0.5) {
       showNotification(
-        paste0("Atencion: solo se ha mapeado el ", round(100 * mp$rate, 1),
+        paste0("Atención: solo se ha mapeado el ", round(100 * mp$rate, 1),
                " % de los genes (", mp$n_mapped, "/", mp$n_input,
                "). Revisa el keyType: los IDs de featureCounts suelen ser locus ",
                "tags, no simbolos."),
@@ -385,11 +385,11 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       )
     }
 
-    # Se registra el enriquecimiento AUNQUE no haya dado terminos: un resultado
-    # negativo tambien forma parte del analisis, y sin sus parametros (ontologia,
+    # Se registra el enriquecimiento AUNQUE no haya dado términos: un resultado
+    # negativo también forma parte del análisis, y sin sus parámetros (ontologia,
     # keyType, universo, tasa de mapeo) no es interpretable ni reproducible.
     state$deg_rv$enrich <- list(
-      enfoque    = if (identical(approach, "gsea")) "GSEA" else "ORA (sobre-representacion)",
+      enfoque    = if (identical(approach, "gsea")) "GSEA" else "ORA (sobre-representación)",
       ontologia  = enrich_collection_label(p$ont),
       organismo_kegg = if (identical(p$ont, "KEGG")) p$org_code else NA_character_,
       organismo_reactome = if (identical(p$ont, "REACTOME")) p$org_code else NA_character_,
@@ -398,8 +398,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       metrica    = if (identical(approach, "gsea")) p$metric else NA_character_,
       exponent   = if (identical(approach, "gsea")) 0 else NA_real_,
       simplify   = if (identical(approach, "gsea")) NA else p$simplify,
-      # Los parametros de GSEA cambian que conjuntos se testean y cuales se
-      # devuelven, asi que sin ellos el resultado no es reproducible.
+      # Los parámetros de GSEA cambian que conjuntos se testean y cuales se
+      # devuelven, así que sin ellos el resultado no es reproducible.
       gsea_min_size = if (identical(approach, "gsea")) p$min_size else NA_integer_,
       gsea_max_size = if (identical(approach, "gsea")) p$max_size else NA_integer_,
       gsea_pcutoff  = if (identical(approach, "gsea")) p$pcut else NA_real_,
@@ -413,8 +413,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       n_lista    = if (identical(approach, "gsea")) NA_integer_
                    else res$n_lista %||% nrow(ctx$deg_significant() %||% data.frame()),
       n_universo = length(p$universe %||% character(0)),
-      # La traduccion cambia que genes entran en el test, asi que forma parte de
-      # los parametros del analisis, no de su presentacion.
+      # La traducción cambia que genes entran en el test, así que forma parte de
+      # los parámetros del análisis, no de su presentación.
       traduccion = if (!isTRUE(p$traducir)) NA_character_ else {
         tr <- res$traduccion %||% res$ranking$traduccion
         if (is.null(tr)) "solicitada, sin resultado"
@@ -429,13 +429,13 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
       n_terminos = if (is.null(res$table)) 0L else nrow(res$table),
       error      = res$error %||% NA_character_,
       # Fechas de las fuentes del OrgDb: los resultados de enriquecimiento
-      # cambian con la version de la anotacion (Wadi et al., Nat Methods 2016),
-      # asi que sin esto el resultado no es reproducible.
+      # cambian con la versión de la anotación (Wadi et al., Nat Methods 2016),
+      # así que sin esto el resultado no es reproducible.
       anotacion  = orgdb_source_info(deg_orgdb())
     )
 
-    # El contexto de GSEA se guarda aunque no haya terminos: es lo que permite
-    # que el running score sepa sobre que ranking se calculo todo.
+    # El contexto de GSEA se guarda aunque no haya términos: es lo que permite
+    # que el running score sepa sobre que ranking se cálculo todo.
     if (identical(approach, "gsea")) {
       # `ranked_used` solo lo devuelven las colecciones que traducen los IDs
       # (hoy Reactome, que trabaja en ENTREZID). El running score tiene que
@@ -459,7 +459,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     }
     if (isTRUE(p$directional) && length(res$errores %||% character(0))) {
       showNotification(
-        paste0("Direcciones sin terminos: ",
+        paste0("Direcciones sin términos: ",
                paste0(names(res$errores), " (", res$errores, ")", collapse = "; ")),
         type = "message", duration = 10)
     }
@@ -473,7 +473,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     m <- tr$mapping
     perdidos <- (m$n_input %||% 0L) - (m$n_mapped %||% 0L)
     div(class = "small text-muted py-1 px-2 mb-1",
-        tags$b("Traduccion: "),
+        tags$b("Traducción: "),
         sprintf("%s -> %s, %d de %d genes (%.1f %%)",
                 m$keytype %||% "?", m$source %||% "?", m$n_mapped %||% 0L,
                 m$n_input %||% 0L, 100 * (m$rate %||% 0)),
@@ -495,14 +495,14 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   })
 
   #' El dotplot sirve a dos tipos de tabla: el ORA trae GeneRatio/Count y se
-  #' ordena por significacion; GSEA trae NES/setSize, y ahi lo informativo es el
+  #' ordena por significacion; GSEA trae NES/setSize, y ahí lo informativo es el
   #' signo del NES (si el conjunto sube o baja), no solo el p-valor.
   make_enrich_dotplot <- function(df) {
     if (is.null(df) || !nrow(df))
       return(plotly_message("Pulsa 'Calcular' para correr el enriquecimiento."))
     top <- enrichment_dotplot_data(df, top_n = 15)
     if (is.null(top) || !nrow(top))
-      return(plotly_message("Sin terminos enriquecidos."))
+      return(plotly_message("Sin términos enriquecidos."))
 
     if ("NES" %in% names(top)) {
       top$size_val <- top$setSize %||% rep(10, nrow(top))
@@ -530,7 +530,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
         ))
     }
 
-    # Con ORA direccional el color codifica la direccion: es la lectura que se
+    # Con ORA direccional el color codifica la dirección: es la lectura que se
     # busca al separar las listas, y sin ella las dos mitades se confunden.
     dir_col <- if ("Direccion" %in% names(top)) {
       unname(c("Conjunto" = "#A8DADC", "Al alza" = "#7BBF9A",
@@ -548,8 +548,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
              colorscale = list(c(0, "#A8DADC"), c(1, "#7BBF9A")),
              sizemode = "area")
       else list(color = dir_col, sizemode = "area"),
-      text = ~paste0("Termino: ", Description,
-                     if ("Direccion" %in% names(top)) paste0("<br>Direccion: ", Direccion) else "",
+      text = ~paste0("Término: ", Description,
+                     if ("Direccion" %in% names(top)) paste0("<br>Dirección: ", Direccion) else "",
                      "<br>Count: ", Count,
                      "<br>p.adjust: ", signif(p.adjust, 3)),
       hoverinfo = "text"
@@ -587,15 +587,15 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   )
 
 
-  # ── Mapas y redes de terminos ──────────────────────────────────────────────
+  # ── Mapas y redes de términos ──────────────────────────────────────────────
   # Completan el esquema del pipeline: el dotplot resume, pero no deja ver que
-  # los terminos comparten genes entre si. Son ggplot2, no plotly (ver la nota
+  # los términos comparten genes entre si. Son ggplot2, no plotly (ver la nota
   # de cabecera de R/utils_enrich_plots.R).
 
-  # log2FC con el que colorear los genes de la red. Sale de la tabla DEG, asi
+  # log2FC con el que colorear los genes de la red. Sale de la tabla DEG, así
   # que sus nombres son los identificadores de la matriz de conteos; si el
   # enriquecimiento se corrio en otro espacio (keyType distinto, o readable =
-  # TRUE traduciendo a simbolos) no casaran, y en vez de un grafico mudo se
+  # TRUE traduciendo a simbolos) no casaran, y en vez de un gráfico mudo se
   # avisa de cuantos genes han quedado sin color.
   enrich_fold_change <- reactive({
     tab <- state$deg_rv$results
@@ -604,7 +604,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     v <- v[!is.na(v) & nzchar(names(v))]
     # Si el enriquecimiento se corrio traduciendo, el objeto guarda los genes ya
     # traducidos: un vector de log2FC con los identificadores de la matriz no
-    # casaria con ninguno y la red saldria en gris.
+    # casaria con ninguno y la red saldría en gris.
     p <- enrich_inputs()
     if (isTRUE(p$traducir)) {
       tv <- translate_ranking_with_annotation(v, p$annot_path, to = p$translate_to)
@@ -633,9 +633,9 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     tags$p(class = "small text-muted mb-2", txt)
   })
 
-  #' Construye el grafico una sola vez para la vista y para la descarga: si se
-  #' calculase dos veces, el emapplot —que reordena por similitud— podria salir
-  #' con una disposicion distinta en el PNG que en pantalla.
+  #' Construye el gráfico una sola vez para la vista y para la descarga: si se
+  #' calculase dos veces, el emapplot —que reordena por similitud— podría salir
+  #' con una disposición distinta en el PNG que en pantalla.
   enrich_netplot_rv <- reactive({
     obj <- enrich_obj_rv()
     tipo <- input$deg_enrich_plot_tipo
@@ -672,7 +672,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     div(class = "alert alert-warning py-1 px-2 small mb-2",
         icon("triangle-exclamation"), " ",
         sprintf(paste("Solo el %.0f %% de los genes del enriquecimiento tiene log2FC",
-                      "asignable, asi que la mayoria quedan sin color. Ocurre cuando",
+                      "asignable, así que la mayoria quedan sin color. Ocurre cuando",
                       "el enriquecimiento traduce los identificadores (keyType o",
                       "'mostrar simbolos') y la tabla DEG usa los de la matriz."),
                 100 * tasa))
@@ -685,7 +685,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     },
     content = function(file) {
       r <- enrich_netplot_rv()
-      if (is.null(r) || is.null(r$plot)) stop(r$error %||% "No hay grafico que descargar.")
+      if (is.null(r) || is.null(r$plot)) stop(r$error %||% "No hay gráfico que descargar.")
       # 300 ppp: es lo que necesita una figura impresa, y el renderPlot de
       # pantalla se queda muy por debajo.
       ggplot2::ggsave(file, r$plot, width = 11, height = 7.5, dpi = 300, bg = "white")
@@ -785,8 +785,8 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     if (!length(tg$genes)) {
       return(list(error = tg$error %||% "No se han podido recuperar los genes del conjunto."))
     }
-    # gseaParam = exponent: la curva debe ser la del estadistico con el que se
-    # calculo el NES, no la ponderada por defecto de fgsea.
+    # gseaParam = exponent: la curva debe ser la del estadístico con el que se
+    # cálculo el NES, no la ponderada por defecto de fgsea.
     gsea_running_score(gctx$ranked, tg$genes, gseaParam = gctx$exponent %||% 0)
   })
 
@@ -801,14 +801,14 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     plotly::plot_ly() |>
       plotly::add_lines(x = cur$rank, y = cur$ES, line = list(color = "#3F7D5C"),
                         name = "Running score", hoverinfo = "x+y") |>
-      # Cada marca es un gen del conjunto en su posicion del ranking: es lo que
-      # deja ver si el conjunto se concentra en un extremo o esta repartido.
+      # Cada marca es un gen del conjunto en su posición del ranking: es lo que
+      # deja ver si el conjunto se concentra en un extremo o está repartido.
       plotly::add_markers(x = rs$ticks$rank, y = rep(base, nrow(rs$ticks)),
                           marker = list(symbol = "line-ns-open", color = "#60756A",
                                         size = 8),
                           name = "Genes del conjunto", hoverinfo = "x") |>
       plotly::layout(
-        xaxis = list(title = "Posicion en el ranking"),
+        xaxis = list(title = "Posición en el ranking"),
         yaxis = list(title = "Enrichment score acumulado"),
         showlegend = FALSE,
         shapes = list(list(type = "line", x0 = 0, x1 = rs$n_ranked, y0 = 0, y1 = 0,
@@ -848,16 +848,16 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   observeEvent(input$deg_run_enrich_compare_btn, {
     req(state$deg_rv$results)
     if (!isTRUE(HAS_FGSEA)) {
-      showNotification("fgsea no esta instalado: no se puede correr el GSEA.",
+      showNotification("fgsea no está instalado: no se puede correr el GSEA.",
                        type = "error"); return()
     }
     shinyjs::disable("deg_run_enrich_compare_btn")
     on.exit(shinyjs::enable("deg_run_enrich_compare_btn"), add = TRUE)
 
     p <- enrich_inputs()
-    # La comparacion exige que las dos ramas vean lo mismo: misma ontologia,
+    # La comparación exige que las dos ramas vean lo mismo: misma ontologia,
     # mismo universo y misma lista. El ORA direccional partiria la lista en tres
-    # y dejaria de ser comparable con un unico GSEA.
+    # y dejaría de ser comparable con un único GSEA.
     p$directional <- FALSE
 
     res <- withProgress(message = "Comparando ORA y GSEA...", value = 0.2, {
@@ -869,7 +869,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
     if (is.null(res$ora$table) && is.null(res$gsea$table)) {
       compare_rv(NULL)
-      showNotification(paste0("Ninguno de los dos enfoques devolvio terminos. ORA: ",
+      showNotification(paste0("Ninguno de los dos enfoques devolvio términos. ORA: ",
                               res$ora$error %||% "—", " | GSEA: ",
                               res$gsea$error %||% "—"),
                        type = "warning", duration = 12)
@@ -891,16 +891,16 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     jac <- if (is.na(cmp$jaccard)) "—" else paste0(round(100 * cmp$jaccard, 1), " %")
     tagList(
       div(class = "alert alert-secondary py-2 px-2 small mb-2",
-          tags$b("Terminos significativos (p ajustado <= 0,05): "),
+          tags$b("Términos significativos (p ajustado <= 0,05): "),
           "ORA ", fmt_int(cmp$n_ora), " | GSEA ", fmt_int(cmp$n_gsea),
           " | comunes ", fmt_int(cmp$n_comun),
-          " | indice de Jaccard ", jac, ".",
+          " | índice de Jaccard ", jac, ".",
           tags$br(),
           if (cmp$n_gsea > cmp$n_comun)
-            paste0("GSEA ve ", cmp$n_gsea - cmp$n_comun, " terminos que el ORA no ve: ",
+            paste0("GSEA ve ", cmp$n_gsea - cmp$n_comun, " términos que el ORA no ve: ",
                    "conjuntos desplazados en el ranking cuyos genes no llegan al corte ",
                    "de la lista.")
-          else "GSEA no añade ningun termino sobre los del ORA."),
+          else "GSEA no añade ningun término sobre los del ORA."),
       if (!is.na(cmp$error_ora %||% NA))
         div(class = "small text-muted", tags$b("ORA: "), cmp$error_ora) else NULL,
       if (!is.na(cmp$error_gsea %||% NA))
@@ -910,7 +910,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
   output$deg_enrich_compare_plot <- plotly::renderPlotly({
     cmp <- compare_rv()
-    if (is.null(cmp)) return(plotly_message("Sin comparacion calculada."))
+    if (is.null(cmp)) return(plotly_message("Sin comparación calculada."))
     d <- data.frame(
       grupo = factor(c("Solo ORA", "Comunes", "Solo GSEA"),
                      levels = c("Solo ORA", "Comunes", "Solo GSEA")),
@@ -920,7 +920,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
                     marker = list(color = c("#A8DADC", "#7BBF9A", "#F4C68A")),
                     text = ~n, textposition = "outside", hoverinfo = "x+y") |>
       plotly::layout(xaxis = list(title = ""),
-                     yaxis = list(title = "Terminos significativos"),
+                     yaxis = list(title = "Términos significativos"),
                      showlegend = FALSE)
   })
 
@@ -936,7 +936,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
   output$deg_enrich_compare_table <- renderDT({
     tb <- compare_table_rv()
-    if (is.null(tb)) return(dt_table(message_df("Sin comparacion calculada.")))
+    if (is.null(tb)) return(dt_table(message_df("Sin comparación calculada.")))
     dt_table(tb, page_length = 15, filter = "top")
   })
 
@@ -944,7 +944,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
     "comparacion_ora_gsea",
     function() {
       tb <- compare_table_rv()
-      if (is.null(tb)) return(message_df("Sin comparacion calculada."))
+      if (is.null(tb)) return(message_df("Sin comparación calculada."))
       tb
     }
   )

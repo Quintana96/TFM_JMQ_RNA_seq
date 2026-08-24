@@ -1,10 +1,10 @@
 #' utils_deg.R
-#' Funciones puras (sin Shiny) para analisis de expresion diferencial (DEG).
+#' Funciones puras (sin Shiny) para análisis de expresión diferencial (DEG).
 #' Soporta tres motores: DESeq2, edgeR v4 (glmQLFit + glmQLFTest/glmTreat) y
 #' limma-voom. Todas devuelven un data.frame con columnas estandar:
 #'   gene, baseMean, log2FC, log2FC_shrunk, lfcSE, stat, pvalue, padj
 #'
-#' Dos criterios estadisticos que atraviesan todo el archivo (ver
+#' Dos criterios estadísticos que atraviesan todo el archivo (ver
 #' docs/REVISION_ESTADISTICA.md):
 #'
 #'   1. El umbral de |log2FC| se aplica DENTRO del test (lfcThreshold en DESeq2,
@@ -15,12 +15,12 @@
 #'   2. El nivel de FDR que va a usar quien llama se pasa a los motores, porque
 #'      DESeq2 lo necesita en `alpha` para calibrar su filtrado independiente.
 
-#' Valida un samplesheet contra la matriz de conteos.
+#' Válida un samplesheet contra la matriz de conteos.
 #' Devuelve list(ok = TRUE/FALSE, errors = character).
 validate_samplesheet <- function(df, samples_in_counts) {
   errors <- character(0)
   if (is.null(df) || !is.data.frame(df) || !nrow(df)) {
-    return(list(ok = FALSE, errors = "El samplesheet esta vacio."))
+    return(list(ok = FALSE, errors = "El samplesheet está vacio."))
   }
   required <- c("sample_id", "condition")
   missing_cols <- setdiff(required, names(df))
@@ -77,8 +77,8 @@ align_counts_to_metadata <- function(counts, meta) {
   list(counts = counts_sub, meta = meta_sub, warnings = warns)
 }
 
-#' Tamaño del grupo mas pequeño de `group`. Solo cuando no hay informacion de
-#' grupo utilizable cae al fallback historico (la mitad de las muestras).
+#' Tamaño del grupo más pequeño de `group`. Solo cuando no hay información de
+#' grupo utilizable cae al fallback histórico (la mitad de las muestras).
 smallest_group_size <- function(group, n_samples) {
   if (!is.null(group) && length(group) == n_samples) {
     g <- as.character(group)
@@ -88,21 +88,21 @@ smallest_group_size <- function(group, n_samples) {
   max(2L, floor(n_samples / 2))
 }
 
-#' Prefiltrado de genes de baja expresion.
+#' Prefiltrado de genes de baja expresión.
 #'
 #' `mode = "auto"` (recomendado) delega en `edgeR::filterByExpr()`, que decide
 #' en cuantas muestras debe superarse el umbral a partir del tamaño del grupo
-#' MAS PEQUEÑO. `mode = "manual"` mantiene el criterio explicito "al menos
+#' MÁS PEQUEÑO. `mode = "manual"` mantiene el criterio explícito "al menos
 #' `min_count` lecturas en >= `min_samples` muestras".
 #'
-#' Ojo con el fallback de `min_samples`: la version anterior usaba la mitad de
+#' Ojo con el fallback de `min_samples`: la versión anterior usaba la mitad de
 #' las muestras TOTALES, lo que en un diseño desequilibrado (3 control vs 9
 #' tratados -> min_samples = 6) descarta precisamente los genes expresados solo
 #' en el grupo pequeño. Ahora se deriva del grupo menor via
 #' `smallest_group_size()`.
 #'
 #' Devuelve la matriz filtrada con un atributo "prefilter" que resume la
-#' decision tomada (modo, umbrales efectivos, genes antes/despues), para que la
+#' decisión tomada (modo, umbrales efectivos, genes antes/después), para que la
 #' interfaz pueda mostrarla.
 prefilter_counts <- function(counts, min_count = 10, min_samples = NULL,
                              mode = c("auto", "manual"),
@@ -142,19 +142,19 @@ prefilter_counts <- function(counts, min_count = 10, min_samples = NULL,
 
 #' Construye matriz de diseño.
 #'
-#' Tres modos, de menos a mas expresivo:
+#' Tres modos, de menos a más expresivo:
 #'   - `~ condition` (por defecto);
 #'   - `~ batch + condition` si se indica `batch`;
 #'   - `design_formula` arbitraria, que permite diseños pareados
 #'     (`~ subject + condition`), covariables continuas e interacciones. En ese
 #'     caso las variables se tipan con `prepare_design_meta()`, que respeta las
-#'     numericas en lugar de convertirlas a factor.
+#'     numéricas en lugar de convertirlas a factor.
 #'
 #' `condition` siempre acaba como factor releveleado al denominador del
-#' contraste, tambien en modo formula libre, porque de ahi sale la etiqueta del
+#' contraste, también en modo formula libre, porque de ahí sale la etiqueta del
 #' contraste y el coeficiente a testear.
 #'
-#' Devuelve tambien los niveles del factor y el de referencia.
+#' Devuelve también los niveles del factor y el de referencia.
 build_design <- function(meta, ref_level = NULL, batch = NULL,
                          design_formula = NULL) {
   if (!is.null(design_formula)) {
@@ -177,13 +177,13 @@ build_design <- function(meta, ref_level = NULL, batch = NULL,
   list(meta = meta, formula = formula_obj, levels = lvls, ref = lvls[1])
 }
 
-#' Resuelve el coeficiente a testear: el explicito si se da y existe, y si no el
+#' Resuelve el coeficiente a testear: el explícito si se da y existe, y si no el
 #' que corresponde al numerador del contraste.
 #'
 #' El emparejamiento es tolerante porque los dos estilos de nombre no coinciden
 #' en las interacciones: `model.matrix` produce "genotipowt:conditiontrt" y
 #' DESeq2 lo renombra a "genotipowt.conditiontrt". `make.names()` traduce entre
-#' ambos, asi que un coeficiente pedido en un estilo se encuentra en el otro.
+#' ambos, así que un coeficiente pedido en un estilo se encuentra en el otro.
 resolve_test_coef <- function(coef_names, test_coef = NULL, num = NULL, ref = NULL) {
   if (!is.null(test_coef) && length(test_coef) && nzchar(test_coef)) {
     if (test_coef %in% coef_names) return(test_coef)
@@ -197,13 +197,13 @@ resolve_test_coef <- function(coef_names, test_coef = NULL, num = NULL, ref = NU
 #'
 #' Si se pide un numerador concreto (`num`) se devuelve su coeficiente, que es
 #' como se implementa el selector de contraste: el denominador se ha puesto como
-#' nivel de referencia del factor, asi que "num vs den" ES un coeficiente del
+#' nivel de referencia del factor, así que "num vs den" ES un coeficiente del
 #' diseño. Eso importa porque `lfcShrink(type = "apeglm")` solo acepta `coef` y
-#' no `contrast`, de modo que la via del relevel es la unica que permite
+#' no `contrast`, de modo que la via del relevel es la única que permite
 #' contrastes arbitrarios CON encogido.
 #'
-#' Sin `num`, se devuelve el ultimo coeficiente de `condition`: con dos niveles
-#' es el unico posible, con tres o mas es una comparacion arbitraria que quien
+#' Sin `num`, se devuelve el último coeficiente de `condition`: con dos niveles
+#' es el único posible, con tres o más es una comparación arbitraria que quien
 #' llama debe etiquetar.
 condition_coef_for <- function(coef_names, num = NULL, ref = NULL) {
   cond <- grep("^condition", coef_names, value = TRUE)
@@ -243,7 +243,7 @@ norm_lib_sizes <- function(y) {
 }
 
 #' TRUE si edgeR es >= 4.0.0. En v4 `glmQLFit()` estima la dispersion NB y la
-#' cuasi-dispersion internamente (con devianzas corregidas por sesgo), asi que
+#' cuasi-dispersion internamente (con devianzas corregidas por sesgo), así que
 #' `estimateDisp()` ya no hace falta; en v3 si.
 edger_is_v4 <- function() {
   isTRUE(tryCatch(utils::packageVersion("edgeR") >= "4.0.0", error = function(e) FALSE))
@@ -261,7 +261,7 @@ deg_engine_info <- function(d) {
 }
 
 #' Elige el mejor tipo de encogido de log2FC disponible.
-#' `apeglm` es la recomendacion de la vinieta de DESeq2 (prior de colas anchas:
+#' `apeglm` es la recomendación de la vinieta de DESeq2 (prior de colas anchas:
 #' encoge el ruido sin aplastar los efectos grandes reales).
 pick_shrink_type <- function() {
   if (requireNamespace("apeglm", quietly = TRUE)) return("apeglm")
@@ -269,16 +269,16 @@ pick_shrink_type <- function() {
   "normal"
 }
 
-#' Prepara el uso de IHW como funcion de filtrado de DESeq2.
+#' Prepara el uso de IHW como función de filtrado de DESeq2.
 #'
-#' IHW pondera cada hipotesis segun una covariable independiente del p-valor bajo
-#' la nula (aqui `baseMean`) y gana potencia sobre BH sin perder el control de la
-#' FDR. Es una generalizacion del filtrado independiente que DESeq2 ya hace.
+#' IHW pondera cada hipótesis según una covariable independiente del p-valor bajo
+#' la nula (aquí `baseMean`) y gana potencia sobre BH sin perder el control de la
+#' FDR. Es una generalización del filtrado independiente que DESeq2 ya hace.
 #'
 #' Necesita S4Vectors ATACHADO, no solo cargado: la ruta interna de IHW llama a
 #' `mcols()` sin cualificar, y la app trabaja con prefijos `DESeq2::` sin atachar
-#' nada, asi que sin esto falla con "no se pudo encontrar la funcion mcols".
-#' Devuelve la funcion o NULL si no se puede usar.
+#' nada, así que sin esto falla con "no se pudo encontrar la función mcols".
+#' Devuelve la función o NULL si no se puede usar.
 ihw_filter_fun <- function() {
   if (!requireNamespace("IHW", quietly = TRUE)) return(NULL)
   ok <- requireNamespace("S4Vectors", quietly = TRUE) &&
@@ -290,7 +290,7 @@ ihw_filter_fun <- function() {
 }
 
 #' Tabla de dispersiones de un DESeqDataSet ajustado, para dibujar el
-#' equivalente de plotDispEsts() con plotly en lugar de graficos base.
+#' equivalente de plotDispEsts() con plotly en lugar de gráficos base.
 deseq_dispersion_data <- function(dds) {
   tryCatch({
     mc <- S4Vectors::mcols(dds)
@@ -308,31 +308,31 @@ deseq_dispersion_data <- function(dds) {
   }, error = function(e) NULL)
 }
 
-# ── Extraccion de resultados, separada del ajuste ───────────────────────────
+# ── Extracción de resultados, separada del ajuste ───────────────────────────
 #
-# Por que estan separadas: ajustar el modelo (estimar dispersiones, ajustar los
+# Por qué están separadas: ajustar el modelo (estimar dispersiones, ajustar los
 # GLM) cuesta segundos y no depende del nivel de significacion; extraer la tabla
 # a un FDR o un umbral de fold-change concretos cuesta decimas y si depende de
 # ellos. Medido sobre 20.000 genes x 8 muestras: `DESeq()` 5,05 s frente a
 # `results()` 0,20 s, un 4 %.
 #
-# Mientras las dos cosas vivian en la misma funcion, cambiar el FDR obligaba a
-# repetir el ajuste entero, y por eso estaba detras de un boton. Separarlas
+# Mientras las dos cosas vivian en la misma función, cambiar el FDR obligaba a
+# repetir el ajuste entero, y por eso estaba detrás de un boton. Separarlas
 # permite que el FDR y el umbral del test se comporten como lo que son —
-# parametros de LECTURA del mismo modelo— sin caer en el error contrario, que
-# seria recolorear los puntos sin recalcular: el filtrado independiente de
+# parámetros de LECTURA del mismo modelo— sin caer en el error contrario, que
+# sería recolorear los puntos sin recalcular: el filtrado independiente de
 # DESeq2 depende de `alpha`, de modo que cambiarlo cambia que genes son
 # evaluables (con 20.000 genes, de 20.000 a 18.061 al pasar de 0,05 a 0,01).
 #
-# Estas funciones las llaman DOS caminos: el ajuste inicial y `deg_reextract()`.
-# Esa es justamente la razon de que existan: si cada camino construyera su tabla,
+# Estás funciones las llaman DOS caminos: el ajuste inicial y `deg_reextract()`.
+# Esa es justamente la razón de que existan: si cada camino construyera su tabla,
 # acabarian divergiendo en una columna y nadie lo notaria hasta comparar un
 # informe con la interfaz.
 
 #' Extrae la tabla de resultados de un `dds` ya ajustado.
 #'
 #' @param lfc_shrunk Vector de log2FC encogidos ya calculado. `lfcShrink()` es
-#'   mas caro que el propio ajuste (6,4 s frente a 5,1 s en la medicion de
+#'   más caro que el propio ajuste (6,4 s frente a 5,1 s en la medición de
 #'   arriba) y NO depende de `fdr` ni de `lfc_threshold`: depende del
 #'   coeficiente. Por eso se calcula una vez y se reutiliza en cada reextraccion
 #'   en lugar de recalcularlo con cada movimiento de un deslizador.
@@ -389,8 +389,8 @@ deseq2_extract <- function(dds, coef_name, fdr = 0.05, lfc_threshold = 0,
 
 #' Extrae la tabla de un `glmQLFit` de edgeR ya ajustado.
 #'
-#' `fdr` no aparece: edgeR no tiene filtrado independiente que calibrar, asi que
-#' su columna FDR es la correccion BH de todos los p-valores y no depende del
+#' `fdr` no aparece: edgeR no tiene filtrado independiente que calibrar, así que
+#' su columna FDR es la corrección BH de todos los p-valores y no depende del
 #' nivel objetivo. Cambiar el FDR con este motor cambia donde se CORTA, no lo
 #' que se calcula, y eso ya lo resuelve la interfaz.
 edger_extract <- function(qlfit, coef_test, lfc_threshold = 0) {
@@ -406,8 +406,8 @@ edger_extract <- function(qlfit, coef_test, lfc_threshold = 0) {
   base_mean <- if (!is.null(tt[["logCPM"]])) 2 ^ tt[["logCPM"]]
                else if (!is.null(tt[["AveLogCPM"]])) 2 ^ tt[["AveLogCPM"]]
                else rep(NA_real_, nrow(tt))
-  # Ojo: `tt$F` haria partial matching con la columna FDR y colaria el FDR
-  # como estadistico cuando glmTreat no devuelve F. Con [[ ]] el match es
+  # Ojo: `tt$F` haría partial matching con la columna FDR y colaria el FDR
+  # como estadístico cuando glmTreat no devuelve F. Con [[ ]] el match es
   # exacto y devuelve NULL si la columna no existe.
   stat_col <- tt[["F"]] %||% tt[["LR"]] %||% rep(NA_real_, nrow(tt))
 
@@ -444,8 +444,8 @@ limma_extract <- function(lmfit, coef_test, lfc_threshold = 0) {
   base_mean <- if (!is.null(tt[["AveExpr"]])) 2 ^ tt[["AveExpr"]]
                else rep(NA_real_, nrow(tt))
   # lfcSE recuperable en limma: stdev.unscaled * sqrt(s2.post) para el
-  # coeficiente testeado. El indexado es POSICIONAL a proposito: `s2.post` es
-  # un vector sin nombres, asi que indexarlo por gen devolveria NA.
+  # coeficiente testeado. El indexado es POSICIONAL a propósito: `s2.post` es
+  # un vector sin nombres, así que indexarlo por gen devolveria NA.
   lfc_se <- tryCatch({
     su <- fit$stdev.unscaled
     s2 <- fit$s2.post
@@ -471,15 +471,15 @@ limma_extract <- function(lmfit, coef_test, lfc_threshold = 0) {
 #' Motor DESeq2.
 #'
 #' @param fdr Nivel de FDR objetivo. Se pasa a `results(alpha = fdr)` porque el
-#'   filtrado independiente de DESeq2 elige el umbral de expresion que maximiza
-#'   el numero de genes significativos A ESE NIVEL. Con el default (0,1) y un
+#'   filtrado independiente de DESeq2 elige el umbral de expresión que maximiza
+#'   el número de genes significativos A ESE NIVEL. Con el default (0,1) y un
 #'   corte real de 0,05 el filtrado se optimiza para el umbral equivocado y se
 #'   pierden descubrimientos.
 #' @param lfc_threshold Umbral de |log2FC| aplicado dentro del test. 0 = test
 #'   clasico contra H0: log2FC = 0.
 #' @param shrink Si TRUE, añade `log2FC_shrunk` via `lfcShrink()`. El encogido
-#'   cambia el log2FC pero NO los p-valores, asi que se testea con el estimador
-#'   de maxima verosimilitud y se visualiza/ordena con el encogido.
+#'   cambia el log2FC pero NO los p-valores, así que se testea con el estimador
+#'   de máxima verosimilitud y se visualiza/ordena con el encogido.
 #' @param contrast_num Nivel que actua de numerador. `ref_level` es el
 #'   denominador, de modo que el contraste pedido es un coeficiente del diseño.
 #' @param use_ihw Si TRUE, sustituye el filtrado independiente por IHW.
@@ -489,7 +489,7 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
                            design_formula = NULL, test_coef = NULL,
                            outliers = c("na", "refit", "keep")) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
-    return(list(table = NULL, error = "DESeq2 no esta instalado."))
+    return(list(table = NULL, error = "DESeq2 no está instalado."))
   }
   d <- build_design(meta, ref_level, batch, design_formula)
   info <- deg_engine_info(d)
@@ -503,9 +503,9 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
     # un valor extremo en alguna muestra, y solo sustituye ese valor cuando hay
     # al menos `minReplicatesForReplace` replicas. Los tres modos:
     #   "na"     comportamiento por defecto: el gen se marca y sale de la lista.
-    #   "refit"  se rebaja el minimo de replicas para que DESeq2 sustituya el
-    #            valor atipico y el gen vuelva a ser testeable.
-    #   "keep"   se desactiva el filtro: util cuando el "outlier" es biologia
+    #   "refit"  se rebaja el mínimo de replicas para que DESeq2 sustituya el
+    #            valor atípico y el gen vuelva a ser testeable.
+    #   "keep"   se desactiva el filtro: útil cuando el "outlier" es biologia
     #            real (un gen que solo se expresa en una muestra tratada) y no
     #            un artefacto.
     outliers <- match.arg(outliers, c("na", "refit", "keep"))
@@ -527,7 +527,7 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
          padj_method = ext$padj_method, disp_data = deseq_dispersion_data(dds),
          cooks = cooks, coef_available = DESeq2::resultsNames(dds),
          # El ajuste viaja de vuelta para poder reextraer sin repetirlo. Es el
-         # objeto pesado de la sesion: decenas de MB para un dataset humano.
+         # objeto pesado de la sesión: decenas de MB para un dataset humano.
          fit = list(engine = "DESeq2", dds = dds, coef = coef_name,
                     lfc_shrunk = ext$lfc_shrunk, shrink = ext$shrink,
                     outliers = outliers, cooks = cooks))
@@ -549,16 +549,16 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
 
 #' Motor edgeR, pipeline v4.
 #'
-#' Cambios respecto al pipeline v3 que habia antes:
-#'   - `normLibSizes()` en lugar de `calcNormFactors()` (mismo calculo, nombre
+#' Cambios respecto al pipeline v3 que había antes:
+#'   - `normLibSizes()` en lugar de `calcNormFactors()` (mismo cálculo, nombre
 #'     nuevo desde v4).
 #'   - Sin `estimateDisp()`: en v4 `glmQLFit()` estima la dispersion NB y la
 #'     cuasi-dispersion internamente usando devianzas corregidas por sesgo, lo
-#'     que corrige la subestimacion historica de las cuasi-dispersiones en
+#'     que corrige la subestimación historica de las cuasi-dispersiones en
 #'     conteos pequeños (Chen et al., NAR 2025) — justo el regimen de un
 #'     experimento con pocas replicas.
 #'   - `glmTreat()` cuando hay umbral de fold-change, en lugar de filtrar la
-#'     tabla despues.
+#'     tabla después.
 #'
 #' `fdr` y `shrink` se aceptan por uniformidad de la interfaz pero no se usan:
 #' edgeR no tiene filtrado independiente que calibrar, y el `logFC` que reporta
@@ -568,7 +568,7 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
                           contrast_num = NULL, use_ihw = FALSE,
                           design_formula = NULL, test_coef = NULL) {
   if (!requireNamespace("edgeR", quietly = TRUE)) {
-    return(list(table = NULL, error = "edgeR no esta instalado."))
+    return(list(table = NULL, error = "edgeR no está instalado."))
   }
   d <- build_design(meta, ref_level, batch, design_formula)
   info <- deg_engine_info(d)
@@ -599,15 +599,15 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
 
 #' Motor limma-voom.
 #'
-#' Dos endurecimientos respecto a la version anterior:
+#' Dos endurecimientos respecto a la versión anterior:
 #'   - `voomWithQualityWeights()` en lugar de `voom()`: pondera a la baja las
 #'     muestras de peor calidad en vez de descartarlas, lo que importa con pocas
 #'     replicas y algun outlier. Si falla, cae a `voom()`.
 #'   - `robust = TRUE` en la moderacion empirica-bayesiana, que protege frente a
 #'     genes con varianza extrema.
 #'
-#' No se pasa `trend = TRUE` a proposito: la tendencia media-varianza ya la
-#' modelan los pesos de precision de voom, y `trend = TRUE` es la via de
+#' No se pasa `trend = TRUE` a propósito: la tendencia media-varianza ya la
+#' modelan los pesos de precisión de voom, y `trend = TRUE` es la via de
 #' limma-trend sobre logCPM. Activar ambas contaria la tendencia dos veces.
 run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
@@ -645,7 +645,7 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
   c(list(table = out$table, error = NULL), info)
 }
 
-#' CPM normalizados por composicion (TMM cuando edgeR esta disponible).
+#' CPM normalizados por composicion (TMM cuando edgeR está disponible).
 #'
 #' Los motores robustos usaban CPM por tamaño de libreria crudo. El benchmark
 #' que motiva el motor de Wilcoxon (Li et al., Genome Biology 2022) normaliza
@@ -670,15 +670,15 @@ normalized_cpm <- function(counts) {
   t(t(cm) / libs) * 1e6
 }
 
-#' Motores de expresion diferencial disponibles.
+#' Motores de expresión diferencial disponibles.
 #'
-#' Los tres que declara la memoria y que la Figura 3 recoge. La aplicacion
-#' llego a integrar ademas dos motores robustos y uno sobre replicas
+#' Los tres que declara la memoria y que la Figura 3 recoge. La aplicación
+#' llego a integrar además dos motores robustos y uno sobre replicas
 #' inferenciales; se retiraron para ajustar el alcance al documentado, que es
-#' el que se valida.
+#' el que se válida.
 DEG_METHODS_PARAMETRIC <- c("DESeq2", "edgeR", "limma-voom")
 
-#' Solapamiento entre dos listas de significativos, para comparar metodos.
+#' Solapamiento entre dos listas de significativos, para comparar métodos.
 deg_method_overlap <- function(tab_a, tab_b, fdr = 0.05,
                                name_a = "A", name_b = "B") {
   sig <- function(t) if (is.null(t)) character(0) else
@@ -697,13 +697,13 @@ deg_method_overlap <- function(tab_a, tab_b, fdr = 0.05,
 #'
 #' Devuelve list(table, error, method, contrast, coef, n_levels, shrink,
 #' padj_method, disp_data, cooks, fdr, lfc_threshold). `contrast` es la etiqueta
-#' legible de la comparacion testeada.
+#' legible de la comparación testeada.
 #'
-#' El contraste se especifica como `contrast_num` (numerador) y `ref_level`
+#' El contraste se específica como `contrast_num` (numerador) y `ref_level`
 #' (denominador). Poner el denominador como nivel de referencia del factor hace
-#' que la comparacion pedida sea un coeficiente del diseño, lo que permite usar
+#' que la comparación pedida sea un coeficiente del diseño, lo que permite usar
 #' `lfcShrink(coef = ...)`: `apeglm` no admite `contrast`. La diferencia
-#' numerica frente a `results(contrast = ...)` es ruido del ajuste iterativo
+#' numérica frente a `results(contrast = ...)` es ruido del ajuste iterativo
 #' (del orden de 1e-6 en log2FC, sin cambios en las llamadas de significacion).
 run_deg <- function(counts, meta,
                     method = c("DESeq2", "edgeR", "limma-voom"),
@@ -727,8 +727,8 @@ run_deg <- function(counts, meta,
                   error = "El numerador y el denominador del contraste son el mismo nivel."))
     }
   }
-  # Con formula libre se valida ANTES de ajustar, para cambiar un error criptico
-  # de DESeq2 en ingles por un diagnostico que dice cual es el problema.
+  # Con formula libre se válida ANTES de ajustar, para cambiar un error criptico
+  # de DESeq2 en ingles por un diagnóstico que dice cual es el problema.
   if (!is.null(design_formula)) {
     v <- validate_design_formula(design_formula, meta)
     if (!isTRUE(v$ok)) {
@@ -749,26 +749,26 @@ run_deg <- function(counts, meta,
   res$method        <- method
   res$fdr           <- fdr
   # Los tres motores meten el umbral DENTRO del test (lfcThreshold, glmTreat,
-  # treat), asi que declararlo es fiel al ajuste realizado.
+  # treat), así que declararlo es fiel al ajuste realizado.
   res$lfc_threshold <- lfc_threshold
   # IC del log2FC donde el motor haya dado error estandar (DESeq2 y limma).
   if (!is.null(res$table)) res$table <- add_lfc_confidence_interval(res$table)
   # Motores sin objeto reutilizable: su tabla NO depende del nivel de
-  # significacion (padj es la correccion BH de los p-valores del test), asi que
+  # significacion (padj es la corrección BH de los p-valores del test), así que
   # reextraer es devolver la misma tabla y dejar que cambie solo donde se corta.
   if (is.null(res$fit) && !is.null(res$table)) {
     res$fit <- list(engine = "estatico", table = res$table)
   }
   if (!is.null(res$fit)) {
     res$fit$method  <- method
-    # Parametros con los que se extrajo esta tabla. Sirven para no reextraer
+    # Parámetros con los que se extrajo esta tabla. Sirven para no reextraer
     # cuando nada ha cambiado.
     res$fit$extract <- list(fdr = fdr, lfc_threshold = res$lfc_threshold,
                             use_ihw = isTRUE(use_ihw), outliers = outliers)
   }
   # El diseño REPORTADO tiene que ser el que el motor ajusto de verdad.
   # `design` es la etiqueta LEGIBLE (banner, informe) y `design_code` la formula
-  # como CODIGO; se mantienen separadas porque el generador del script interpola
+  # como CÓDIGO; se mantienen separadas porque el generador del script interpola
   # la segunda dentro de model.matrix().
   res$design <- if (!is.null(design_formula)) {
     deparse1(design_formula)
@@ -783,13 +783,13 @@ run_deg <- function(counts, meta,
 #' Reextrae la tabla de un ajuste ya hecho, con otro nivel de significacion.
 #'
 #' Es lo que permite que el FDR objetivo y el umbral del test sean controles en
-#' vivo en lugar de exigir relanzar. La diferencia de coste esta medida sobre
+#' vivo en lugar de exigir relanzar. La diferencia de coste está medida sobre
 #' 20.000 genes x 8 muestras: reajustar 5,05 s, reextraer 0,20 s.
 #'
-#' No es un recorte cosmetico de la tabla ya calculada, que seria el error
-#' contrario y el que invalida la FDR declarada (McCarthy y Smyth, 2009): se
+#' No es un recorte cosmetico de la tabla ya calculada, que sería el error
+#' contrario y el que inválida la FDR declarada (McCarthy y Smyth, 2009): se
 #' vuelve a llamar al `results()` / `topTags()` / `topTreat()` del motor con los
-#' nuevos parametros, de modo que el filtrado independiente y la hipotesis nula
+#' nuevos parámetros, de modo que el filtrado independiente y la hipótesis nula
 #' se recalculan como corresponde.
 #'
 #' Lo que NO puede cambiar por esta via, porque cambia el AJUSTE y no su lectura:
@@ -804,7 +804,7 @@ deg_reextract <- function(fit, fdr = 0.05, lfc_threshold = 0, use_ihw = FALSE,
                           outliers = "na") {
   fail <- function(msg) list(table = NULL, error = msg)
   if (is.null(fit) || is.null(fit$engine)) {
-    return(fail("No hay ajuste que reutilizar: relanza el analisis."))
+    return(fail("No hay ajuste que reutilizar: relanza el análisis."))
   }
   lfc_thr <- if (is.null(lfc_threshold) || !length(lfc_threshold) ||
                  !is.finite(lfc_threshold[1])) 0 else lfc_threshold[1]
@@ -813,11 +813,11 @@ deg_reextract <- function(fit, fdr = 0.05, lfc_threshold = 0, use_ihw = FALSE,
   # `minReplicatesForReplace`, que es un argumento de `DESeq()`. Cambiar a ese
   # modo, o salir de el, exige reajustar. Se comprueba fuera del tryCatch para
   # no repetir el patron de `return()` dentro de un `tryCatch({...})`, que sale
-  # de la funcion entera y confunde a quien lee.
+  # de la función entera y confunde a quien lee.
   if (identical(fit$engine, "DESeq2") && !identical(outliers, fit$outliers) &&
       (identical(outliers, "refit") || identical(fit$outliers, "refit"))) {
-    return(fail(paste0("El tratamiento de outliers 'sustituir el valor atipico' ",
-                       "cambia el ajuste, no solo su lectura: relanza el analisis.")))
+    return(fail(paste0("El tratamiento de outliers 'sustituir el valor atípico' ",
+                       "cambia el ajuste, no solo su lectura: relanza el análisis.")))
   }
 
   out <- tryCatch(switch(
@@ -854,16 +854,16 @@ deg_reextract <- function(fit, fdr = 0.05, lfc_threshold = 0, use_ihw = FALSE,
 #'
 #'   - Sin ajuste guardado no hay nada que reextraer.
 #'   - Con el ajuste DESACTUALIZADO (la interfaz pide un modelo distinto del que
-#'     se ajusto) hay que abstenerse: reextraer daria una tabla que no
-#'     corresponde ni al modelo anterior ni al que se esta pidiendo, y ademas
+#'     se ajusto) hay que abstenerse: reextraer daría una tabla que no
+#'     corresponde ni al modelo anterior ni al que se está pidiendo, y además
 #'     taparia el aviso de "relanza" con un resultado de aspecto normal.
-#'   - Con los mismos parametros que la ultima vez no hay trabajo que hacer.
+#'   - Con los mismos parámetros que la última vez no hay trabajo que hacer.
 #'     Sin esta guarda, cada reevaluacion del reactivo recalcularia la tabla y
-#'     anadiria una linea al registro de auditoria por nada.
+#'     anadiria una línea al registro de auditoria por nada.
 #'
 #' @param fit slot `fit` guardado, o NULL
-#' @param params parametros de extraccion pedidos ahora
-#' @param params_prev parametros con los que se extrajo la tabla actual
+#' @param params parámetros de extracción pedidos ahora
+#' @param params_prev parámetros con los que se extrajo la tabla actual
 #' @param stale TRUE si el ajuste ya no corresponde a la interfaz
 deg_reextract_needed <- function(fit, params, params_prev, stale = FALSE) {
   if (is.null(fit)) return(FALSE)
@@ -874,8 +874,8 @@ deg_reextract_needed <- function(fit, params, params_prev, stale = FALSE) {
 #' TRUE si el ajuste llevaba un umbral de |log2FC| DENTRO del test.
 #'
 #' Existe para que nadie vuelva a ramificar con `if (lfc_thr > 0)` a pelo. El
-#' umbral no es siempre un numero: Swish no lo recibe (trabaja sobre replicas
-#' inferenciales, no sobre la matriz prefiltrada), asi que su ajuste lo registra
+#' umbral no es siempre un número: Swish no lo recibe (trabaja sobre replicas
+#' inferenciales, no sobre la matriz prefiltrada), así que su ajuste lo registra
 #' como `NA_real_` para no atribuirle un test que no hizo. `%||%` no captura ese
 #' NA —solo NULL y length 0—, de modo que `if (NA > 0)` aborta el render con
 #' "valor ausente donde TRUE/FALSE es necesario". Rompia el panel de estado y el
@@ -889,16 +889,16 @@ has_lfc_threshold <- function(lfc_thr) {
 #'
 #' Cierra A9 (docs/REVISION_ESTADISTICA.md): la interfaz declaraba una columna
 #' `lfcSE` que solo DESeq2 rellenaba, y sin error estandar "no se pueden dibujar
-#' intervalos de confianza". Ahora la rellenan DESeq2 y limma, asi que el
+#' intervalos de confianza". Ahora la rellenan DESeq2 y limma, así que el
 #' intervalo se puede calcular y exportar.
 #'
 #' Nota de diseño: el IC se añade a la TABLA, no como barras de error en el
 #' volcano. Con miles de genes, las barras de error se solapan hasta hacer el
-#' grafico ilegible y esconden justo lo que el volcano sirve para ver. El valor
-#' del IC esta en la tabla y en los datos exportados, donde se puede leer gen a
+#' gráfico ilegible y esconden justo lo que el volcano sirve para ver. El valor
+#' del IC está en la tabla y en los datos exportados, donde se puede leer gen a
 #' gen.
 #'
-#' En edgeR-QL no hay un equivalente directo del SE, asi que sus filas quedan sin
+#' En edgeR-QL no hay un equivalente directo del SE, así que sus filas quedan sin
 #' intervalo; es coherente con usar `glmTreat`, que responde a "es el efecto
 #' mayor que este umbral" sin necesitar el SE.
 add_lfc_confidence_interval <- function(deg_df, level = 0.95) {
@@ -912,16 +912,16 @@ add_lfc_confidence_interval <- function(deg_df, level = 0.95) {
   deg_df
 }
 
-#' Selecciona los genes significativos y aplica los filtros de visualizacion.
+#' Selecciona los genes significativos y aplica los filtros de visualización.
 #'
-#' IMPORTANTE — dos cosas distintas conviven aqui:
+#' IMPORTANTE — dos cosas distintas conviven aquí:
 #'   - `fdr` es el nivel del test: seleccionar `padj <= fdr` es leer el
 #'     resultado, no filtrarlo. Debe ser el MISMO valor que se paso a
 #'     `run_deg()`, o el FDR declarado deja de corresponder al calculado.
-#'   - `abs_log2fc` y `base_mean` son filtros de VISUALIZACION. Recortan lo que
-#'     se muestra y NO llevan garantia estadistica: un corte de fold-change a
+#'   - `abs_log2fc` y `base_mean` son filtros de VISUALIZACIÓN. Recortan lo que
+#'     se muestra y NO llevan garantía estadística: un corte de fold-change a
 #'     posteriori reduce la FDR real en una cantidad desconocida. Para umbralizar
-#'     por fold-change con garantia hay que pasar `lfc_threshold` a `run_deg()`,
+#'     por fold-change con garantía hay que pasar `lfc_threshold` a `run_deg()`,
 #'     que lo mete dentro del test. Por eso `abs_log2fc` vale 0 por defecto.
 apply_deg_filters <- function(deg_df, fdr = 0.05, abs_log2fc = 0, base_mean = 0) {
   if (is.null(deg_df) || !nrow(deg_df)) return(deg_df)
@@ -941,9 +941,9 @@ apply_deg_filters <- function(deg_df, fdr = 0.05, abs_log2fc = 0, base_mean = 0)
 #' Lista de genes significativos para el ENRIQUECIMIENTO.
 #'
 #' Solo aplica el FDR con el que se ajusto el modelo. Deliberadamente NO acepta
-#' los filtros de |log2FC| ni de baseMean: esos son de visualizacion y no
-#' recortan el universo, de modo que usarlos aqui cambiaria el resultado del ORA
-#' al mover un deslizador declarado cosmetico, y ademas dejaria lista y fondo
+#' los filtros de |log2FC| ni de baseMean: esos son de visualización y no
+#' recortan el universo, de modo que usarlos aquí cambiaría el resultado del ORA
+#' al mover un deslizador declarado cosmetico, y además dejaría lista y fondo
 #' definidos con criterios distintos.
 #'
 #' @param deg_df tabla de resultados del motor
@@ -957,22 +957,22 @@ deg_significant_genes <- function(deg_df, fdr = 0.05) {
 #'
 #' Son los que tienen p-valor ajustado. Un gen sin `padj` —descartado por el
 #' filtrado independiente, con conteo cero o marcado como outlier de Cook— nunca
-#' habria podido entrar en la lista de significativos, asi que contarlo como
+#' habría podido entrar en la lista de significativos, así que contarlo como
 #' fondo infla el enriquecimiento (Wijesooriya et al., 2022: el fondo mal
-#' definido es el error mas extendido en analisis de sobre-representacion).
+#' definido es el error más extendido en análisis de sobre-representación).
 #'
 #' @param deg_df tabla de resultados del motor
 #' @return vector de identificadores de gen
 deg_testable_universe <- function(deg_df) {
   if (is.null(deg_df) || !nrow(deg_df)) return(character(0))
   u <- deg_df$gene[!is.na(deg_df$padj)]
-  # Un motor que no rellene padj dejaria el universo vacio, lo que romperia el
+  # Un motor que no rellene padj dejaría el universo vacio, lo que rompería el
   # enriquecimiento entero; en ese caso es preferible el fondo completo.
   if (!length(u)) deg_df$gene else u
 }
 
-#' Transformacion estabilizadora de varianza para visualizacion.
-#' Usa DESeq2::vst si nrow >= 1000 (mas rapido), rlog si menos (mas suave).
+#' Transformación estabilizadora de varianza para visualización.
+#' Usa DESeq2::vst si nrow >= 1000 (más rápido), rlog si menos (más suave).
 vst_or_rlog <- function(counts, meta, blind = TRUE) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
     # Fallback: log2(counts + 1) normalizado por libreria

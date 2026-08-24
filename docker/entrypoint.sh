@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Punto de entrada del contenedor.
 #
-# Comprueba el entorno ANTES de arrancar la aplicacion. El motivo no es
-# ceremonial: si una herramienta del pipeline no esta en el PATH, la aplicacion
-# arranca perfectamente y el fallo aparece veinte minutos despues, a mitad de una
-# ejecucion, en forma de codigo de salida. Comprobarlo al arrancar convierte ese
+# Comprueba el entorno ANTES de arrancar la aplicación. El motivo no es
+# ceremonial: si una herramienta del pipeline no está en el PATH, la aplicación
+# arranca perfectamente y el fallo aparece veinte minutos después, a mitad de una
+# ejecución, en forma de código de salida. Comprobarlo al arrancar convierte ese
 # fallo tardio en un mensaje inmediato que nombra lo que falta.
 set -Eeuo pipefail
 
@@ -20,8 +20,8 @@ comprobar_entorno() {
   done
   if [ ${#faltan[@]} -gt 0 ]; then
     printf 'AVISO: herramientas del pipeline ausentes en el PATH: %s\n' "${faltan[*]}" >&2
-    printf 'El analisis a partir de una matriz de conteos seguira funcionando;\n' >&2
-    printf 'la ejecucion del pipeline desde FASTQ, no.\n' >&2
+    printf 'El análisis a partir de una matriz de conteos seguira funcionando;\n' >&2
+    printf 'la ejecución del pipeline desde FASTQ, no.\n' >&2
   else
     printf 'Entorno completo: %d herramientas del pipeline disponibles.\n' "${#herramientas[@]}"
   fi

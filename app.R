@@ -1,14 +1,14 @@
 #' app.R
-#' Entrypoint de la aplicacion. Cuando se ejecuta con `Rscript app.R`,
+#' Entrypoint de la aplicación. Cuando se ejecuta con `Rscript app.R`,
 #' cargamos explicitamente los archivos que Shiny normalmente espera en
 #' una app multi-archivo.
 
-#' Localiza la raiz de la aplicacion a partir del working directory y del
-#' `--file=` de la linea de comandos.
+#' Localiza la raíz de la aplicación a partir del working directory y del
+#' `--file=` de la línea de comandos.
 #'
 #' Ninguna de las dos pistas vale por si sola:
-#'   - Shiny fija el wd al directorio de la app antes de sourcear app.R, asi que
-#'     cuando ahi esta global.R esa es la respuesta correcta AUNQUE `--file`
+#'   - Shiny fija el wd al directorio de la app antes de sourcear app.R, así que
+#'     cuando ahí está global.R esa es la respuesta correcta AUNQUE `--file`
 #'     apunte a otra cosa (p. ej. `Rscript lanzador.R` que llama a runApp()).
 #'   - Con `Rscript app.R` desde otro directorio pasa lo contrario: el wd es el
 #'     del usuario y la pista buena es `--file`.
@@ -28,12 +28,12 @@ cmd_args <- commandArgs(trailingOnly = FALSE)
 file_arg <- grep("^--file=", cmd_args, value = TRUE)
 app_dir <- resolve_app_dir(file_arg)
 
-# `runApp()` solo fija el working directory cuando recibe una RUTA; aqui recibe
-# un objeto app, asi que con `Rscript app.R` desde otro directorio el wd seguia
+# `runApp()` solo fija el working directory cuando recibe una RUTA; aquí recibe
+# un objeto app, así que con `Rscript app.R` desde otro directorio el wd seguía
 # siendo el del usuario. Como `outputs_base_dir()` es `file.path(getwd(),
 # "outputs")` y la ruta de workflow.sh se resuelve igual, la app creaba outputs/
 # en el sitio equivocado y no encontraba el workflow. No se restaura al salir a
-# proposito: el wd tiene que seguir siendo este mientras la app viva.
+# propósito: el wd tiene que seguir siendo este mientras la app viva.
 setwd(app_dir)
 
 source(file.path(app_dir, "global.R"), local = TRUE)
@@ -69,9 +69,9 @@ if (is_direct_rscript) {
     primera_no_vacia(Sys.getenv("SARA_PORT", ""), Sys.getenv("SHINY_PORT", ""))))
   if (nzchar(host)) options(shiny.host = host)
   if (!is.na(port) && port > 0) options(shiny.port = port)
-  # Con `Rscript app.R` la sesion no es interactiva, de modo que hasta ahora no
-  # se abria nada y habia que ir al navegador a mano. `lanzador_de_interfaz()`
-  # decide que hacer segun la maquina: una ventana de aplicacion sin adornos de
+  # Con `Rscript app.R` la sesión no es interactiva, de modo que hasta ahora no
+  # se abria nada y había que ir al navegador a mano. `lanzador_de_interfaz()`
+  # decide que hacer según la maquina: una ventana de aplicación sin adornos de
   # navegador en un escritorio, nada dentro de un contenedor. Se puede forzar
   # con SARA_UI=app|navegador|ninguno. Ver R/utils_launch.R.
   shiny::runApp(app, launch.browser = lanzador_de_interfaz())

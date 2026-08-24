@@ -2,8 +2,8 @@
 #' Tabla de resultados, volcano, MA, PCA y heatmaps de la pestana 4.
 #'
 #' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
-#' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
-#' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
+#' fichero original llego a 1.608 líneas en una única función. NO se usa
+#' moduleServer(): igual que el resto de la aplicación, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
 #'
 #' `ctx` es el contexto compartido del modulo (un environment, como `state`, para
@@ -37,8 +37,8 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
   # ── Helpers de ploteo (reutilizados en render y en descarga) ──────────────
 
   #' Elige el eje de fold-change: el encogido si existe. Los estimadores de
-  #' maxima verosimilitud estan sesgados hacia valores exagerados en genes de
-  #' baja expresion, asi que un volcano construido sobre ellos destaca
+  #' máxima verosimilitud están sesgados hacía valores exagerados en genes de
+  #' baja expresión, así que un volcano construido sobre ellos destaca
   #' visualmente los genes peor estimados. Se ordena y se dibuja con el
   #' encogido; se testea con el MLE.
   lfc_axis <- function(df) {
@@ -59,9 +59,9 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     ax <- lfc_axis(df)
     df$x <- ax$values
     df$minus_log10_p <- -log10(pmax(df$pvalue, .Machine$double.xmin))
-    # La significacion es padj <= FDR y nada mas: cuando hay umbral de
-    # fold-change ya esta dentro del test, asi que volver a cortar por |log2FC|
-    # aqui seria el filtro post-hoc que estamos eliminando.
+    # La significacion es padj <= FDR y nada más: cuando hay umbral de
+    # fold-change ya está dentro del test, así que volver a cortar por |log2FC|
+    # aquí sería el filtro post-hoc que estamos eliminando.
     sig <- !is.na(df$padj) & df$padj <= fdr_thr
     df$significant <- ifelse(is.na(sig), FALSE, sig)
     df$color <- ifelse(df$significant, "Significativo", "No significativo")
@@ -163,13 +163,13 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
 
   # ── PCA ────────────────────────────────────────────────────────────────────
   # El selector se rellena con las columnas del samplesheet del ajuste, para que
-  # se pueda colorear por cualquier covariable y no solo por la condicion.
+  # se pueda colorear por cualquier covariable y no solo por la condición.
   observe({
     m <- state$deg_rv$meta
     if (is.null(m) || !nrow(m)) return()
-    # Se descartan los identificadores unicos por muestra (sample_id y similares):
+    # Se descartan los identificadores únicos por muestra (sample_id y similares):
     # colorear por ellos da un color por punto, no informa de ningun agrupamiento
-    # y ademas agota la paleta.
+    # y además agota la paleta.
     is_id <- vapply(names(m), function(v) {
       length(unique(as.character(m[[v]]))) >= nrow(m) && !is.numeric(m[[v]])
     }, logical(1))
@@ -192,8 +192,8 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
               color_col %in% names(pcd)) color_col
           else if ("condition" %in% names(pcd)) "condition" else "sample_id"
     # Una covariable continua (edad, dosis, tiempo, una variable sustituta) se deja
-    # numerica para que plotly use una escala de color continua; forzarla a
-    # discreta daria un color por valor y no se leeria nada.
+    # numérica para que plotly use una escala de color continua; forzarla a
+    # discreta daría un color por valor y no se leeria nada.
     raw <- pcd[[cc]]
     pcd$color <- if (is.numeric(raw) && length(unique(raw)) > 5) raw else as.character(raw)
     p <- plotly::plot_ly(
@@ -216,12 +216,12 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     make_deg_pca_plot(input$deg_pca_color)
   })
 
-  # ── Heatmaps (graficos base) ───────────────────────────────────────────────
-  # Estos dos se dibujan con graficos base, no con plotly, asi que no pueden usar
+  # ── Heatmaps (gráficos base) ───────────────────────────────────────────────
+  # Estos dos se dibujan con gráficos base, no con plotly, así que no pueden usar
   # `plotly_download()`. Se factorizan en helpers para que el render y la descarga
-  # produzcan exactamente el mismo grafico: antes el bloque de pheatmap estaba
+  # produzcan exactamente el mismo gráfico: antes el bloque de pheatmap estaba
   # duplicado literalmente en los cuatro sitios, y cualquier cambio de paleta o de
-  # anotacion habia que hacerlo cuatro veces.
+  # anotación había que hacerlo cuatro veces.
   draw_deg_heatmap <- function(n = 30) {
     if (is.null(state$deg_rv$vst_mat)) {
       plot.new(); title("Sin datos para el heatmap."); return(invisible())
@@ -263,7 +263,7 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     }
   }
 
-  #' Descarga PNG de un grafico de graficos base.
+  #' Descarga PNG de un gráfico de gráficos base.
   png_download <- function(prefix, draw_fun, width = 1200, height = 900) {
     downloadHandler(
       filename = function() paste0(prefix, "_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png"),
@@ -285,10 +285,10 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
     draw_deg_dist_heatmap()
   })
 
-  # ── Descargas de esta seccion ──────────────────────────────────────────────
+  # ── Descargas de esta sección ──────────────────────────────────────────────
   # Cada descarga vive junto al render que reutiliza, en lugar de en un bloque
-  # "Descargas" al final del fichero: asi es imposible que se desincronicen, que
-  # es lo que le habia pasado al PCA.
+  # "Descargas" al final del fichero: así es imposible que se desincronicen, que
+  # es lo que le había pasado al PCA.
   output$download_deg_table <- csv_download(
     "deg_table_filtered",
     function() {

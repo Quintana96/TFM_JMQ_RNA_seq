@@ -1,7 +1,7 @@
 #' test-informe.R
-#' El informe es el documento que queda cuando el analisis ya no esta en
-#' pantalla. Se estructura segun el contenido minimo que la guia ACMG/AMP exige
-#' a un informe de diagnostico genomico: que se evaluo, con que bases de datos y
+#' El informe es el documento que queda cuando el análisis ya no está en
+#' pantalla. Se estructura según el contenido mínimo que la guia ACMG/AMP exige
+#' a un informe de diagnóstico genomico: que se evaluo, con que bases de datos y
 #' pipeline (con sus VERSIONES), los hallazgos, la fecha, un resumen en lenguaje
 #' llano y las limitaciones. Un informe negativo se trata igual que uno positivo.
 
@@ -22,7 +22,7 @@ test_that("el informe incluye resumen en lenguaje llano y fecha", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   h <- suppressMessages(build_deg_report_html(rv_minimo()))
   expect_true(grepl("Resumen", h, fixed = TRUE))
-  expect_true(grepl("Analisis realizado el", h, fixed = TRUE))
+  expect_true(grepl("Análisis realizado el", h, fixed = TRUE))
   expect_true(grepl("Limitaciones", h, fixed = TRUE))
   expect_true(grepl("Reproducibilidad", h, fixed = TRUE))
 })
@@ -30,7 +30,7 @@ test_that("el informe incluye resumen en lenguaje llano y fecha", {
 test_that("el informe fija fondo claro para no depender del tema del lector", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   h <- suppressMessages(build_deg_report_html(rv_minimo()))
-  # Sin fondo explicito, un navegador en modo oscuro deja texto oscuro sobre
+  # Sin fondo explícito, un navegador en modo oscuro deja texto oscuro sobre
   # negro: el documento se descarga y se lee en cualquier parte.
   expect_true(grepl("background:#FFFFFF", h, fixed = TRUE))
 })
@@ -44,7 +44,7 @@ test_that("un resultado negativo se documenta en lugar de quedar en blanco", {
   expect_true(grepl("Genes con menor p-valor ajustado", h, fixed = TRUE))
 })
 
-test_that("las limitaciones se derivan del analisis, no son texto fijo", {
+test_that("las limitaciones se derivan del análisis, no son texto fijo", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   rv <- rv_minimo(n_per_group = 4)
   lims <- deg_report_limitations(rv, diagnostics = NULL, sig_n = 10L)
@@ -53,9 +53,9 @@ test_that("las limitaciones se derivan del analisis, no son texto fijo", {
   # Sin bootstrap -> debe avisar
   expect_true(any(grepl("replicabilidad por remuestreo", lims)))
 
-  # Con un resumen a gen degradado, aparece esa limitacion y no antes
+  # Con un resumen a gen degradado, aparece esa limitación y no antes
   expect_false(any(grepl("via recomendada", lims)))
-  rv$counts_source <- list(method = "est_counts", ok = FALSE, detail = "Sin anotacion.")
+  rv$counts_source <- list(method = "est_counts", ok = FALSE, detail = "Sin anotación.")
   expect_true(any(grepl("via recomendada", deg_report_limitations(rv, NULL, 10L))))
 })
 
@@ -75,14 +75,14 @@ test_that("orgdb_source_info devuelve las fechas de las fuentes", {
   skip_if_not(requireNamespace("org.Hs.eg.db", quietly = TRUE), "org.Hs.eg.db no instalado")
   info <- orgdb_source_info("org.Hs.eg.db")
   expect_true("GOSOURCEDATE" %in% names(info))
-  # El campo KEGG de los OrgDb esta congelado: por eso la app no lo usa y
+  # El campo KEGG de los OrgDb está congelado: por eso la app no lo usa y
   # consulta la API. Que aparezca en el informe lo deja documentado.
   expect_true("KEGGSOURCEDATE" %in% names(info))
   expect_identical(orgdb_source_info(NULL)$OrgDb, "no disponible")
 })
 
-test_that("app_provenance identifica version y commit", {
+test_that("app_provenance identifica versión y commit", {
   p <- app_provenance()
-  expect_true(all(c("Aplicacion", "Commit de git", "Version de R") %in% names(p)))
-  expect_identical(p[["Version de R"]], as.character(getRversion()))
+  expect_true(all(c("Aplicación", "Commit de git", "Versión de R") %in% names(p)))
+  expect_identical(p[["Versión de R"]], as.character(getRversion()))
 })

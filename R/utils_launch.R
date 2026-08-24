@@ -1,23 +1,23 @@
 #' utils_launch.R
 #' Apertura de la interfaz en una ventana sin adornos de navegador.
 #'
-#' Shiny es una aplicacion web: no existe una ventana nativa de verdad sin
+#' Shiny es una aplicación web: no existe una ventana nativa de verdad sin
 #' envolverla en Electron, que obliga a empaquetar R entero y convierte el
-#' arranque en un proceso de compilacion. El termino medio es el modo
-#' aplicacion de los navegadores basados en Chromium: `--app=URL` abre una
+#' arranque en un proceso de compilacion. El término medio es el modo
+#' aplicación de los navegadores basados en Chromium: `--app=URL` abre una
 #' ventana SIN barra de direcciones, pestanas, marcadores ni menu de extensiones.
 #' Visualmente es indistinguible de una ventana propia; por dentro sigue siendo
 #' el mismo navegador, con sus herramientas de desarrollo si se necesitan.
 #'
 #' Se invoca el BINARIO directamente en lugar de `open -a` (macOS): `open -a`
-#' ignora los argumentos cuando la aplicacion ya esta abierta, de modo que con
+#' ignora los argumentos cuando la aplicación ya está abierta, de modo que con
 #' el navegador en marcha se limitaria a traerlo al frente sin abrir nada. El
-#' binario, en cambio, detecta la instancia existente y le pide la ventana, asi
+#' binario, en cambio, detecta la instancia existente y le pide la ventana, así
 #' que no se duplica el proceso.
 
 #' Candidatos por plataforma, en orden de preferencia.
-#' Chrome primero por ser el mas extendido; el resto comparten motor y aceptan
-#' exactamente los mismos parametros.
+#' Chrome primero por ser el más extendido; el resto comparten motor y aceptan
+#' exactamente los mismos parámetros.
 navegadores_de_aplicacion <- function() {
   if (Sys.info()[["sysname"]] == "Darwin") {
     apps <- c("Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium", "Vivaldi")
@@ -50,7 +50,7 @@ buscar_navegador_de_aplicacion <- function(rutas = navegadores_de_aplicacion()) 
 
 #' Si el proceso corre dentro de un contenedor.
 #'
-#' Importa porque ahi no hay escritorio ni navegador: intentar abrir una ventana
+#' Importa porque ahí no hay escritorio ni navegador: intentar abrir una ventana
 #' escribiria un error en el log de arranque sin que nadie pueda hacer nada.
 en_contenedor <- function() {
   if (file.exists("/.dockerenv")) return(TRUE)
@@ -65,8 +65,8 @@ en_contenedor <- function() {
 
 #' Si tiene sentido intentar abrir una ventana en esta maquina.
 #'
-#' Se exige un entorno grafico. En Linux sin DISPLAY ni WAYLAND_DISPLAY el
-#' navegador no arranca; en macOS y Windows siempre lo hay cuando hay sesion.
+#' Se exige un entorno gráfico. En Linux sin DISPLAY ni WAYLAND_DISPLAY el
+#' navegador no arranca; en macOS y Windows siempre lo hay cuando hay sesión.
 hay_entorno_grafico <- function() {
   so <- Sys.info()[["sysname"]]
   if (so == "Darwin" || .Platform$OS.type == "windows") return(TRUE)
@@ -76,11 +76,11 @@ hay_entorno_grafico <- function() {
 #' Modo de apertura pedido por el entorno: "app", "navegador" o "ninguno".
 #'
 #' Por defecto "app" en una maquina de escritorio y "ninguno" dentro de un
-#' contenedor o sin entorno grafico, que es donde abrir algo no puede funcionar.
+#' contenedor o sin entorno gráfico, que es donde abrir algo no puede funcionar.
 #' Las dos comprobaciones del entorno entran como argumentos con valor por
-#' defecto en lugar de llamarse dentro. Asi la decision se puede probar sin
-#' montar un contenedor ni apagar el servidor grafico, que es la unica forma de
-#' verificar la rama que mas importa: la que evita abrir una ventana donde no
+#' defecto en lugar de llamarse dentro. Así la decisión se puede probar sin
+#' montar un contenedor ni apagar el servidor gráfico, que es la única forma de
+#' verificar la rama que más importa: la que evita abrir una ventana donde no
 #' puede haberla.
 modo_de_apertura <- function(contenedor = en_contenedor(),
                              grafico = hay_entorno_grafico()) {
@@ -94,9 +94,9 @@ modo_de_apertura <- function(contenedor = en_contenedor(),
   "app"
 }
 
-#' Abre `url` en una ventana de aplicacion.
+#' Abre `url` en una ventana de aplicación.
 #'
-#' @return TRUE si se lanzo el navegador, FALSE si no habia ninguno compatible.
+#' @return TRUE si se lanzo el navegador, FALSE si no había ninguno compatible.
 abrir_ventana_de_aplicacion <- function(url, navegador = buscar_navegador_de_aplicacion(),
                                         tamaño = Sys.getenv("SARA_UI_SIZE", "1440,900"),
                                         ejecutar = system2) {
@@ -105,15 +105,15 @@ abrir_ventana_de_aplicacion <- function(url, navegador = buscar_navegador_de_apl
             "--no-first-run", "--no-default-browser-check")
   ok <- tryCatch({
     # wait = FALSE es imprescindible: runApp() sigue bloqueado sirviendo la
-    # aplicacion, asi que si se esperase al navegador no habria servidor al que
-    # conectarse y la ventana quedaria en blanco.
+    # aplicación, así que si se esperase al navegador no habría servidor al que
+    # conectarse y la ventana quedaría en blanco.
     ejecutar(navegador, args, wait = FALSE, stdout = FALSE, stderr = FALSE)
     TRUE
   }, error = function(e) FALSE, warning = function(w) FALSE)
   isTRUE(ok)
 }
 
-#' Funcion que se le pasa a `runApp(launch.browser = ...)`.
+#' Función que se le pasa a `runApp(launch.browser = ...)`.
 #'
 #' Devuelve NULL cuando no hay que abrir nada, que es lo que `runApp` espera
 #' para no hacer nada (`launch.browser = FALSE`).

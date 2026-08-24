@@ -1,8 +1,8 @@
 #' server_tab_processing.R
-#' Logica server de la Tab 2 (Procesamiento):
-#'   - renderUI("tab2_content") segun process_unlocked
+#' Lógica server de la Tab 2 (Procesamiento):
+#'   - renderUI("tab2_content") según process_unlocked
 #'   - Lanzamiento del workflow (processx no bloqueante o system2 bloqueante)
-#'   - Polling periodico, parsing de progreso, heartbeat
+#'   - Polling periódico, parsing de progreso, heartbeat
 #'   - Boton stop, refresh
 #'
 #' Comparte estado con tab_config y tab_results via `state`.
@@ -33,7 +33,7 @@ server_tab_processing <- function(input, output, session, state) {
     invisible(TRUE)
   }
 
-  #' Linea de log con timestamp y newline
+  #' Línea de log con timestamp y newline
   log_line <- function(msg) append_run_log(paste0(ts_log(msg), "\n"))
 
   #' Sincroniza el log de disco al reactivo (tail-only)
@@ -59,7 +59,7 @@ server_tab_processing <- function(input, output, session, state) {
     chunk
   }
 
-  #' Actualiza checkpoints / muestras a partir de las nuevas lineas
+  #' Actualiza checkpoints / muestras a partir de las nuevas líneas
   update_progress_from_log <- function(chunk) {
     lines <- strsplit(terminal_text(chunk), "\n", fixed = TRUE)[[1]]
     lines <- lines[nzchar(lines)]
@@ -115,7 +115,7 @@ server_tab_processing <- function(input, output, session, state) {
         log_line(sprintf("Matriz cargada: %d genes x %d muestras",
                          nrow(counts), ncol(counts)))
         # Si se ha tenido que degradar a est_counts crudos, decirlo: antes
-        # fallaba en silencio y parecia que se habia usado tximport.
+        # fallaba en silencio y parecía que se había usado tximport.
         src <- attr(counts, "counts_source")
         if (!is.null(src)) {
           log_line(paste0("Origen de los conteos: ", src$method,
@@ -126,7 +126,7 @@ server_tab_processing <- function(input, output, session, state) {
       if (length(files) > 0) {
         state$output_files_rv(file_table_for_files(output_dir, files))
       }
-      log_line("=== Analisis finalizado OK ===")
+      log_line("=== Análisis finalizado OK ===")
       state$analysis_done(TRUE)
       state$results_refresh(Sys.time())
       updateSelectInput(session, "selected_result_dir",
@@ -138,7 +138,7 @@ server_tab_processing <- function(input, output, session, state) {
     } else {
       log_line("=== ERROR en el workflow ===")
       showNotification(
-        paste0("Error (codigo ", exit_code, "). Revisa el log de ejecucion."),
+        paste0("Error (código ", exit_code, "). Revisa el log de ejecución."),
         type = "error", duration = 12
       )
     }
@@ -159,7 +159,7 @@ server_tab_processing <- function(input, output, session, state) {
       proc_rv$end_time <- Sys.time()
       shinyjs::disable("stop_btn")
       shinyjs::enable("run_btn")
-      log_line(paste0("Codigo de salida: ", exit_code))
+      log_line(paste0("Código de salida: ", exit_code))
 
       if (!is.null(proc_rv$cur_sample)) {
         ss <- proc_rv$samp_stat
@@ -169,10 +169,10 @@ server_tab_processing <- function(input, output, session, state) {
         proc_rv$bytes_done <- (proc_rv$bytes_done %||% 0) + bytes
         proc_rv$cur_sample <- NULL
       }
-      # Solo se dan por completados TODOS los pasos si el proceso termino bien.
-      # Con un codigo de salida distinto de 0, el paso que estaba en curso queda
+      # Solo se dan por completados TODOS los pasos si el proceso término bien.
+      # Con un código de salida distinto de 0, el paso que estaba en curso queda
       # marcado como fallido y los posteriores siguen pendientes: marcar la lista
-      # entera en verde contradecia la notificacion de error que se muestra a
+      # entera en verde contradecia la notificación de error que se muestra a
       # continuacion.
       if (identical(exit_code, 0L) || identical(exit_code, 0)) {
         proc_rv$cp_idx <- length(proc_rv$checkpoints)
@@ -211,14 +211,14 @@ server_tab_processing <- function(input, output, session, state) {
     # El resumen se construye con los MISMOS reactivos que arman el comando, no
     # con la foto que se tomo al pulsar "Continuar".
     #
-    # Con la foto, cambiar algo en el paso 1 y volver por la barra de navegacion
+    # Con la foto, cambiar algo en el paso 1 y volver por la barra de navegación
     # —sin pasar otra vez por "Continuar"— dejaba un resumen que ya no describia
-    # lo que se iba a ejecutar: decia "Single-end" mientras el comando llevaba
+    # lo que se iba a ejecutar: decía "Single-end" mientras el comando llevaba
     # "--READ_TYPE pe". Un resumen que miente sobre lo que va a correr es peor
     # que no tener resumen.
     #
     # Del snapshot se conserva solo el directorio de salida, que se crea al
-    # validar y no debe moverse despues.
+    # validar y no debe moverse después.
     rt <- shared$effective_read_type()
     dir_in <- shared$input_dir_val()
     cfg <- list(
@@ -401,7 +401,7 @@ server_tab_processing <- function(input, output, session, state) {
         prepare_uploaded_input_file(input$annotation_file_pseudo_upload, shared$output_dir_val(), prefix = "annotation", optional = TRUE)
       }
     }, error = function(e) {
-      showNotification(paste0("Error al preparar el archivo de anotacion: ", conditionMessage(e)), type = "error")
+      showNotification(paste0("Error al preparar el archivo de anotación: ", conditionMessage(e)), type = "error")
       NULL
     })
     if (is.null(annotation_path)) return()
@@ -411,7 +411,7 @@ server_tab_processing <- function(input, output, session, state) {
     # --FEATURE_TYPE y --FEATURE_ATTR, pero desde la interfaz era imposible
     # fijarlos, hasta el punto de que el motor Swish recomendaba "relanza el
     # workflow con --INFERENTIAL_REPS 20" sin que existiera forma de hacerlo.
-    # Pasarlos explicitamente los deja ademas registrados en run_params.tsv.
+    # Pasarlos explicitamente los deja además registrados en run_params.tsv.
     cmd <- sprintf(
       paste0("bash %s --INPUT %s --OUTPUT %s --GENOME_FILE %s --ANNOTATION_FILE %s ",
              "--ALIGNMENT_TYPE %s --READ_TYPE %s --FRAGMENT_LENGTH %s --FRAGMENT_SD %s ",
@@ -441,9 +441,9 @@ server_tab_processing <- function(input, output, session, state) {
     shinyjs::disable("stop_btn")
     on.exit({ if (!proc_rv$running) shinyjs::enable("run_btn") }, add = TRUE)
 
-    # Checkpoints segun tipo de analisis
+    # Checkpoints según tipo de análisis
     cps <- if (input$analysis_type == "alignment")
-      c("Construyendo indice Bowtie2",
+      c("Construyendo índice Bowtie2",
         "Control de calidad inicial (FastQC)",
         "Alineamiento de muestras (Bowtie2 + fastp)",
         "Procesando BAM (samtools sort + index)",
@@ -451,9 +451,9 @@ server_tab_processing <- function(input, output, session, state) {
         "Control de calidad post-trimming (FastQC)",
         "Informe global (MultiQC)")
     else
-      c(paste0("Construyendo indice (", shared$effective_tool(), ")"),
+      c(paste0("Construyendo índice (", shared$effective_tool(), ")"),
         "Control de calidad inicial (FastQC)",
-        paste0("Cuantificacion de muestras (", shared$effective_tool(), " + fastp)"),
+        paste0("Cuantificación de muestras (", shared$effective_tool(), " + fastp)"),
         "Importando cuantificaciones",
         "Matriz de conteos",
         "Control de calidad post-trimming (FastQC)",
@@ -461,7 +461,7 @@ server_tab_processing <- function(input, output, session, state) {
 
     proc_rv$checkpoints <- cps
     proc_rv$cp_idx      <- 0L
-    # Una ejecucion nueva parte sin el fallo de la anterior.
+    # Una ejecución nueva parte sin el fallo de la anterior.
     proc_rv$cp_failed      <- NA_integer_
     proc_rv$cp_failed_kind <- NA_character_
     proc_rv$n_total     <- length(samps)
@@ -479,12 +479,12 @@ server_tab_processing <- function(input, output, session, state) {
     cat("", file = proc_rv$log_file, append = FALSE)
 
     append_run_log(paste0(
-      ts_log("=== Iniciando analisis ==="), "\n",
+      ts_log("=== Iniciando análisis ==="), "\n",
       ts_log("Log completo en: "), proc_rv$log_file, "\n",
       ts_log(paste0("Lanzando: ", cmd)), "\n"))
 
     if (HAS_PROCESSX) {
-      # Ejecucion no bloqueante con processx
+      # Ejecución no bloqueante con processx
       proc <- tryCatch(
         processx::process$new("bash", c("-lc", cmd),
                               stdout = proc_rv$log_file, stderr = "2>&1",
@@ -499,8 +499,8 @@ server_tab_processing <- function(input, output, session, state) {
         shinyjs::enable("run_btn")
       }
     } else {
-      # Fallback bloqueante con system2 — reusa finalize_run para la post-ejecucion
-      withProgress(message = "Ejecutando analisis RNA-seq...", value = 0, {
+      # Fallback bloqueante con system2 — reusa finalize_run para la post-ejecución
+      withProgress(message = "Ejecutando análisis RNA-seq...", value = 0, {
         setProgress(0.05, detail = "Preparando comando...")
         setProgress(0.15, detail = cps[1])
         setProgress(0.25, detail = cps[2])
@@ -510,7 +510,7 @@ server_tab_processing <- function(input, output, session, state) {
         )
         exit_status <- attr(result, "status") %||% 0L
         append_run_log(paste0(terminal_text(result), "\n",
-                              ts_log(paste0("Codigo de salida: ", exit_status)), "\n"))
+                              ts_log(paste0("Código de salida: ", exit_status)), "\n"))
         setProgress(0.85, detail = "Cargando resultados...")
         finalize_run(exit_status, state$run_params_rv()$output_dir %||% "")
         setProgress(1, detail = if (exit_status == 0) "Completado." else "Finalizado con error.")

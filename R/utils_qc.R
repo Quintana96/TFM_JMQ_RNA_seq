@@ -17,7 +17,7 @@ find_metric_col <- function(df, patterns) {
   ""
 }
 
-#' Devuelve un data.frame con una unica columna Mensaje (para mostrar avisos)
+#' Devuelve un data.frame con una única columna Mensaje (para mostrar avisos)
 message_df <- function(msg) {
   data.frame(Mensaje = msg, stringsAsFactors = FALSE, check.names = FALSE)
 }
@@ -53,17 +53,17 @@ clean_result_samples <- function(df) {
   df[!grepl("(_1|_2|_R1|_R2)$", df[[sc]]), , drop = FALSE]
 }
 
-#' Resumen de asignacion genica desde multiqc_featurecounts.txt
+#' Resumen de asignación genica desde multiqc_featurecounts.txt
 featurecounts_assignment_summary <- function(out_dir) {
   fc <- featurecounts_stats(out_dir)
-  if (is.null(fc)) return(message_df("No se encontraron metricas de asignacion genica para este analisis."))
+  if (is.null(fc)) return(message_df("No se encontraron metricas de asignación genica para este análisis."))
   sc <- sample_column(fc)
-  if (!nzchar(sc)) return(message_df("No se encontraron metricas de asignacion genica para este analisis."))
+  if (!nzchar(sc)) return(message_df("No se encontraron metricas de asignación genica para este análisis."))
 
   assigned_col <- find_metric_col(fc, c("^Assigned$", "featurecounts.*assigned$"))
   unassigned_cols <- grep("unassigned", names(fc), ignore.case = TRUE, value = TRUE)
   if (!nzchar(assigned_col) && !length(unassigned_cols)) {
-    return(message_df("No se encontraron metricas de asignacion genica para este analisis."))
+    return(message_df("No se encontraron metricas de asignación genica para este análisis."))
   }
 
   assigned <- if (nzchar(assigned_col)) num_or_na(fc[[assigned_col]]) else rep(NA_real_, nrow(fc))
@@ -87,7 +87,7 @@ align_qc_summary <- function(out_dir) {
   fc_sum <- featurecounts_assignment_summary(out_dir)
 
   if (is.null(gs) && is.null(bt) && !has_real_rows(fc_sum)) {
-    return(message_df("No se encontraron metricas de alineamiento clasico para este analisis."))
+    return(message_df("No se encontraron metricas de alineamiento clasico para este análisis."))
   }
 
   source <- if (!is.null(bt)) bt else gs
@@ -100,9 +100,9 @@ align_qc_summary <- function(out_dir) {
   total_col <- find_metric_col(source, c("total_reads", "fastqc-total_sequences", "total_sequences", "reads_processed"))
   total_reads <- if (nzchar(total_col)) num_or_na(source[[total_col]]) else rep(NA_real_, length(samples))
 
-  # Buscamos *rate* de multimapping de forma especifica para no capturar
+  # Buscamos *rate* de multimapping de forma específica para no capturar
   # columnas de conteo crudo (p.ej. paired_aligned_multi). Si no encontramos
-  # un match explicito como rate/porcentaje, dejamos multimapping_rate = NA.
+  # un match explícito como rate/porcentaje, dejamos multimapping_rate = NA.
   multi_col <- find_metric_col(source, c(
     "multi_rate", "multimapping_rate", "pct_multi", "percent_multi",
     "aligned.*multi.*rate", "multi.*percent"
@@ -119,7 +119,7 @@ align_qc_summary <- function(out_dir) {
       multimapping_rate <- raw_multi
     }
   } else {
-    # Si no hay rate explicito, no inventamos uno a partir de conteos: deja NA.
+    # Si no hay rate explícito, no inventamos uno a partir de conteos: deja NA.
     multimapping_rate <- rep(NA_real_, length(samples))
   }
 
@@ -156,7 +156,7 @@ align_qc_summary <- function(out_dir) {
     out$assigned_rate <- NA_real_
   }
 
-  if (!nrow(out)) message_df("No se encontraron metricas de alineamiento clasico para este analisis.") else out
+  if (!nrow(out)) message_df("No se encontraron metricas de alineamiento clasico para este análisis.") else out
 }
 
 #' Lee y concatena todos los quant.sf de un run salmon
@@ -200,16 +200,16 @@ read_kallisto_quant_table <- function(out_dir) {
 
 #' Fraccion de lecturas asignadas a rRNA por muestra.
 #'
-#' Por que es una metrica de primer nivel y no un detalle (ver
+#' Por qué es una metrica de primer nivel y no un detalle (ver
 #' docs/REVISION_ESTADISTICA.md, B10): el rRNA supera el 85 % del RNA celular
 #' procariota y la depleccion es imperfecta — hasta un 50 % de lecturas
-#' residuales de rRNA es un resultado habitual. Con normalizacion por
+#' residuales de rRNA es un resultado habitual. Con normalización por
 #' composicion (TMM/RLE), un arrastre de rRNA que varie entre muestras sesga
 #' TODOS los factores de tamaño, no solo los genes de rRNA. Por eso lo relevante
-#' no es el valor absoluto sino la VARIACION entre muestras.
+#' no es el valor absoluto sino la VARIACIÓN entre muestras.
 #'
 #' @param counts matriz de conteos (genes x muestras)
-#' @param rrna_ids identificadores de rRNA de la anotacion. Si es NULL o no casa
+#' @param rrna_ids identificadores de rRNA de la anotación. Si es NULL o no casa
 #'   con la matriz, se cae a la heuristica de nombres `infer_rna_type()`.
 #' @return list(table = data.frame(sample_id, rrna_reads, total_reads, frac),
 #'   source, n_rrna_genes, spread, alert)
@@ -248,11 +248,11 @@ rrna_fraction_per_sample <- function(counts, rrna_ids = NULL) {
       " puntos entre muestras (de ", round(100 * min(df$frac, na.rm = TRUE), 1),
       " % a ", round(100 * max(df$frac, na.rm = TRUE), 1),
       " %). Un arrastre desigual de rRNA sesga los factores de tamaño de la ",
-      "normalizacion por composicion, asi que afecta a todos los genes. ",
-      "Considera excluir el rRNA antes del analisis diferencial.")
+      "normalización por composicion, así que afecta a todos los genes. ",
+      "Considera excluir el rRNA antes del análisis diferencial.")
   } else if (is.finite(max(df$frac, na.rm = TRUE)) && max(df$frac, na.rm = TRUE) > 0.3) {
     alert <- paste0(
-      "Hay muestras con mas del ", round(100 * max(df$frac, na.rm = TRUE), 0),
+      "Hay muestras con más del ", round(100 * max(df$frac, na.rm = TRUE), 0),
       " % de lecturas en rRNA. La depleccion no ha sido eficaz, lo que reduce ",
       "la profundidad efectiva sobre el mRNA.")
   }
@@ -277,16 +277,16 @@ infer_rna_type <- function(x) {
   type
 }
 
-#' Tabla de cuantificacion concatenada (salmon o kallisto) con columnas comunes
+#' Tabla de cuantificación concatenada (salmon o kallisto) con columnas comunes
 pseudo_qc_quant_table <- function(out_dir) {
   df <- read_salmon_quant_table(out_dir)
   if (is.null(df)) df <- read_kallisto_quant_table(out_dir)
-  if (is.null(df)) return(message_df("No se encontraron resultados de pseudoalineamiento para este analisis."))
+  if (is.null(df)) return(message_df("No se encontraron resultados de pseudoalineamiento para este análisis."))
   if ("Name" %in% names(df) && !"Type" %in% names(df)) {
     df$Type <- infer_rna_type(df$Name)
   }
   keep <- intersect(c("Name", "Type", "Length", "EffectiveLength", "TPM", "NumReads", "sample_id"), names(df))
-  if (!length(keep)) return(message_df("No se encontraron resultados de pseudoalineamiento para este analisis."))
+  if (!length(keep)) return(message_df("No se encontraron resultados de pseudoalineamiento para este análisis."))
   df[, keep, drop = FALSE]
 }
 
@@ -298,7 +298,7 @@ pseudo_qc_summary <- function(out_dir) {
   quant <- pseudo_qc_quant_table(out_dir)
 
   if (is.null(stats) && !has_real_rows(quant)) {
-    return(message_df("No se encontraron resultados de pseudoalineamiento para este analisis."))
+    return(message_df("No se encontraron resultados de pseudoalineamiento para este análisis."))
   }
 
   if (!is.null(stats)) {
@@ -332,7 +332,7 @@ pseudo_qc_summary <- function(out_dir) {
     tpm_median <- aggregate(q$TPM, list(sample_id = q$sample_id), median, na.rm = TRUE)
     names(tpm_median)[2] <- "median_tpm"
     # Mediana excluyendo TPM = 0 (transcritos NO detectados).
-    # Util porque median_tpm a menudo es 0 cuando hay muchos features no detectados.
+    # Útil porque median_tpm a menudo es 0 cuando hay muchos features no detectados.
     tpm_median_det <- aggregate(
       q$TPM,
       list(sample_id = q$sample_id),
@@ -357,21 +357,21 @@ pseudo_qc_summary <- function(out_dir) {
     out <- merge(out, detected_features, by = "sample_id", all = TRUE)
   }
 
-  if (!nrow(out)) message_df("No se encontraron resultados de pseudoalineamiento para este analisis.") else out
+  if (!nrow(out)) message_df("No se encontraron resultados de pseudoalineamiento para este análisis.") else out
 }
 
 #' Semaforo de calidad por muestra a partir de los modulos de FastQC.
 #'
-#' FastQC define los cortes del modulo "per base sequence quality" asi: aviso si
-#' el primer cuartil de alguna posicion baja de 10 o la mediana de 25; fallo si
+#' FastQC define los cortes del modulo "per base sequence quality" así: aviso si
+#' el primer cuartil de alguna posición baja de 10 o la mediana de 25; fallo si
 #' el cuartil baja de 5 o la mediana de 20. MultiQC no expone los cuartiles por
-#' posicion, pero si el veredicto por modulo, que aplica exactamente esos cortes.
+#' posición, pero si el veredicto por modulo, que aplica exactamente esos cortes.
 #'
 #' Se traduce a un semaforo por muestra indicando QUE modulo falla: un fallo en
 #' calidad por base y uno en contenido de adaptadores no significan lo mismo ni
 #' se arreglan igual.
 #'
-#' El modulo de duplicados NO cuenta para el veredicto: en RNA-seq de expresion
+#' El modulo de duplicados NO cuenta para el veredicto: en RNA-seq de expresión
 #' los duplicados son señal, no artefacto, y su "fail" es esperable en los genes
 #' muy expresados.
 #'
@@ -403,17 +403,17 @@ fastqc_traffic_light <- function(out_dir) {
   }))
 }
 
-#' Saturacion de la libreria: cuantos genes nuevos aporta secuenciar mas.
+#' Saturación de la libreria: cuantos genes nuevos aporta secuenciar más.
 #'
 #' Submuestreo binomial de los conteos observados. Es una curva de rendimientos
 #' decrecientes: si al 50 % de la profundidad ya se detectan casi los mismos
-#' genes que al 100 %, secuenciar mas no aporta y el limite del experimento son
-#' las replicas, no la profundidad — que es justo la conclusion de Liu, Zhou y
-#' White (Bioinformatics 2014): compensa mas replicar que profundizar.
+#' genes que al 100 %, secuenciar más no aporta y el límite del experimento son
+#' las replicas, no la profundidad — que es justo la conclusión de Liu, Zhou y
+#' White (Bioinformatics 2014): compensa más replicar que profundizar.
 #'
 #' @param counts matriz de conteos (genes x muestras)
 #' @param fracciones proporciones de la profundidad a evaluar
-#' @param min_count conteos minimos para considerar detectado un gen
+#' @param min_count conteos mínimos para considerar detectado un gen
 #' @param seed semilla: el submuestreo es aleatorio
 #' @return data.frame(sample_id, fraccion, genes_detectados) o NULL
 library_saturation <- function(counts, fracciones = c(0.1, 0.25, 0.5, 0.75, 1),
@@ -438,7 +438,7 @@ library_saturation <- function(counts, fracciones = c(0.1, 0.25, 0.5, 0.75, 1),
   })
 }
 
-#' Resume la curva de saturacion en un veredicto por muestra.
+#' Resume la curva de saturación en un veredicto por muestra.
 #' @return data.frame(sample_id, genes_full, pct_al_50, saturada)
 saturation_verdict <- function(sat, umbral = 0.95) {
   if (is.null(sat) || !nrow(sat)) return(NULL)
@@ -475,18 +475,18 @@ align_qc_alerts <- function(out_dir, thresholds = qc_thresholds) {
       add("warning", "assigned_rate", round(x$assigned_rate[i], 3), "assigned_rate bajo.")
     if (is.finite(med_reads) && med_reads > 0 && !is.na(x$total_reads[i]) &&
         x$total_reads[i] < med_reads * thresholds$low_reads_fraction_warning)
-      add("warning", "total_reads", round(x$total_reads[i]), "Numero de lecturas muy inferior a la mediana del conjunto.")
+      add("warning", "total_reads", round(x$total_reads[i]), "Número de lecturas muy inferior a la mediana del conjunto.")
     if (!is.na(x$total_reads[i]) && is.finite(med_reads) && med_reads > 0 &&
         x$total_reads[i] > med_reads * 1.5)
-      add("info", "total_reads", round(x$total_reads[i]), "Numero de lecturas muy superior a la mediana del conjunto.")
+      add("info", "total_reads", round(x$total_reads[i]), "Número de lecturas muy superior a la mediana del conjunto.")
   }
-  if (!length(alerts)) return(message_df("No se detectaron alertas automaticas con los umbrales actuales."))
+  if (!length(alerts)) return(message_df("No se detectaron alertas automáticas con los umbrales actuales."))
   do.call(rbind, alerts)
 }
 
 #' Alertas heuristicas sobre el pseudoalineamiento
 #' Nota (auditoria): Para el aviso "tpm_distribution_shift_warning" usamos
-#' median_tpm_detected cuando esta disponible, porque median_tpm tiende a 0
+#' median_tpm_detected cuando está disponible, porque median_tpm tiende a 0
 #' con muchos transcritos no detectados y no discrimina bien shifts reales
 #' entre muestras. Si median_tpm_detected no esta (sin tabla quant), caemos
 #' de vuelta a median_tpm.
@@ -513,10 +513,10 @@ pseudo_qc_alerts <- function(out_dir, thresholds = qc_thresholds) {
       add("warning", "pseudoalignment_rate", round(x$pseudoalignment_rate[i], 3), "pseudoalignment_rate bajo.")
     if (is.finite(med_detected) && med_detected > 0 && !is.na(x$transcripts_detected[i]) &&
         x$transcripts_detected[i] < med_detected * thresholds$low_detected_fraction_warning)
-      add("warning", "transcripts_detected", x$transcripts_detected[i], "Numero de transcritos detectados anomalamente bajo.")
+      add("warning", "transcripts_detected", x$transcripts_detected[i], "Número de transcritos detectados anomalamente bajo.")
     if (is.finite(med_processed) && med_processed > 0 && !is.na(x$fragments_processed[i]) &&
         x$fragments_processed[i] < med_processed * thresholds$low_reads_fraction_warning)
-      add("warning", "fragments_processed", round(x$fragments_processed[i]), "Bajo numero de fragmentos procesados.")
+      add("warning", "fragments_processed", round(x$fragments_processed[i]), "Bajo número de fragmentos procesados.")
     if (!is.na(x$near_zero_tpm_fraction[i]) &&
         x$near_zero_tpm_fraction[i] > thresholds$near_zero_tpm_fraction_warning)
       add("info", "near_zero_tpm_fraction", round(x$near_zero_tpm_fraction[i], 3), "Exceso de transcritos con TPM cercano a cero.")
@@ -524,8 +524,8 @@ pseudo_qc_alerts <- function(out_dir, thresholds = qc_thresholds) {
     metric_name <- if (use_det) "median_tpm_detected" else "median_tpm"
     if (is.finite(mad_tpm) && mad_tpm > 0 && !is.na(tpm_i) &&
         abs(tpm_i - med_tpm) / mad_tpm > thresholds$tpm_distribution_shift_warning)
-      add("warning", metric_name, round(tpm_i, 3), "Distribucion de TPM muy diferente al resto.")
+      add("warning", metric_name, round(tpm_i, 3), "Distribución de TPM muy diferente al resto.")
   }
-  if (!length(alerts)) return(message_df("No se detectaron alertas automaticas con los umbrales actuales."))
+  if (!length(alerts)) return(message_df("No se detectaron alertas automáticas con los umbrales actuales."))
   do.call(rbind, alerts)
 }

@@ -1,9 +1,9 @@
 #' server_tab_deg_diag.R
-#' Diagnosticos post-ajuste de la pestana 4 (item 10 y B3c).
+#' Diagnósticos post-ajuste de la pestana 4 (item 10 y B3c).
 #'
 #' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
-#' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
-#' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
+#' fichero original llego a 1.608 líneas en una única función. NO se usa
+#' moduleServer(): igual que el resto de la aplicación, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
 #'
 #' `ctx` es el contexto compartido del modulo (un environment, como `state`, para
@@ -11,7 +11,7 @@
 #' y contiene los reactivos que varias partes necesitan.
 
 server_tab_deg_diag <- function(input, output, session, state, ctx) {
-  # ── Diagnosticos post-ajuste ───────────────────────────────────────────────
+  # ── Diagnósticos post-ajuste ───────────────────────────────────────────────
 
   deg_na_breakdown <- reactive({
     padj_na_breakdown(state$deg_rv$results)
@@ -25,10 +25,10 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
         tags$b("Genes sin p-valor ajustado: "), txt,
         if (isTRUE(b$n_outlier > 0)) tags$span(
           " Los marcados como outlier tienen un valor extremo en alguna muestra:",
-          " mirar la pestana de diagnosticos antes de descartarlos.") else NULL)
+          " mirar la pestana de diagnósticos antes de descartarlos.") else NULL)
   })
 
-  # p-valores usados en los diagnosticos. Por defecto solo los genes que pasan el
+  # p-valores usados en los diagnósticos. Por defecto solo los genes que pasan el
   # filtrado independiente, que es el conjunto sobre el que se controla la FDR;
   # incluir los de conteo muy bajo distorsiona la forma del histograma.
   diag_pvalues <- reactive({
@@ -63,7 +63,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
     div(class = paste("alert py-2 px-3 mb-2", cls),
         tags$b(d$label), tags$div(class = "small mt-1", d$detail),
         tags$div(class = "small mt-1",
-                 tags$b("pi0 (proporcion de nulas ciertas): "), pi_txt,
+                 tags$b("pi0 (proporción de nulas ciertas): "), pi_txt,
                  tags$span(class = "text-muted",
                            paste0("  ·  ", fmt_int(length(p)), " p-valores"))))
   })
@@ -81,7 +81,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
                           hoverinfo = "text", name = "observado") |>
       plotly::layout(
         xaxis = list(title = "p-valor", range = c(0, 1)),
-        yaxis = list(title = "numero de genes"),
+        yaxis = list(title = "número de genes"),
         showlegend = !is.na(floor_h),
         bargap = 0.02
       )
@@ -97,7 +97,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
 
   output$deg_pvalue_hist <- plotly::renderPlotly({
     p <- diag_pvalues()
-    if (is.null(p) || !length(p)) return(plotly_message("Lanza primero un analisis DEG."))
+    if (is.null(p) || !length(p)) return(plotly_message("Lanza primero un análisis DEG."))
     make_pvalue_hist(p, diag_pi0()$pi0 %||% NA_real_)
   })
 
@@ -115,12 +115,12 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
   make_disp_plot <- function(dd) {
     if (is.null(dd) || !nrow(dd)) {
       return(plotly_message(paste("Las dispersiones solo las produce DESeq2.",
-                                  "Relanza el analisis con ese motor.")))
+                                  "Relanza el análisis con ese motor.")))
     }
     d <- dd[!is.na(dd$baseMean) & dd$baseMean > 0, , drop = FALSE]
     plotly::plot_ly() |>
       plotly::add_markers(data = d, x = ~baseMean, y = ~dispGeneEst,
-                          name = "estimacion por gen",
+                          name = "estimación por gen",
                           marker = list(size = 4, opacity = 0.35, color = "#C0C0C0"),
                           hoverinfo = "skip") |>
       plotly::add_markers(data = d, x = ~baseMean, y = ~dispersion,
@@ -173,11 +173,11 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
     make_rle_plot(state$deg_rv$counts, state$deg_rv$meta)
   })
 
-  # ── Distribucion de la expresion (densidad y cajas) ────────────────────────
-  # El selector de escala no es cosmetico: ver la misma matriz antes y despues de
-  # la normalizacion por composicion es lo que permite comprobar que ha hecho
+  # ── Distribución de la expresión (densidad y cajas) ────────────────────────
+  # El selector de escala no es cosmetico: ver la misma matriz antes y después de
+  # la normalización por composicion es lo que permite comprobar que ha hecho
   # algo, en lugar de darlo por supuesto.
-  # Sin req(): esta reactiva tambien se lee desde los downloadHandler, y alli un
+  # Sin req(): esta reactiva también se lee desde los downloadHandler, y allí un
   # req() no muestra el mensaje de "sin datos", aborta la descarga en silencio.
   # Devolver NULL deja que las funciones de dibujo expliquen que falta.
   expr_dist <- reactive({
@@ -195,7 +195,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
   }
 
   make_expr_density_plot <- function(dist, meta = NULL, group_col = NULL) {
-    if (is.null(dist)) return(plotly_message("Sin conteos para la distribucion."))
+    if (is.null(dist)) return(plotly_message("Sin conteos para la distribución."))
     df <- distribution_add_group(dist$density, meta, group_col)
     cols <- grupo_colores(df$grupo)
     p <- plotly::plot_ly()
@@ -222,7 +222,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
   }
 
   make_expr_box_plot <- function(dist, meta = NULL, group_col = NULL) {
-    if (is.null(dist)) return(plotly_message("Sin conteos para la distribucion."))
+    if (is.null(dist)) return(plotly_message("Sin conteos para la distribución."))
     # Las cajas se dibujan a partir de los cuantiles ya calculados y no de la
     # matriz entera: con decenas de miles de genes por muestra, mandar los puntos
     # al navegador cuelga la pestana sin añadir nada legible.
@@ -279,14 +279,14 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
     div(class = "alert alert-warning py-2 px-3 mb-2",
         icon("triangle-exclamation"),
         tags$b(paste0(" La muestra '", ck$dominant, "' concentra los outliers. ")),
-        paste0("Con ", nrow(ck$table), " muestras, lo esperado por azar seria ",
+        paste0("Con ", nrow(ck$table), " muestras, lo esperado por azar sería ",
                round(100 * ck$expected_frac, 1), " % cada una."))
   })
 
   make_cooks_plot <- function(ck) {
     if (is.null(ck) || is.null(ck$table)) {
       return(plotly_message(paste("Las distancias de Cook solo las produce DESeq2.",
-                                  "Relanza el analisis con ese motor.")))
+                                  "Relanza el análisis con ese motor.")))
     }
     df <- ck$table
     df$pct <- 100 * df$frac
@@ -295,13 +295,13 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
                       !is.na(ck$dominant) & df$sample_id == ck$dominant,
                       "#D9534F", "#7BBF9A")),
                     text = ~paste0("Muestra: ", sample_id,
-                                   "<br>genes donde es el maximo: ", n_max,
+                                   "<br>genes donde es el máximo: ", n_max,
                                    " (", round(pct, 1), " %)",
-                                   "<br>Cook maximo: ", signif(max_cooks, 3)),
+                                   "<br>Cook máximo: ", signif(max_cooks, 3)),
                     hoverinfo = "text") |>
       plotly::layout(
         xaxis = list(title = ""),
-        yaxis = list(title = "% de genes donde la muestra es el maximo de Cook"),
+        yaxis = list(title = "% de genes donde la muestra es el máximo de Cook"),
         shapes = list(list(type = "line", xref = "paper", x0 = 0, x1 = 1,
                            y0 = 100 * ck$expected_frac, y1 = 100 * ck$expected_frac,
                            line = list(dash = "dot", color = "#60756A")))
@@ -330,9 +330,9 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
   output$download_deg_cooks_plot <- plotly_download(
     "deg_cooks", function() make_cooks_plot(state$deg_rv$cooks))
 
-  # ── Diagnostico de sesgo de longitud (B3c) ─────────────────────────────────
-  # Las longitudes salen de la anotacion de la ejecucion. Con una matriz subida no
-  # hay anotacion asociada, asi que el diagnostico no es calculable y se dice.
+  # ── Diagnóstico de sesgo de longitud (B3c) ─────────────────────────────────
+  # Las longitudes salen de la anotación de la ejecución. Con una matriz subida no
+  # hay anotación asociada, así que el diagnóstico no es calculable y se dice.
   deg_gene_lengths <- reactive({
     src <- input$deg_source %||% "current"
     af <- switch(
@@ -342,10 +342,10 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
         p <- state$run_params_rv()
         p$annotation_file %||% annotation_file_for_run(p$output_dir %||% "")
       },
-      # Una matriz subida no tiene anotacion asociada. Antes caia en la rama de
-      # la ejecucion actual y usaba SU anotacion, que no tiene por que
+      # Una matriz subida no tiene anotación asociada. Antes caia en la rama de
+      # la ejecución actual y usaba SU anotación, que no tiene por qué
       # corresponder a los genes de la matriz: si los identificadores
-      # solapaban parcialmente, el diagnostico de sesgo de longitud salia
+      # solapaban parcialmente, el diagnóstico de sesgo de longitud salía
       # calculado sobre longitudes de otro organismo.
       NULL
     )
@@ -363,14 +363,14 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
 
   output$deg_lenbias_verdict <- renderUI({
     if (is.null(state$deg_rv$results)) {
-      return(div(class = "small text-muted", "Lanza primero un analisis DEG."))
+      return(div(class = "small text-muted", "Lanza primero un análisis DEG."))
     }
     if (is.null(deg_gene_lengths())) {
       return(div(class = "alert alert-secondary py-2 px-2 small",
                  icon("circle-info"),
                  paste(" No se puede evaluar: hacen falta las longitudes de gen, que",
-                       "vienen del fichero de anotacion de la ejecucion. Con una matriz",
-                       "de conteos subida no hay anotacion asociada.")))
+                       "vienen del fichero de anotación de la ejecución. Con una matriz",
+                       "de conteos subida no hay anotación asociada.")))
     }
     lb <- deg_length_bias()
     if (is.null(lb) || is.null(lb$verdict)) {
@@ -389,7 +389,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
   make_deg_lenbias_plot <- function() {
     lb <- tryCatch(deg_length_bias(), error = function(e) NULL)
     if (is.null(lb) || is.null(lb$table)) {
-      return(plotly_message("Sin diagnostico de sesgo de longitud."))
+      return(plotly_message("Sin diagnóstico de sesgo de longitud."))
     }
     df <- lb$table
     df$pct <- 100 * df$prop_de
@@ -407,14 +407,14 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
         xaxis = list(title = "longitud del gen (pb, mediana del bin)", type = "log"),
         yaxis = list(title = "% de genes diferenciales"),
         shapes = list(
-          # Referencia: la proporcion global. Una curva plana sobre esta linea
+          # Referencia: la proporción global. Una curva plana sobre esta línea
           # significa que la longitud no influye.
           list(type = "line", xref = "paper", x0 = 0, x1 = 1,
                y0 = overall, y1 = overall,
                line = list(dash = "dash", color = "#F4A6A6"))),
         annotations = list(
           list(x = 1, y = overall, xref = "paper", yanchor = "bottom",
-               text = paste0("proporcion global: ", round(overall, 1), " %"),
+               text = paste0("proporción global: ", round(overall, 1), " %"),
                showarrow = FALSE, xanchor = "right", font = list(size = 10)))
       )
   }
@@ -423,8 +423,8 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
   output$download_deg_lenbias_plot <- plotly_download(
     "deg_sesgo_longitud", function() make_deg_lenbias_plot())
 
-  # El informe reproducible necesita estos tres diagnosticos. Se publican en el
-  # contexto en lugar de duplicar su calculo.
+  # El informe reproducible necesita estos tres diagnósticos. Se publican en el
+  # contexto en lugar de duplicar su cálculo.
   ctx$diag_pvalues      <- diag_pvalues
   ctx$diag_pi0          <- diag_pi0
   ctx$deg_na_breakdown  <- deg_na_breakdown

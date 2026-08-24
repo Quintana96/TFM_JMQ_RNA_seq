@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Verificacion de la imagen.
+# Verificación de la imagen.
 #
-# Una imagen no es valida por construir sin error. Es valida si dentro de ella
+# Una imagen no es válida por construir sin error. Es válida si dentro de ella
 # se cumple lo mismo que se cumplia en el entorno de desarrollo. Esto comprueba
 # las tres cosas, en orden de coste creciente:
 #
-#   1. Que las herramientas del pipeline estan y responden.
-#   2. Que los paquetes de R que la aplicacion da por presentes se cargan.
-#   3. Que la bateria de tests pasa entera DENTRO del contenedor.
+#   1. Que las herramientas del pipeline están y responden.
+#   2. Que los paquetes de R que la aplicación da por presentes se cargan.
+#   3. Que la batería de tests pasa entera DENTRO del contenedor.
 #
-# El paso 3 es el que importa: es la misma bateria que valida el codigo en
+# El paso 3 es el que importa: es la misma batería que válida el código en
 # desarrollo, ejecutada sobre el entorno empaquetado.
 set -Eeuo pipefail
 
@@ -42,13 +42,13 @@ Rscript -e '
   cat("  OK     ", length(req), "paquetes requeridos disponibles\n")
 ' || fallos=$((fallos + 1))
 
-titulo "3. Bateria de tests"
+titulo "3. Batería de tests"
 Rscript tests/testthat.R || fallos=$((fallos + 1))
 
 titulo "Resultado"
 if [ "$fallos" -eq 0 ]; then
   printf 'Imagen verificada: los tres bloques han pasado.\n'
 else
-  printf 'Verificacion fallida: %d bloque(s) con errores.\n' "$fallos" >&2
+  printf 'Verificación fallida: %d bloque(s) con errores.\n' "$fallos" >&2
 fi
 exit "$fallos"

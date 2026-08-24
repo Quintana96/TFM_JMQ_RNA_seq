@@ -1,26 +1,26 @@
 #' ui_tab_config.R
-#' Contenido del nav_panel "1 . Configuracion".
+#' Contenido del nav_panel "1 . Configuración".
 #'
-#' Reorganizacion respecto de la version anterior (un grid de seis a ocho
+#' Reorganizacion respecto de la versión anterior (un grid de seis a ocho
 #' tarjetas de igual peso):
 #'
 #'   - Se separa lo que el usuario RELLENA (columna izquierda) de lo que la
-#'     aplicacion le RESPONDE (columna derecha: checklist, errores, muestras).
+#'     aplicación le RESPONDE (columna derecha: checklist, errores, muestras).
 #'     Antes ambas cosas se alternaban en el mismo grid, de modo que el
 #'     checklist podia quedar a dos tarjetas de distancia del campo que lo
 #'     dejaba en rojo.
 #'   - La tarjeta "Resumen" se ha eliminado: repetia `textOutput("input_dir_path")`
 #'     y `textOutput("output_base_path")`, que ya estaban en "Rutas y archivos".
-#'     Shiny vincula cada valor de salida a UN solo elemento del DOM, asi que la
+#'     Shiny vincula cada valor de salida a UN solo elemento del DOM, así que la
 #'     segunda copia se quedaba permanentemente en blanco; en la pantalla se veia
-#'     un "Directorio de salida automatico" vacio con la ruta correcta a dos
-#'     tarjetas de distancia. Cada salida aparece ahora una unica vez.
-#'   - `uiOutput("validation_ui")` estaba definido en el server pero no existia
+#'     un "Directorio de salida automático" vacio con la ruta correcta a dos
+#'     tarjetas de distancia. Cada salida aparece ahora una única vez.
+#'   - `uiOutput("validation_ui")` estaba definido en el server pero no existía
 #'     en ninguna parte de la interfaz: la lista de errores concretos no se
 #'     mostraba nunca y el boton de continuar se quedaba gris sin explicar por
 #'     que. Ahora acompaña al checklist.
 #'   - Las opciones avanzadas y la calculadora de potencia bajan a un acordeon
-#'     plegado. Son utiles, pero no forman parte de configurar una ejecucion, y
+#'     plegado. Son útiles, pero no forman parte de configurar una ejecución, y
 #'     ocupaban dos terceras partes del alto de la pestana.
 
 #' Bloque de rutas efectivas (cada salida aparece una sola vez en toda la app).
@@ -35,7 +35,7 @@ ui_config_paths <- function() {
   )
 }
 
-#' Acordeon con lo que no forma parte de configurar la ejecucion en curso.
+#' Acordeon con lo que no forma parte de configurar la ejecución en curso.
 ui_config_extras <- function() {
   paneles <- list(
     accordion_panel(
@@ -43,10 +43,10 @@ ui_config_extras <- function() {
       icon = icon("sliders"),
       value = "adv",
       tags$p(class = "small text-muted",
-             "Orientacion de la libreria, hilos y replicas inferenciales."),
+             "Orientación de la libreria, hilos y replicas inferenciales."),
       layout_columns(
         col_widths = c(4, 4, 4),
-        selectInput("adv_strandedness", "Orientacion de la libreria",
+        selectInput("adv_strandedness", "Orientación de la libreria",
                     choices = c("Inferir de los datos" = "auto",
                                 "Sin orientar (-s 0)" = "0",
                                 "Directa (-s 1)" = "1",
@@ -63,34 +63,34 @@ ui_config_extras <- function() {
                        "lecturas antisentido y degrada la especificidad, sobre",
                        "todo en genomas densos como los procariotas. Las replicas",
                        "inferenciales (salmon/kallisto) cuantifican la incertidumbre",
-                       "de asignacion de lecturas; 0 las desactiva."))
+                       "de asignación de lecturas; 0 las desactiva."))
     )
   )
 
-  # La calculadora de potencia va en configuracion porque la decision que
-  # informa (cuantas replicas) se toma ANTES de secuenciar, no despues.
+  # La calculadora de potencia va en configuración porque la decisión que
+  # informa (cuantas replicas) se toma ANTES de secuenciar, no después.
   if (isTRUE(HAS_RNASEQPOWER)) {
     paneles <- c(paneles, list(accordion_panel(
       "Potencia y tamaño muestral",
       icon = icon("chart-line"),
       value = "power",
       tags$p(class = "small text-muted mb-2",
-             paste("El tamaño muestral es el determinante mas fuerte de la",
+             paste("El tamaño muestral es el determinante más fuerte de la",
                    "calidad del resultado. Esta calculadora orienta, no",
                    "garantiza: ninguna herramienta es fiable cuando se exigen",
-                   "efectos pequeños y potencias altas, porque los parametros",
+                   "efectos pequeños y potencias altas, porque los parámetros",
                    "no se pueden fijar bien desde datos piloto limitados.")),
       layout_columns(
         col_widths = c(3, 3, 3, 3),
         numericInput("pw_n", "Replicas por grupo", value = 3, min = 2, max = 100, step = 1),
         numericInput("pw_effect", "Fold-change a detectar", value = 2, min = 1.1,
                      max = 10, step = 0.1),
-        numericInput("pw_cv", "CV biologico", value = 0.4, min = 0.05, max = 1.5,
+        numericInput("pw_cv", "CV biológico", value = 0.4, min = 0.05, max = 1.5,
                      step = 0.05),
         numericInput("pw_depth", "Profundidad media por gen", value = 20, min = 1,
                      max = 1000, step = 5)
       ),
-      # El CV y la profundidad son justo los parametros que quien usa la app no
+      # El CV y la profundidad son justo los parámetros que quien usa la app no
       # conoce, y de los que depende todo el resultado. Si hay una matriz
       # cargada se pueden MEDIR en lugar de adivinarse.
       tags$div(class = "d-flex align-items-center gap-2 mb-2 flex-wrap",
@@ -100,8 +100,8 @@ ui_config_extras <- function() {
         tags$small(class = "text-muted", uiOutput("pw_estimate_note", inline = TRUE))
       ),
       tags$small(class = "text-muted d-block mb-2",
-                 paste("CV tipico: 0,1 en lineas celulares, 0,4 en muestras",
-                       "humanas. La profundidad es el numero medio de conteos por",
+                 paste("CV típico: 0,1 en líneas celulares, 0,4 en muestras",
+                       "humanas. La profundidad es el número medio de conteos por",
                        "gen, no el total de lecturas.")),
       uiOutput("pw_verdict"),
       plotly::plotlyOutput("pw_curve", height = "300px")
@@ -110,7 +110,7 @@ ui_config_extras <- function() {
 
   tagList(
     section_title("Herramientas de apoyo",
-                  "No hacen falta para lanzar el analisis; se despliegan cuando se necesitan."),
+                  "No hacen falta para lanzar el análisis; se despliegan cuando se necesitan."),
     do.call(accordion, c(paneles, list(open = FALSE, multiple = TRUE)))
   )
 }
@@ -125,11 +125,11 @@ ui_tab_config <- function() {
       radioButtons(
         "start_mode", label = NULL,
         choices  = c("Ejecutar workflow completo" = "workflow",
-                     "Analisis a partir de matriz de conteos" = "load"),
+                     "Análisis a partir de matriz de conteos" = "load"),
         selected = "workflow", inline = TRUE
       ),
       # En modo "matriz" no hay pipeline que configurar. Antes se seguian
-      # mostrando las tarjetas de FASTQ, genoma y anotacion junto a un checklist
+      # mostrando las tarjetas de FASTQ, genoma y anotación junto a un checklist
       # en rojo que exigia rellenarlas: requisitos que en ese modo no aplican.
       conditionalPanel(
         condition = "input.start_mode === 'load'",
@@ -157,7 +157,7 @@ ui_tab_config <- function() {
       )
     ),
 
-    # ── Configuracion del pipeline (solo en modo workflow) ──────────────────
+    # ── Configuración del pipeline (solo en modo workflow) ──────────────────
     conditionalPanel(
       condition = "input.start_mode === 'workflow'",
 
@@ -167,7 +167,7 @@ ui_tab_config <- function() {
         # Columna izquierda: lo que el usuario rellena
         tags$div(
           card(
-            card_header("Tipo de analisis"),
+            card_header("Tipo de análisis"),
             layout_columns(
               col_widths = c(6, 6),
               radioButtons(
@@ -206,11 +206,11 @@ ui_tab_config <- function() {
 
           card(
             card_header("Rutas y archivos"),
-            # Dos caminos hacia la misma ruta. El boton abre el dialogo del
+            # Dos caminos hacía la misma ruta. El boton abre el dialogo del
             # sistema —Finder, Explorador o el del escritorio— que es donde la
             # gente sabe moverse; el campo de texto permite pegarla directamente,
-            # que es mas rapido cuando ya se conoce. El campo muestra ademas la
-            # seleccion actual, asi que no hace falta una etiqueta aparte.
+            # que es más rápido cuando ya se conoce. El campo muestra además la
+            # selección actual, así que no hace falta una etiqueta aparte.
             tags$label(class = "control-label", "Directorio de FASTQs"),
             div(class = "d-flex gap-2 align-items-start mb-1",
                 uiOutput("input_dir_btn_ui", inline = TRUE),
@@ -223,17 +223,17 @@ ui_tab_config <- function() {
             conditionalPanel(
               "input.analysis_type === 'alignment'",
               fileInput("annotation_file_upload",
-                        "Archivo de anotacion GFF/GTF (requerido)",
+                        "Archivo de anotación GFF/GTF (requerido)",
                         accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE,
                         width = "100%"),
-              # Aviso si la anotacion tiene genes con varios exones: bowtie2 no es
-              # splice-aware y perderia las uniones exon-exon.
+              # Aviso si la anotación tiene genes con varios exones: bowtie2 no es
+              # splice-aware y perdería las uniones exon-exon.
               uiOutput("splice_warning_ui")
             ),
             conditionalPanel(
               "input.analysis_type === 'pseudo'",
               fileInput("annotation_file_pseudo_upload",
-                        "Archivo de anotacion GFF/GTF (opcional)",
+                        "Archivo de anotación GFF/GTF (opcional)",
                         accept = c(".gff", ".gtf", ".gff3", ".gz"), multiple = FALSE,
                         width = "100%"),
               tags$small(class = "text-muted", icon("circle-info"),
@@ -244,10 +244,10 @@ ui_tab_config <- function() {
           )
         ),
 
-        # Columna derecha: lo que la aplicacion responde
+        # Columna derecha: lo que la aplicación responde
         tags$div(
           card(
-            card_header("Estado de la configuracion"),
+            card_header("Estado de la configuración"),
             uiOutput("checklist_ui"),
             tags$hr(class = "my-2"),
             uiOutput("validation_ui"),
@@ -267,7 +267,7 @@ ui_tab_config <- function() {
     ),
 
     # Fuera del conditionalPanel: la calculadora de potencia sirve igual en modo
-    # matriz, donde ademas es cuando puede estimar el CV y la profundidad de los
+    # matriz, donde además es cuando puede estimar el CV y la profundidad de los
     # datos reales en lugar de pedirlos a ojo.
     ui_config_extras()
   )

@@ -1,9 +1,9 @@
-# Metricas de coste de la ejecucion (tiempo y memoria).
+# Metricas de coste de la ejecución (tiempo y memoria).
 #
 # El pico de memoria es el dato que responde a "cuanta RAM necesito"; ni el
-# promedio ni el minimo dicen nada util. Estos tests fijan el formateo y la
-# lectura, que es donde un cambio silencioso pasa desapercibido: un numero mal
-# escalado sigue siendo un numero y nadie lo nota.
+# promedio ni el mínimo dicen nada útil. Estos tests fijan el formateo y la
+# lectura, que es donde un cambio silencioso pasa desapercibido: un número mal
+# escalado sigue siendo un número y nadie lo nota.
 
 test_that("las duraciones se escriben en la unidad que toca", {
   expect_equal(fmt_duracion(0), "0s")
@@ -14,11 +14,11 @@ test_that("las duraciones se escriben en la unidad que toca", {
   # Ausencia y basura dan un guion, no un error ni un cero engañoso.
   expect_equal(fmt_duracion(NA), "—")
   expect_equal(fmt_duracion(NULL), "—")
-  expect_equal(fmt_duracion("no soy un numero"), "—")
+  expect_equal(fmt_duracion("no soy un número"), "—")
   expect_equal(fmt_duracion(-5), "—")
 })
 
-test_that("la memoria pasa a GB cuando el numero en MB deja de leerse", {
+test_that("la memoria pasa a GB cuando el número en MB deja de leerse", {
   expect_equal(fmt_memoria(90), "90 MB")
   expect_equal(fmt_memoria(1023), "1023 MB")
   expect_equal(fmt_memoria(1024), "1.0 GB")
@@ -42,11 +42,11 @@ test_that("read_run_metrics devuelve NULL sin fichero y la tabla cuando lo hay",
   expect_equal(m$pico_rss_mb[m$paso == "TOTAL"], 2444)
 })
 
-test_that("el coste llega al resumen de la ejecucion, tambien si fallo", {
+test_that("el coste llega al resumen de la ejecución, también si fallo", {
   d <- withr::local_tempdir()
   # exit_status.tsv es lo que el workflow escribe en su trap EXIT: lleva el
-  # coste tambien cuando la ejecucion termino mal, que es cuando hace falta
-  # para diagnosticar por que.
+  # coste también cuando la ejecución término mal, que es cuando hace falta
+  # para diagnosticar por qué.
   writeLines(c("exit_code\t1", "status\terror",
                "finished_at\t2026-08-24 13:32:00",
                "duration_seconds\t290", "peak_rss_mb\t2444"),
@@ -57,14 +57,14 @@ test_that("el coste llega al resumen de la ejecucion, tambien si fallo", {
   expect_equal(fmt_memoria(st$peak_rss_mb), "2.4 GB")
 })
 
-test_that("una ejecucion antigua sin metricas no rompe nada", {
+test_that("una ejecución antigua sin metricas no rompe nada", {
   d <- withr::local_tempdir()
   writeLines(c("exit_code\t0", "status\tsuccess",
                "finished_at\t2026-08-01 10:00:00"),
              file.path(d, "exit_status.tsv"))
   st <- read_exit_status(d)
   # Las claves nuevas no existen: el formateador tiene que dar un guion y no
-  # un error, o la pestana de resultados se cae con cualquier ejecucion
+  # un error, o la pestana de resultados se cae con cualquier ejecución
   # anterior a este cambio.
   expect_equal(fmt_duracion(st$duration_seconds), "—")
   expect_equal(fmt_memoria(st$peak_rss_mb), "—")

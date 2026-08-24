@@ -1,6 +1,6 @@
 # Despliegue en contenedor
 
-## Por que
+## Por qué
 
 La aplicación depende a la vez de R con una docena de paquetes de CRAN y
 Bioconductor, y de ocho herramientas de línea de comandos externas.

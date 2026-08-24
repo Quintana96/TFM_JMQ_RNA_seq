@@ -1,29 +1,29 @@
 #' server_tab_deg.R
-#' Nucleo del modulo de la pestana 4 (Expresion diferencial).
+#' Nucleo del modulo de la pestana 4 (Expresión diferencial).
 #'
 #' Responsabilidades de ESTE fichero:
 #'   - carga de la matriz de conteos desde las tres fuentes;
 #'   - editor inline del samplesheet y los selectores que dependen de el;
-#'   - validacion en vivo de la formula de diseño;
+#'   - validación en vivo de la formula de diseño;
 #'   - el observer que ajusta el modelo, y el banner y el estado que lo resumen;
-#'   - `deg_filtered`, la seleccion de significativos con los filtros visuales.
+#'   - `deg_filtered`, la selección de significativos con los filtros visuales.
 #'
-#' El resto vive en cuatro ficheros hermanos, porque este llego a 1.608 lineas en
-#' una unica funcion:
+#' El resto vive en cuatro ficheros hermanos, porque este llego a 1.608 líneas en
+#' una única función:
 #'   - server_tab_deg_results.R  tabla, volcano, MA, PCA, heatmaps
-#'   - server_tab_deg_diag.R     diagnosticos post-ajuste y sesgo de longitud
+#'   - server_tab_deg_diag.R     diagnósticos post-ajuste y sesgo de longitud
 #'   - server_tab_deg_enrich.R   enriquecimiento funcional y GSEA
-#'   - server_tab_deg_reports.R  replicabilidad, comparacion, reproducibilidad
+#'   - server_tab_deg_reports.R  replicabilidad, comparación, reproducibilidad
 #'
-#' No se usa moduleServer() a proposito, igual que en el resto de la aplicacion:
-#' obligaria a renombrar todos los IDs Shiny. La comunicacion entre partes es
-#' explicita a traves de `ctx` (ver el final del fichero).
+#' No se usa moduleServer() a propósito, igual que en el resto de la aplicación:
+#' obligaría a renombrar todos los IDs Shiny. La comunicacion entre partes es
+#' explícita a traves de `ctx` (ver el final del fichero).
 
 server_tab_deg <- function(input, output, session, state) {
 
   outputs_dir <- state$outputs_dir
 
-  # ── Contenido del nav_panel "4. Expresion diferencial" ────────────────────
+  # ── Contenido del nav_panel "4. Expresión diferencial" ────────────────────
   output$tab_deg_content <- renderUI({
     ui_tab_deg()
   })
@@ -61,13 +61,13 @@ server_tab_deg <- function(input, output, session, state) {
       return(div(class = "alert alert-info mb-0",
                  icon("folder-open"), " No hay ejecuciones guardadas en outputs/."))
     }
-    selectizeInput("selected_deg_run_dir", "Ejecucion guardada",
+    selectizeInput("selected_deg_run_dir", "Ejecución guardada",
                    choices = choices, selected = unname(choices)[1],
                    options = list(placeholder = "Escribe para buscar..."),
                    width = "100%")
   })
 
-  # ── reactive: matriz de conteos segun fuente ──────────────────────────────
+  # ── reactive: matriz de conteos según fuente ──────────────────────────────
   deg_counts_source <- reactive({
     src <- input$deg_source %||% "current"
     if (identical(src, "current")) {
@@ -75,7 +75,7 @@ server_tab_deg <- function(input, output, session, state) {
       if (!is.null(cm) && length(cm)) {
         m <- as.matrix(cm)
         attr(m, "counts_origin") <- list(
-          tipo = "Ejecucion actual de la sesion",
+          tipo = "Ejecución actual de la sesión",
           ruta = state$run_params_rv()$output_dir %||% "—",
           detalle = paste0("Fuente: ", state$data_rv$source %||% "—"))
         return(m)
@@ -100,7 +100,7 @@ server_tab_deg <- function(input, output, session, state) {
                        annotation_file = annotation_file_for_run(sel)),
                      error = function(e) NULL)
       if (!is.null(cm)) attr(cm, "counts_origin") <- list(
-        tipo = "Ejecucion guardada", ruta = sel,
+        tipo = "Ejecución guardada", ruta = sel,
         detalle = paste0("Cuantificador: ", p$tool %||% "—"))
       return(cm)
     }
@@ -108,8 +108,8 @@ server_tab_deg <- function(input, output, session, state) {
       up <- input$deg_counts_upload
       if (is.null(up) || !nrow(up)) return(NULL)
       cm <- read_uploaded_counts(up$datapath)
-      # El md5 del fichero subido es lo unico que permite despues demostrar que
-      # dos analisis partieron de la misma matriz.
+      # El md5 del fichero subido es lo único que permite después demostrar que
+      # dos análisis partieron de la misma matriz.
       if (!is.null(cm)) attr(cm, "counts_origin") <- list(
         tipo = "Matriz subida", ruta = up$name,
         md5 = unname(tryCatch(tools::md5sum(up$datapath), error = function(e) NA_character_)),
@@ -119,7 +119,7 @@ server_tab_deg <- function(input, output, session, state) {
     NULL
   })
 
-  # ── reactiveValues: edicion inline del samplesheet ────────────────────────
+  # ── reactiveValues: edición inline del samplesheet ────────────────────────
   meta_rv <- reactiveVal(NULL)
 
   # Cuando llega un upload de samplesheet, lo cargamos
@@ -166,7 +166,7 @@ server_tab_deg <- function(input, output, session, state) {
   })
 
   # Aviso de columnas potencialmente identificativas del samplesheet. Avisa; no
-  # borra nada: la decision de que es identificativo depende del estudio.
+  # borra nada: la decisión de que es identificativo depende del estudio.
   output$deg_identifying_cols <- renderUI({
     df <- meta_rv()
     if (is.null(df) || !nrow(df)) return(NULL)
@@ -218,7 +218,7 @@ server_tab_deg <- function(input, output, session, state) {
     }
   })
 
-  # Actualiza selectInputs de condition/batch/ref_level segun columnas del meta
+  # Actualiza selectInputs de condition/batch/ref_level según columnas del meta
   observe({
     df <- meta_rv()
     if (is.null(df) || !nrow(df)) return()
@@ -239,7 +239,7 @@ server_tab_deg <- function(input, output, session, state) {
     if (cc %in% names(df)) {
       lvls <- unique(df[[cc]][!is.na(df[[cc]]) & nzchar(as.character(df[[cc]]))])
       if (length(lvls)) {
-        # Por defecto, el ultimo nivel contra el primero: reproduce lo que hacia
+        # Por defecto, el último nivel contra el primero: reproduce lo que hacía
         # la app antes, pero ahora dicho explicitamente.
         prev_num <- isolate(input$deg_contrast_num)
         prev_den <- isolate(input$deg_contrast_den)
@@ -253,9 +253,9 @@ server_tab_deg <- function(input, output, session, state) {
     }
   })
 
-  # ── Diseño avanzado: validacion en vivo ────────────────────────────────────
-  # Se valida mientras se escribe, para que el error no llegue como un mensaje
-  # criptico de DESeq2 despues de esperar el ajuste.
+  # ── Diseño avanzado: validación en vivo ────────────────────────────────────
+  # Se válida mientras se escribe, para que el error no llegue como un mensaje
+  # criptico de DESeq2 después de esperar el ajuste.
   design_validation <- reactive({
     if (!isTRUE(input$deg_advanced_design)) return(NULL)
     df <- meta_rv()
@@ -279,41 +279,41 @@ server_tab_deg <- function(input, output, session, state) {
     )
   })
 
-  # El selector de coeficiente se rellena con los nombres REALES del ultimo
+  # El selector de coeficiente se rellena con los nombres REALES del último
   # ajuste: DESeq2 y model.matrix nombran las interacciones distinto
-  # ("a.b" vs "a:b"), asi que adivinarlos daria opciones invalidas.
+  # ("a.b" vs "a:b"), así que adivinarlos daría opciones inválidas.
   observe({
     avail <- state$deg_rv$coef_available
     if (is.null(avail) || !length(avail)) {
       updateSelectInput(session, "deg_test_coef",
-                        choices = c("Automatico (contraste de la condicion)" = ""))
+                        choices = c("Automático (contraste de la condición)" = ""))
       return()
     }
     ch <- setdiff(avail, c("Intercept", "(Intercept)"))
     updateSelectInput(
       session, "deg_test_coef",
-      choices = c(c("Automatico (contraste de la condicion)" = ""), ch),
+      choices = c(c("Automático (contraste de la condición)" = ""), ch),
       selected = isolate(input$deg_test_coef) %||% "")
   })
 
-  # ── Ajuste y extraccion: dos operaciones, no una ───────────────────────────
+  # ── Ajuste y extracción: dos operaciones, no una ───────────────────────────
   #
-  # Los parametros de la pestana se reparten en dos grupos que se comportan de
-  # forma distinta, y la separacion no es de comodidad sino de coste medido:
+  # Los parámetros de la pestana se reparten en dos grupos que se comportan de
+  # forma distinta, y la separación no es de comodidad sino de coste medido:
   #
   #   AJUSTE (5,05 s en 20.000 genes x 8 muestras). Motor, diseño, batch,
   #   variables sustitutas, prefiltrado, encogido, fuente de datos. Cambian el
-  #   modelo, asi que exigen relanzar. `deg_fit_signature()` es su huella.
+  #   modelo, así que exigen relanzar. `deg_fit_signature()` es su huella.
   #
-  #   EXTRACCION (0,20 s, un 4 %). FDR objetivo, umbral |log2FC| del test, IHW y
-  #   tratamiento de outliers. Cambian como se LEE el mismo modelo, asi que se
+  #   EXTRACCIÓN (0,20 s, un 4 %). FDR objetivo, umbral |log2FC| del test, IHW y
+  #   tratamiento de outliers. Cambian como se LEE el mismo modelo, así que se
   #   recalculan en vivo sobre el ajuste guardado.
   #
   # Lo que no se hace, y conviene decirlo porque es la alternativa tentadora:
-  # recortar la tabla ya calculada al nuevo umbral. Eso seria un filtro post hoc
-  # y la lista resultante no tendria la FDR que declara.
+  # recortar la tabla ya calculada al nuevo umbral. Eso sería un filtro post hoc
+  # y la lista resultante no tendría la FDR que declara.
 
-  #' Huella de los parametros que definen el AJUSTE.
+  #' Huella de los parámetros que definen el AJUSTE.
   deg_fit_signature <- reactive({
     list(
       metodo     = input$deg_method,
@@ -337,11 +337,11 @@ server_tab_deg <- function(input, output, session, state) {
     )
   })
 
-  #' Parametros de EXTRACCION, con debounce.
+  #' Parámetros de EXTRACCIÓN, con debounce.
   #'
   #' El debounce es lo que hace usable un deslizador: sin el, arrastrar el FDR de
   #' 0,05 a 0,01 dispara una reextraccion por cada valor intermedio. 300 ms es el
-  #' tiempo tras el que el usuario ha soltado y todavia no ha mirado el grafico.
+  #' tiempo tras el que el usuario ha soltado y todavia no ha mirado el gráfico.
   deg_extract_inputs <- reactive({
     lfc <- input$deg_lfc_threshold
     list(
@@ -352,15 +352,15 @@ server_tab_deg <- function(input, output, session, state) {
     )
   }) |> debounce(300)
 
-  #' TRUE si el ajuste guardado ya no corresponde a los parametros de la interfaz.
+  #' TRUE si el ajuste guardado ya no corresponde a los parámetros de la interfaz.
   deg_fit_stale <- reactive({
     if (is.null(state$deg_rv$results) || is.null(state$deg_rv$fit_signature)) return(FALSE)
     !identical(state$deg_rv$fit_signature, deg_fit_signature())
   })
 
   # Reextraccion en vivo. Solo actua si hay un ajuste, si algo ha cambiado de
-  # verdad y si ese ajuste sigue siendo el de los parametros actuales: reextraer
-  # de un ajuste desactualizado produciria una tabla que no corresponde ni al
+  # verdad y si ese ajuste sigue siendo el de los parámetros actuales: reextraer
+  # de un ajuste desactualizado produciría una tabla que no corresponde ni al
   # modelo anterior ni al que pide la interfaz.
   observeEvent(deg_extract_inputs(), ignoreInit = TRUE, {
     fit <- state$deg_rv$fit
@@ -388,9 +388,9 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$extract_params <- p
     state$deg_rv$reextracted_at <- Sys.time()
 
-    # La reextraccion produce una lista de significativos distinta, asi que deja
+    # La reextraccion produce una lista de significativos distinta, así que deja
     # rastro en el registro igual que el ajuste. Sin esto, el registro diria que
-    # el analisis se hizo a FDR 0,05 cuando la figura que acabo en la memoria se
+    # el análisis se hizo a FDR 0,05 cuando la figura que acabo en la memoria se
     # leyo a 0,01, que es justo el "creo que use FDR 0,05" que el registro
     # existe para eliminar.
     append_audit_log("deg_reextract", list(
@@ -409,7 +409,7 @@ server_tab_deg <- function(input, output, session, state) {
     div(class = "alert alert-warning py-2 px-3 mb-2",
         icon("triangle-exclamation"),
         tags$b(" Estos resultados corresponden a otro ajuste. "),
-        "Has cambiado un parametro que define el modelo (motor, diseño, batch, ",
+        "Has cambiado un parámetro que define el modelo (motor, diseño, batch, ",
         "variables sustitutas, prefiltrado o encogido). El FDR y el umbral del ",
         "test se recalculan solos; esto no. Pulsa ",
         tags$b("Lanzar DEG"), " para actualizarlo.")
@@ -420,7 +420,7 @@ server_tab_deg <- function(input, output, session, state) {
     cm <- deg_counts_source()
     df <- meta_rv()
     method <- input$deg_method %||% "DESeq2"
-    # La procedencia y el metodo de resumen a gen se leen AQUI: los atributos se
+    # La procedencia y el método de resumen a gen se leen AQUÍ: los atributos se
     # pierden al alinear y prefiltrar, y el informe los necesita para declarar
     # de donde salio la matriz y si se uso tximport o el respaldo.
     counts_origin_info <- attr(cm, "counts_origin")
@@ -428,24 +428,24 @@ server_tab_deg <- function(input, output, session, state) {
 
     if (is.null(cm) || !ncol(cm)) {
       # Un "no hay matriz" a secas no dice donde mirar. El fallo depende de la
-      # fuente elegida en la tarjeta 1, asi que el mensaje la nombra y explica
+      # fuente elegida en la tarjeta 1, así que el mensaje la nombra y explica
       # que falta exactamente en cada caso.
       src <- input$deg_source %||% "current"
       detalle <- switch(src,
         "current" = paste0(
-          "Fuente: 'Ejecucion actual', pero no hay ninguna cargada en esta ",
-          "sesion. Si has subido la matriz en la pestana 1, pulsa alli ",
-          "'Analisis a partir de matriz de conteos' para cargarla; si vienes de ",
-          "una ejecucion guardada, elige 'Ejecucion guardada' aqui."),
+          "Fuente: 'Ejecución actual', pero no hay ninguna cargada en está ",
+          "sesión. Si has subido la matriz en la pestana 1, pulsa allí ",
+          "'Análisis a partir de matriz de conteos' para cargarla; si vienes de ",
+          "una ejecución guardada, elige 'Ejecución guardada' aquí."),
         "saved" = {
           sel <- input$selected_deg_run_dir %||% ""
           if (!nzchar(sel)) {
-            "Fuente: 'Ejecucion guardada', pero no hay ninguna seleccionada."
+            "Fuente: 'Ejecución guardada', pero no hay ninguna seleccionada."
           } else if (!dir.exists(sel)) {
-            paste0("Fuente: 'Ejecucion guardada', pero el directorio ya no ",
+            paste0("Fuente: 'Ejecución guardada', pero el directorio ya no ",
                    "existe: ", sel)
           } else {
-            paste0("Fuente: 'Ejecucion guardada' (", basename(sel),
+            paste0("Fuente: 'Ejecución guardada' (", basename(sel),
                    "), pero no se ha podido leer su matriz de conteos. ",
                    "Comprueba que existe 04_counts/count_matrix.tsv, o las ",
                    "cuantificaciones en 03_alignments/.")
@@ -466,17 +466,17 @@ server_tab_deg <- function(input, output, session, state) {
 
     # Seudonimizacion opcional de los identificadores de muestra. Se aplica ANTES
     # de alinear y ajustar, para que los alias viajen a todo lo que se genere
-    # despues: graficos, informe, script y ficheros persistidos.
+    # después: gráficos, informe, script y ficheros persistidos.
     pseudo_map <- NULL
     if (isTRUE(input$deg_pseudonymize)) {
       ps <- pseudonymize_dataset(cm, df)
       cm <- ps$counts; df <- ps$meta; pseudo_map <- ps$map
     }
 
-    # Renombrar columna de condicion a 'condition' para el motor
+    # Renombrar columna de condición a 'condition' para el motor
     cond_col <- input$deg_condition_col %||% "condition"
     if (!cond_col %in% names(df)) {
-      showNotification(paste0("La columna '", cond_col, "' no esta en el samplesheet."),
+      showNotification(paste0("La columna '", cond_col, "' no está en el samplesheet."),
                        type = "error"); return()
     }
     df_work <- df
@@ -511,8 +511,8 @@ server_tab_deg <- function(input, output, session, state) {
                        type = "error"); return()
     }
 
-    # Prefiltrado. En modo automatico pasamos el diseño para que filterByExpr
-    # use el tamaño del grupo mas pequeño; en manual, el grupo permite derivar
+    # Prefiltrado. En modo automático pasamos el diseño para que filterByExpr
+    # use el tamaño del grupo más pequeño; en manual, el grupo permite derivar
     # min_samples cuando el usuario lo deja vacio.
     pf_mode <- input$deg_prefilter_mode %||% "auto"
     mc <- input$deg_min_count %||% 10
@@ -536,7 +536,7 @@ server_tab_deg <- function(input, output, session, state) {
     if (is.null(lfc_thr) || !is.finite(lfc_thr) || lfc_thr < 0) lfc_thr <- 0
     do_shrink  <- isTRUE(input$deg_shrink)
 
-    # Formula del diseño: la libre si esta activada, y si no la construye el motor
+    # Formula del diseño: la libre si está activada, y si no la construye el motor
     # a partir de ref_level/batch.
     dsg_formula <- if (isTRUE(input$deg_advanced_design)) {
       input$deg_design_formula %||% "~ condition"
@@ -547,14 +547,14 @@ server_tab_deg <- function(input, output, session, state) {
     } else NULL
 
     # Semillas usadas en este ajuste. Se registran para poder declararlas en el
-    # informe y reproducir el resultado: sin esto, un analisis con variables
-    # sustitutas no es reproducible aunque el resto de parametros coincida.
+    # informe y reproducir el resultado: sin esto, un análisis con variables
+    # sustitutas no es reproducible aunque el resto de parámetros coincida.
     seeds_used <- list()
 
     # Diseño ANTES de añadir las variables sustitutas. Hay que registrarlo
     # aparte de `design_formula`, que acaba incluyendo las SV: el script
     # exportado necesita el modelo base para reestimarlas (`sva::svaseq(cm, mod,
-    # mod0)`), y usar el diseño con SV ahi seria circular. Sin este campo, el
+    # mod0)`), y usar el diseño con SV ahí sería circular. Sin este campo, el
     # script las reestimaba siempre con `~ condition` aunque el ajuste hubiera
     # llevado un batch o una formula libre, de modo que no reproducia nada.
     design_base <- NULL
@@ -580,10 +580,10 @@ server_tab_deg <- function(input, output, session, state) {
       }
       # `num.sv` puede estimar 0: no hay estructura latente que modelar. Antes se
       # forzaba a 1 y se metia una covariable espuria que gastaba un grado de
-      # libertad y podia absorber señal de la condicion. Ahora se sigue sin SV.
+      # libertad y podia absorber señal de la condición. Ahora se sigue sin SV.
       if (is.null(svres$sv) || !svres$n_sv) {
-        showNotification(paste0("sva no ha encontrado variacion latente que ",
-                                "modelar (0 variables sustitutas): el analisis ",
+        showNotification(paste0("sva no ha encontrado variación latente que ",
+                                "modelar (0 variables sustitutas): el análisis ",
                                 "continua con el diseño sin SV."),
                          type = "message", duration = 12)
       } else {
@@ -601,8 +601,8 @@ server_tab_deg <- function(input, output, session, state) {
     }
 
     # Barra de progreso en lugar de un aviso que desaparece a los 4 segundos: el
-    # ajuste tarda decenas de segundos (mas si hay encogido o IHW) y sin feedback
-    # persistente la aplicacion parece colgada.
+    # ajuste tarda decenas de segundos (más si hay encogido o IHW) y sin feedback
+    # persistente la aplicación parece colgada.
     res <- withProgress(message = paste0("Ajustando el modelo (", method, ")"),
                         value = 0.15, {
       setProgress(value = 0.25, detail = "estimando dispersiones y ajustando")
@@ -627,8 +627,8 @@ server_tab_deg <- function(input, output, session, state) {
       return()
     }
 
-    # Cache de transformacion para visualizacion. Aqui SI se corrige la matriz si
-    # el usuario lo ha pedido, porque afecta solo a los graficos: el test ya se
+    # Cache de transformación para visualización. Aquí SI se corrige la matriz si
+    # el usuario lo ha pedido, porque afecta solo a los gráficos: el test ya se
     # ha hecho sobre los conteos sin tocar.
     viz_corr <- input$deg_viz_correction %||% "none"
     counts_for_viz <- cm_f
@@ -638,10 +638,10 @@ server_tab_deg <- function(input, output, session, state) {
       cb <- combat_seq_counts(cm_f, meta_aln[[batch]], meta_aln$condition)
       if (!is.null(cb$counts)) {
         counts_for_viz <- cb$counts
-        viz_note <- paste0("Graficos sobre conteos ajustados con ComBat-seq por '", batch, "'.")
+        viz_note <- paste0("Gráficos sobre conteos ajustados con ComBat-seq por '", batch, "'.")
       } else {
         showNotification(paste0("ComBat-seq fallo: ", cb$error %||% "—",
-                                ". Los graficos usan los conteos sin corregir."),
+                                ". Los gráficos usan los conteos sin corregir."),
                          type = "warning", duration = 12)
       }
     } else if (identical(viz_corr, "combat")) {
@@ -659,7 +659,7 @@ server_tab_deg <- function(input, output, session, state) {
         rb <- remove_batch_for_plots(vst_mat, meta_aln[[batch]], design = dm)
         if (is.null(rb$error)) {
           vst_mat <- rb$mat
-          viz_note <- paste0("Graficos con el efecto de '", batch,
+          viz_note <- paste0("Gráficos con el efecto de '", batch,
                              "' eliminado (removeBatchEffect).")
         } else {
           showNotification(paste0("removeBatchEffect fallo: ", rb$error),
@@ -676,8 +676,8 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$meta          <- meta_aln
     state$deg_rv$method        <- method
     state$deg_rv$results       <- res$table
-    # Ajuste reutilizable y huella de los parametros que lo definen. A partir de
-    # aqui, cambiar el FDR o el umbral del test reextrae; cambiar cualquier cosa
+    # Ajuste reutilizable y huella de los parámetros que lo definen. A partir de
+    # aquí, cambiar el FDR o el umbral del test reextrae; cambiar cualquier cosa
     # de la huella marca el ajuste como desactualizado.
     state$deg_rv$fit            <- res$fit
     state$deg_rv$extract_params <- res$fit$extract
@@ -698,17 +698,17 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$design        <- res$design %||% "~ condition"
     state$deg_rv$design_code   <- res$design_code
     state$deg_rv$design_base   <- design_base
-    # El modo de outliers de Cook CAMBIA el conjunto de genes con padj, asi que
-    # tiene que viajar al informe, al script y al registro: sin el, dos analisis
+    # El modo de outliers de Cook CAMBIA el conjunto de genes con padj, así que
+    # tiene que viajar al informe, al script y al registro: sin el, dos análisis
     # con resultados distintos son indistinguibles en sus artefactos.
     state$deg_rv$outliers      <- input$deg_outliers %||% "na" 
     state$deg_rv$coef          <- res$coef
     state$deg_rv$coef_available <- res$coef_available %||% character(0)
     state$deg_rv$viz_note      <- viz_note
     # Contraste y diseño con los que se ha ajustado REALMENTE. Los selectores de
-    # la interfaz pueden cambiar despues sin relanzar el analisis, asi que el
-    # informe, el script exportado, el bootstrap y la comparacion de metodos
-    # leen de aqui y no de `input$...`.
+    # la interfaz pueden cambiar después sin relanzar el análisis, así que el
+    # informe, el script exportado, el bootstrap y la comparación de métodos
+    # leen de aquí y no de `input$...`.
     state$deg_rv$ref_level      <- ref
     state$deg_rv$contrast_num   <- num
     state$deg_rv$batch          <- batch
@@ -719,7 +719,7 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$pseudonym_map  <- pseudo_map
     state$deg_rv$counts_origin  <- counts_origin_info
     state$deg_rv$counts_source  <- counts_source_info
-    # Directorio de la ejecucion de origen, si lo hay: da acceso a versions.tsv
+    # Directorio de la ejecución de origen, si lo hay: da acceso a versions.tsv
     # y checksums.tsv del pipeline para cerrar el ciclo de trazabilidad.
     state$deg_rv$run_dir <- if (identical(input$deg_source %||% "current", "saved")) {
       input$selected_deg_run_dir %||% NULL
@@ -748,17 +748,17 @@ server_tab_deg <- function(input, output, session, state) {
     if (!is.na(dom)) {
       showNotification(
         paste0("La muestra '", dom, "' concentra la mayoria de los outliers de ",
-               "Cook. Revisala en la pestana de diagnosticos antes de interpretar ",
+               "Cook. Revisala en la pestana de diagnósticos antes de interpretar ",
                "los resultados."),
         type = "warning", duration = 16
       )
     }
 
-    # Persistencia del analisis. Hasta ahora el informe y el script solo
-    # existian si el usuario los descargaba, de modo que una ejecucion del
-    # pipeline dejaba rastro en disco pero los analisis hechos sobre ella no:
-    # no habia forma de saber cuantos se lanzaron ni con que parametros.
-    # Sin diagnosticos a proposito: se persiste en el momento del ajuste, cuando
+    # Persistencia del análisis. Hasta ahora el informe y el script solo
+    # existian si el usuario los descargaba, de modo que una ejecución del
+    # pipeline dejaba rastro en disco pero los análisis hechos sobre ella no:
+    # no había forma de saber cuantos se lanzaron ni con que parámetros.
+    # Sin diagnósticos a propósito: se persiste en el momento del ajuste, cuando
     # todavia no se ha corrido ningun bootstrap. El informe archivado refleja el
     # estado en ese instante; el descargable desde la interfaz si los incluye.
     dest <- persist_deg_analysis(state$deg_rv, base_dir = state$deg_rv$run_dir,
@@ -800,7 +800,7 @@ server_tab_deg <- function(input, output, session, state) {
                        " (", state$deg_rv$padj_method %||% "BH", ")",
                        "  ·  ", test_txt))
     )
-    # Con el contraste elegido explicitamente ya no hay comparacion oculta, asi
+    # Con el contraste elegido explicitamente ya no hay comparación oculta, así
     # que con >2 niveles solo se recuerda que quedan otras por explorar.
     extra <- if (isTRUE(nl > 2)) {
       n_pairs <- nl * (nl - 1) / 2
@@ -809,11 +809,11 @@ server_tab_deg <- function(input, output, session, state) {
                       " contrastes por pares posibles. Cambia numerador o ",
                       "denominador en la tarjeta 3 para testear otro."))
     } else NULL
-    # Si los graficos llevan una correccion que el test no lleva, hay que decirlo
+    # Si los gráficos llevan una corrección que el test no lleva, hay que decirlo
     # justo al lado del contraste, no en una ayuda escondida.
     vn <- state$deg_rv$viz_note
     viz <- if (!is.null(vn)) tags$div(
-      class = "small mt-1", icon("eye"), " ", tags$b("Solo en los graficos: "), vn,
+      class = "small mt-1", icon("eye"), " ", tags$b("Solo en los gráficos: "), vn,
       tags$span(class = "text-muted",
                 " El test se ha hecho sobre los conteos sin corregir.")) else NULL
     div(class = "alert alert-light border py-2 px-3 mb-2",
@@ -821,10 +821,10 @@ server_tab_deg <- function(input, output, session, state) {
   })
 
   output$deg_status_text <- renderText({
-    if (is.null(state$deg_rv$results)) return("Sin ejecucion DEG. Pulsa 'Lanzar DEG'.")
+    if (is.null(state$deg_rv$results)) return("Sin ejecución DEG. Pulsa 'Lanzar DEG'.")
     tab <- state$deg_rv$results
     # La significacion se lee con el FDR del AJUSTE, no con un deslizador: es el
-    # unico nivel para el que el control de FDR calculado es valido.
+    # único nivel para el que el control de FDR calculado es válido.
     fdr_thr <- state$deg_rv$fdr %||% 0.05
     lfc_thr <- state$deg_rv$lfc_threshold %||% 0
     sig <- !is.na(tab$padj) & tab$padj <= fdr_thr
@@ -845,8 +845,8 @@ server_tab_deg <- function(input, output, session, state) {
       "Encogido log2FC: ", state$deg_rv$shrink %||% "ninguno", "\n",
       "Significativos a FDR <= ", fdr_thr, ": ",
       sum(sig, na.rm = TRUE), " (", n_up, " up / ", n_down, " down)\n",
-      "Ultimo ajuste: ", format(state$deg_rv$run_at, "%Y-%m-%d %H:%M:%S"),
-      # Distinguir el ajuste de la ultima lectura importa: si alguien pregunta
+      "Último ajuste: ", format(state$deg_rv$run_at, "%Y-%m-%d %H:%M:%S"),
+      # Distinguir el ajuste de la última lectura importa: si alguien pregunta
       # "cuando calculaste esto", las dos fechas son respuestas distintas y las
       # dos son ciertas.
       if (!is.null(state$deg_rv$reextracted_at))
@@ -856,8 +856,8 @@ server_tab_deg <- function(input, output, session, state) {
     )
   })
 
-  # ── Tabla filtrada (reactivo derivado, rapido) ─────────────────────────────
-  # El FDR viene del ajuste; |log2FC| y baseMean son filtros de visualizacion.
+  # ── Tabla filtrada (reactivo derivado, rápido) ─────────────────────────────
+  # El FDR viene del ajuste; |log2FC| y baseMean son filtros de visualización.
   deg_filtered <- reactive({
     tab <- state$deg_rv$results
     if (is.null(tab)) return(NULL)
@@ -869,12 +869,12 @@ server_tab_deg <- function(input, output, session, state) {
     )
   })
 
-  # Lista de significativos SIN los filtros de visualizacion: unicamente el FDR
+  # Lista de significativos SIN los filtros de visualización: unicamente el FDR
   # con el que se ajusto el modelo.
   #
-  # Es la que debe alimentar el enriquecimiento. Usar la tabla filtrada hacia que
+  # Es la que debe alimentar el enriquecimiento. Usar la tabla filtrada hacía que
   # mover un deslizador declarado "solo visual" cambiase el resultado del ORA, y
-  # ademas recortaba la lista sin recortar el universo, que es exactamente el
+  # además recortaba la lista sin recortar el universo, que es exactamente el
   # sesgo de fondo mal definido que la Fase 1 elimino de las listas DEG.
   deg_significant <- reactive({
     tab <- state$deg_rv$results
@@ -884,7 +884,7 @@ server_tab_deg <- function(input, output, session, state) {
 
   # Universo del enriquecimiento: los genes efectivamente EVALUABLES, es decir
   # los que tienen padj. Los descartados por el filtrado independiente nunca
-  # podrian haber entrado en la lista de significativos, asi que incluirlos en el
+  # podrían haber entrado en la lista de significativos, así que incluirlos en el
   # fondo infla artificialmente el enriquecimiento.
   deg_universe <- reactive({
     tab <- state$deg_rv$results
@@ -900,30 +900,30 @@ server_tab_deg <- function(input, output, session, state) {
 
   # Nota sobre la pestana activa: cada ajuste reconstruye el navset de
   # resultados entero, y Shiny restaura la pestana que estuviera seleccionada
-  # antes de la sustitucion. Es el comportamiento deseable —quien estaba mirando
-  # el volcano y relanza el ajuste sigue en el volcano— asi que NO se fuerza la
+  # antes de la sustitución. Es el comportamiento deseable —quien estaba mirando
+  # el volcano y relanza el ajuste sigue en el volcano— así que NO se fuerza la
   # vuelta a la primera pestana. En un ajuste inicial, donde no hay valor previo
   # que restaurar, queda seleccionada la primera.
 
   # ── Contexto compartido y delegacion en las partes del modulo ──────────────
   #
-  # La pestana 4 llego a 1.608 lineas en una sola funcion, asi que se ha partido
-  # en cuatro ficheros por area de responsabilidad. `ctx` es un environment (no
+  # La pestana 4 llego a 1.608 líneas en una sola función, así que se ha partido
+  # en cuatro ficheros por área de responsabilidad. `ctx` es un environment (no
   # una lista) por el mismo motivo que `state`: en R los environments son
-  # pass-by-reference, de modo que lo que una parte publica en `ctx` lo ven las
-  # demas. Las listas serian copy-on-modify y la publicacion se perderia.
+  # pass-by-reference, de modo que lo que una parte pública en `ctx` lo ven las
+  # demas. Las listas serían copy-on-modify y la publicación se perdería.
   #
-  # Lo que va en `ctx` es exactamente lo que MAS de una parte necesita; todo lo
+  # Lo que va en `ctx` es exactamente lo que MÁS de una parte necesita; todo lo
   # demas queda local a su fichero.
   ctx <- new.env(parent = emptyenv())
-  ctx$meta_rv           <- meta_rv            # lo lee la sugerencia de metodo
+  ctx$meta_rv           <- meta_rv            # lo lee la sugerencia de método
   ctx$deg_counts_source <- deg_counts_source
-  ctx$deg_filtered      <- deg_filtered       # tabla y graficos (filtros visuales)
+  ctx$deg_filtered      <- deg_filtered       # tabla y gráficos (filtros visuales)
   ctx$deg_significant   <- deg_significant    # enriquecimiento: solo el FDR del ajuste
   ctx$deg_universe      <- deg_universe       # fondo del enriquecimiento
 
-  # El orden importa: los diagnosticos publican en `ctx` los reactivos que el
-  # informe reproducible consume, asi que tienen que registrarse antes.
+  # El orden importa: los diagnósticos publican en `ctx` los reactivos que el
+  # informe reproducible consume, así que tienen que registrarse antes.
   server_tab_deg_results(input, output, session, state, ctx)
   server_tab_deg_diag(input, output, session, state, ctx)
   server_tab_deg_enrich(input, output, session, state, ctx)

@@ -13,7 +13,7 @@ test_that("normalized_cpm corrige por composicion y no solo por libreria", {
   libs <- colSums(counts); crudo <- t(t(counts) / libs) * 1e6
 
   expect_false(isTRUE(all.equal(tmm, crudo)))
-  # El CPM crudo desplaza la mediana del grupo afectado; TMM lo corrige, asi que
+  # El CPM crudo desplaza la mediana del grupo afectado; TMM lo corrige, así que
   # la diferencia de medianas entre grupos debe ser MENOR tras TMM.
   med_dif <- function(m) abs(stats::median(m[-(1:5), 1:4]) - stats::median(m[-(1:5), 5:8]))
   expect_lt(med_dif(tmm), med_dif(crudo))
@@ -28,17 +28,17 @@ test_that("los motores parametricos siguen reportando su formula", {
   res <- suppressMessages(run_deg(counts, meta, method = "DESeq2", ref_level = "ctrl",
                                   contrast_num = "trt", fdr = 0.05, shrink = FALSE,
                                   design_formula = "~ lote + condition"))
-  # deparse1 normaliza el espacio tras la virgulilla, asi que se compara el
+  # deparse1 normaliza el espacio tras la virgulilla, así que se compara el
   # contenido y no la cadena exacta.
   expect_match(res$design, "lote \\+ condition")
   expect_null(res$design_warning)
 })
 
-test_that("el bootstrap estratifica por condicion x batch cuando hay batch", {
-  # Diseño exigente: una sola muestra por celda condicion x lote. Sin
+test_that("el bootstrap estratifica por condición x batch cuando hay batch", {
+  # Diseño exigente: una sola muestra por celda condición x lote. Sin
   # estratificar por lote, un remuestreo puede perder un lote entero y ese
-  # ajuste falla; como los fallos solo se cuentan, la estimacion queda apoyada
-  # en los remuestreos faciles y sale optimista.
+  # ajuste falla; como los fallos solo se cuentan, la estimación queda apoyada
+  # en los remuestreos fáciles y sale optimista.
   meta <- data.frame(sample_id = paste0("s", 1:6),
                      condition = rep(c("ctrl", "trt"), each = 3),
                      lote = rep(c("A", "B", "C"), times = 2),
@@ -54,10 +54,10 @@ test_that("el bootstrap estratifica por condicion x batch cuando hay batch", {
   expect_equal(con, 0)
 })
 
-test_that("bootstrap_sample_indices no confunde un indice con un rango", {
+test_that("bootstrap_sample_indices no confunde un índice con un rango", {
   # Trampa clasica de R: sample(pos, 1) con pos de longitud 1 interpreta pos
-  # como 1:pos. Con estratos de tamaño 1 (frecuentes al cruzar condicion x
-  # batch) eso devolveria indices inventados.
+  # como 1:pos. Con estratos de tamaño 1 (frecuentes al cruzar condición x
+  # batch) eso devolveria índices inventados.
   meta <- data.frame(sample_id = paste0("s", 1:4),
                      condition = rep(c("ctrl", "trt"), each = 2),
                      lote = c("A", "B", "A", "B"), stringsAsFactors = FALSE)
@@ -76,7 +76,7 @@ test_that("el RLE se calcula sobre conteos normalizados por composicion", {
   norm <- rle_summary(counts, normalized = TRUE)
   crudo <- rle_summary(counts, normalized = FALSE)
   expect_false(isTRUE(all.equal(norm$med, crudo$med)))
-  # El RLE diagnostica la normalizacion APLICADA: sobre conteos normalizados,
-  # las medianas deben quedar mas cerca de cero que sobre CPM crudo.
+  # El RLE diagnóstica la normalización APLICADA: sobre conteos normalizados,
+  # las medianas deben quedar más cerca de cero que sobre CPM crudo.
   expect_lt(stats::median(abs(norm$med)), stats::median(abs(crudo$med)))
 })
