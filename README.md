@@ -1,6 +1,23 @@
-# SARA — Shiny App for RNA-seq Analysis
+<p align="center">
+  <img src="inst/logo/sara_logo.svg" alt="SARA — Shiny App for RNA-seq Analysis" width="440">
+</p>
 
-Una aplicación web interactiva desarrollada con R Shiny para el análisis integral de datos de RNA-seq. Integra un pipeline bioinformático completo —desde los archivos FASTQ crudos hasta el análisis de expresión diferencial— en una interfaz gráfica accesible.
+<p align="center">
+  <strong>Del FASTQ al gen diferencial, sin escribir código.</strong><br>
+  Interfaz gráfica en R Shiny sobre un pipeline completo de RNA-seq.
+</p>
+
+<p align="center">
+  <img alt="R" src="https://img.shields.io/badge/R-4.5.2-2E7D5B">
+  <img alt="Bioconductor" src="https://img.shields.io/badge/Bioconductor-3.22-2E7D5B">
+  <img alt="Shiny" src="https://img.shields.io/badge/Shiny-1.11-2A6F87">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-disponible-2A6F87">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-569%20pasan-2E7D5B">
+</p>
+
+---
+
+**SARA** (*Shiny App for RNA-seq Analysis*) integra un pipeline bioinformático completo —desde los FASTQ crudos hasta el análisis funcional— en una interfaz gráfica. Ocho herramientas de línea de comandos y una veintena de paquetes de Bioconductor, gobernados desde el navegador, con la trazabilidad que exige un resultado publicable: versiones de cada herramienta, sumas de verificación de las entradas, semillas fijadas y un script de R equivalente que reproduce el análisis fuera de la aplicación.
 
 > Desarrollada como Trabajo de Fin de Máster (TFM) en la Universidad Europea de Madrid.
 
@@ -65,6 +82,7 @@ La aplicación puede operar en dos modos:
   - Multimapping rate.
   - Distribución de reads y genes detectados.
 - Tablas interactivas de conteos (genes × muestras) con opción de descarga en CSV.
+- **Coste de la ejecución**: duración y memoria máxima, por paso y en total. Es lo que permite responder a «¿esto cabe en mi portátil o necesito un servidor?» antes de lanzar un conjunto de datos grande, y no después. La memoria se mide muestreando el árbol de procesos completo una vez por segundo, no con `/usr/bin/time`, cuyas opciones y unidades difieren entre BSD y GNU y harían que el contenedor midiese distinto que el equipo de desarrollo.
 - Tabla de artefactos de salida con acceso a los archivos generados.
 - Resumen MultiQC integrado.
 - Control de calidad específico del método (alineamiento o pseudoalineamiento) como pestaña más del mismo navegador de pestañas; solo se muestra el que corresponde a la herramienta de la ejecución.
@@ -83,6 +101,8 @@ La aplicación puede operar en dos modos:
   - MA plot.
 - Distribución de la expresión por muestra (densidad y diagrama de cajas), en escala normalizada por composición o sin normalizar, coloreada por condición.
 - Análisis de enriquecimiento funcional sobre **GO**, **KEGG**, **Reactome** y conjuntos de genes propios en formato GMT, con ORA y GSEA (GO y Reactome requieren un OrgDb de Bioconductor).
+- Seis representaciones del resultado funcional, además del dotplot y el running score: barras, **red gen-concepto** coloreada por log2FC, **mapa de términos** por genes compartidos, **upset** de solapamientos, **ridge** de la distribución del estadístico y el **diagrama oficial de la ruta KEGG** con los cambios pintados encima. Todas descargables en PNG a 300 ppp.
+- **Traducción de identificadores con la anotación.** La matriz de conteos trae los identificadores con los que se contaron los genes —locus tags, si el pipeline se lanzó con `featureCounts -g locus_tag`— y ninguna base de anotación funcional los conoce. SARA deduce el atributo de origen comparando la lista contra el GTF y traduce la lista *y el universo* antes del test. Sin ese paso, el enriquecimiento mapea el 0 % y devuelve «sin términos», que no se distingue de la ausencia de señal.
 - Descarga de resultados en CSV.
 - Los parámetros viven en una barra lateral plegable (acordeón de seis secciones) y los resultados ocupan el área principal, agrupados en seis pestañas: Genes, Muestras, Diagnósticos, Robustez, Enriquecimiento y Reproducibilidad.
 
@@ -125,7 +145,7 @@ org.EcK12.eg.db   # Anotación GO/KEGG de E. coli
 org.Hs.eg.db      # Anotación humana
 ReactomePA        # Enriquecimiento sobre rutas de Reactome
 reactome.db       # Conjuntos de Reactome (necesario para el running score)
-sva, IHW, qvalue, ashr, rtracklayer, dearseq, fishpond, RNASeqPower
+sva, IHW, qvalue, ashr, rtracklayer, RNASeqPower, ggupset, ggridges, pathview
 ```
 
 ---
