@@ -88,12 +88,12 @@ USER 1000
 # Escucha en todas las interfaces: con el 127.0.0.1 por defecto el servidor
 # arranca pero es inalcanzable desde fuera del contenedor, que es el fallo mas
 # comun al contenerizar una aplicacion Shiny.
-ENV SHINY_HOST=0.0.0.0 \
-    SHINY_PORT=3838
+ENV SARA_HOST=0.0.0.0 \
+    SARA_PORT=3838
 EXPOSE 3838
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD Rscript -e "con <- try(url(paste0('http://127.0.0.1:', Sys.getenv('SHINY_PORT', '3838')), open = 'rb'), silent = TRUE); quit(status = if (inherits(con, 'try-error')) 1 else {close(con); 0})"
+  CMD Rscript -e "con <- try(url(paste0('http://127.0.0.1:', Sys.getenv('SARA_PORT', '3838')), open = 'rb'), silent = TRUE); quit(status = if (inherits(con, 'try-error')) 1 else {close(con); 0})"
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["app"]

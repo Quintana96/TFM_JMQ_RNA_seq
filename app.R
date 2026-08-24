@@ -55,11 +55,26 @@ if (is_direct_rscript) {
   # imprescindibles: con 127.0.0.1 el servidor arranca y queda inalcanzable
   # desde fuera del contenedor, y con un puerto aleatorio no hay nada que
   # publicar. Un puerto mal escrito se ignora en lugar de tumbar el arranque.
-  host <- Sys.getenv("SHINY_HOST", "")
-  port <- suppressWarnings(as.integer(Sys.getenv("SHINY_PORT", "")))
+  # SARA_PORT y no SHINY_PORT: Shiny reserva esa variable para deducir que se
+  # ejecuta bajo Shiny Server, y con ella definida avisa en cada arranque de que
+  # "Shiny Server v0.3.4 or later is required", que no viene a cuento y asusta.
+  # Se siguen leyendo las antiguas como respaldo para no romper despliegues ya
+  # hechos con ellas.
+  primera_no_vacia <- function(...) {
+    for (v in c(...)) if (nzchar(v)) return(v)
+    ""
+  }
+  host <- primera_no_vacia(Sys.getenv("SARA_HOST", ""), Sys.getenv("SHINY_HOST", ""))
+  port <- suppressWarnings(as.integer(
+    primera_no_vacia(Sys.getenv("SARA_PORT", ""), Sys.getenv("SHINY_PORT", ""))))
   if (nzchar(host)) options(shiny.host = host)
   if (!is.na(port) && port > 0) options(shiny.port = port)
-  shiny::runApp(app, launch.browser = interactive())
+  # Con `Rscript app.R` la sesion no es interactiva, de modo que hasta ahora no
+  # se abria nada y habia que ir al navegador a mano. `lanzador_de_interfaz()`
+  # decide que hacer segun la maquina: una ventana de aplicacion sin adornos de
+  # navegador en un escritorio, nada dentro de un contenedor. Se puede forzar
+  # con SARA_UI=app|navegador|ninguno. Ver R/utils_launch.R.
+  shiny::runApp(app, launch.browser = lanzador_de_interfaz())
 } else {
   app
 }

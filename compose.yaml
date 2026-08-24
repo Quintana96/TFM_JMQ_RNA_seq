@@ -22,8 +22,8 @@ services:
       # Resultados fuera de la imagen: sobreviven a `docker rm` y a reconstruir.
       - ./outputs:/app/outputs
     environment:
-      SHINY_HOST: 0.0.0.0
-      SHINY_PORT: 3838
+      SARA_HOST: 0.0.0.0
+      SARA_PORT: 3838
     # El pipeline se paraleliza con --THREADS. Ese valor debe ajustarse a los
     # limites del CONTENEDOR, no a los nucleos de la maquina anfitriona: dentro
     # del contenedor `nproc` sigue viendo los del host y sobresuscribir el limite

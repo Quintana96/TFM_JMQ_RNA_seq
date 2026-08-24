@@ -190,6 +190,24 @@ Rscript app.R
 
 La aplicación se abrirá en el navegador por defecto. Por defecto acepta uploads de hasta **10 GB** para soportar archivos FASTQ grandes.
 
+
+### La interfaz se abre sola
+
+Al arrancar, SARA abre la interfaz en una **ventana de aplicación**: sin barra de direcciones, sin pestañas y sin marcadores. Por dentro sigue siendo el navegador —Chrome, Edge, Brave, Chromium o Vivaldi, el primero que encuentre— en su modo `--app`, pero visualmente no se distingue de una ventana propia.
+
+No es una ventana nativa de verdad. Shiny es una aplicación web y la única forma de tener una ventana nativa real es envolverla en Electron, lo que obliga a empaquetar R entero y convierte el arranque en un proceso de compilación. Para lo que aporta, no compensa.
+
+| Variable | Efecto |
+|---|---|
+| `SARA_UI=app` | Ventana de aplicación, sin adornos **(por defecto)** |
+| `SARA_UI=navegador` | Pestaña normal en el navegador de siempre |
+| `SARA_UI=ninguno` | No abre nada; se entra por la URL |
+| `SARA_UI_SIZE=1280,800` | Tamaño inicial de la ventana |
+
+Dentro de un contenedor, o en una máquina sin entorno gráfico, no se intenta abrir nada: se detecta y se omite, porque ahí no hay ventana posible y el único efecto sería un error en el log de arranque.
+
+Si no hay ningún navegador compatible, se avisa por consola y se abre en el navegador por defecto: mejor una ventana con barra de direcciones que ninguna.
+
 ---
 
 ## Guía de uso

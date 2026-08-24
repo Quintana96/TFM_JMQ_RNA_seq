@@ -31,7 +31,7 @@ case "${1:-app}" in
   app)
     comprobar_entorno
     printf 'SARA en http://%s:%s\n' \
-      "${SHINY_HOST:-0.0.0.0}" "${SHINY_PORT:-3838}"
+      "${SARA_HOST:-0.0.0.0}" "${SARA_PORT:-3838}"
     exec Rscript app.R
     ;;
   verify)
