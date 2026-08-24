@@ -1,7 +1,7 @@
 #' utils_power.R
-#' Calculo de potencia y tamano muestral a priori para RNA-seq.
+#' Calculo de potencia y tamaño muestral a priori para RNA-seq.
 #'
-#' Por que existe (docs/REVISION_ESTADISTICA.md, B8): el tamano muestral es el
+#' Por que existe (docs/REVISION_ESTADISTICA.md, B8): el tamaño muestral es el
 #' determinante mas fuerte de la calidad del resultado y ningun componente de la
 #' app orientaba sobre el. Schurch et al. (2016), con 48 replicas por condicion
 #' en levadura, concluyeron que hacen falta >= 6 replicas por condicion para
@@ -10,8 +10,8 @@
 #' de los genes que se detectan con 42.
 #'
 #' LIMITACION QUE HAY QUE MOSTRAR, no esconder: la revision en Briefings in
-#' Bioinformatics concluye que ninguna herramienta de calculo de tamano muestral
-#' es fiable cuando se exigen efectos pequenos y potencias altas, porque no se
+#' Bioinformatics concluye que ninguna herramienta de calculo de tamaño muestral
+#' es fiable cuando se exigen efectos pequeños y potencias altas, porque no se
 #' pueden fijar parametros razonables a partir de datos piloto limitados. El
 #' resultado es una orientacion, no una garantia.
 
@@ -37,7 +37,7 @@ POWER_REFERENCE_NOTE <- paste(
 #'     la media la infla por unos pocos genes muy expresados.
 #'
 #' @param counts matriz de conteos
-#' @param meta samplesheet con `condition` (para el diseno del BCV)
+#' @param meta samplesheet con `condition` (para el diseño del BCV)
 #' @return list(cv, depth, n_por_grupo, origen) o NULL si no se puede estimar
 estimate_power_params <- function(counts, meta = NULL) {
   if (is.null(counts) || !nrow(counts) || ncol(counts) < 2) return(NULL)
@@ -74,7 +74,7 @@ estimate_power_params <- function(counts, meta = NULL) {
   out
 }
 
-#' Potencia para un tamano muestral dado, via RNASeqPower.
+#' Potencia para un tamaño muestral dado, via RNASeqPower.
 #'
 #' @param n replicas por grupo
 #' @param cv coeficiente de variacion biologico (0,1 lineas celulares; 0,4 humano)
@@ -125,7 +125,7 @@ power_curve <- function(n_range = 2:20, cv = 0.4, effect = 2, depth = 20,
 #'
 #' El calculo puede decir que 3 replicas bastan para un fold-change de 4 y ser
 #' formalmente correcto, mientras la evidencia empirica dice que con 3 replicas
-#' se recupera una fraccion pequena de los DEG reales. Conviene decir las dos
+#' se recupera una fraccion pequeña de los DEG reales. Conviene decir las dos
 #' cosas.
 interpret_power <- function(n, power) {
   if (is.na(power)) {

@@ -9,7 +9,7 @@
 #   SARA_UI=app        ventana de aplicacion, sin adornos (por defecto)
 #   SARA_UI=navegador  pestana normal en el navegador de siempre
 #   SARA_UI=ninguno    no abre nada; se entra a mano por la URL
-#   SARA_UI_SIZE=1280,800   tamano inicial de la ventana
+#   SARA_UI_SIZE=1280,800   tamaño inicial de la ventana
 export PATH="/Users/usuario/miniforge3/envs/rnaseq_ecoli/bin:$PATH"
 export SARA_HOST=127.0.0.1
 export SARA_PORT=3838

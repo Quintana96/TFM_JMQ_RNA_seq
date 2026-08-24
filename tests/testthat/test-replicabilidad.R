@@ -1,9 +1,9 @@
 #' test-replicabilidad.R
 #' El panel de replicabilidad evalua los resultados del ajuste, asi que tiene que
-#' reajustar EL MISMO modelo. Si remuestrea con otro diseno u otro contraste, el
+#' reajustar EL MISMO modelo. Si remuestrea con otro diseño u otro contraste, el
 #' numero que devuelve no describe los resultados que el usuario esta mirando.
 
-test_that("el bootstrap respeta la formula libre del diseno", {
+test_that("el bootstrap respeta la formula libre del diseño", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   counts <- make_test_counts(n_genes = 200, n_per_group = 4)
   meta <- make_test_meta(counts, batch = TRUE)

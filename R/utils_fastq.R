@@ -53,7 +53,7 @@ missing_r2 <- function(dir_path, samples) {
   }, logical(1))
 }
 
-#' Suma de tamanos (bytes) de los FASTQ asociados a cada muestra
+#' Suma de tamaños (bytes) de los FASTQ asociados a cada muestra
 sample_fastq_sizes <- function(dir_path, samples, read_type = "pe") {
   if (length(samples) == 0 || !dir.exists(dir_path)) return(setNames(numeric(0), samples))
   sapply(samples, function(s) {

@@ -60,10 +60,10 @@ test_that("los cinco graficos se dibujan sobre un enriquecimiento real", {
 
   orgdb <- getFromNamespace("org.EcK12.eg.db", "org.EcK12.eg.db")
   universo <- AnnotationDbi::keys(orgdb, keytype = "SYMBOL")
-  skip_if(length(universo) < 500, "OrgDb demasiado pequeno")
+  skip_if(length(universo) < 500, "OrgDb demasiado pequeño")
 
   # Una lista enriquecida de verdad: los genes de un termino GO concreto mas
-  # ruido. Sin senal, enrichGO devuelve una tabla vacia y no habria que dibujar.
+  # ruido. Sin señal, enrichGO devuelve una tabla vacia y no habria que dibujar.
   set.seed(42)
   tca <- tryCatch(
     AnnotationDbi::select(orgdb, keys = "GO:0006099", keytype = "GOALL",
@@ -127,7 +127,7 @@ test_that("KEGG traduce a ENTREZID cuando se le pide ncbi-geneid", {
   # No se llama a enrichKEGG de verdad —necesita red—: se comprueba que lo que
   # le llega ya esta traducido. Es el punto exacto donde fallaba: con simbolos,
   # KEGG mapeaba el 0 % y la app decia "sin terminos enriquecidos", que no
-  # distingue "no hay senal" de "los IDs no eran los correctos".
+  # distingue "no hay señal" de "los IDs no eran los correctos".
   recibido <- NULL
   local_mocked_bindings(
     enrichKEGG = function(gene, universe, organism, keyType, ...) {

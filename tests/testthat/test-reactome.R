@@ -1,5 +1,5 @@
 #' test-reactome.R
-#' Reactome anade dos cosas que las otras colecciones no tenian y que son las que
+#' Reactome añade dos cosas que las otras colecciones no tenian y que son las que
 #' pueden fallar en silencio: un catalogo CERRADO de organismos (no hay
 #' procariotas) y una TRADUCCION de identificadores a ENTREZID. Un fallo en la
 #' primera devuelve una tabla vacia que parece "sin enriquecimiento"; uno en la

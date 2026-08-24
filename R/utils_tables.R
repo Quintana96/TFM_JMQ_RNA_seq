@@ -1,7 +1,7 @@
 #' utils_tables.R
 #' DataTables y tablas auxiliares (FastQC, alineamiento, conteos, artefactos, log tail).
 
-#' Diccionario de DataTables en espanol.
+#' Diccionario de DataTables en español.
 #'
 #' Se define en local y no por URL: la version oficial se descarga de un CDN, y
 #' una app que puede correr sin conexion no debe quedarse con los textos en
@@ -122,7 +122,7 @@ important_artifacts <- function(out_dir) {
            ifelse(grepl("fastp\\.html", candidates), "fastp HTML", "FastQC HTML")))),
     Archivo = basename(candidates),
     Ruta = candidates,
-    Tamano = sapply(file.info(candidates)$size, fmt_bytes),
+    Tamaño = sapply(file.info(candidates)$size, fmt_bytes),
     stringsAsFactors = FALSE
   )
 }

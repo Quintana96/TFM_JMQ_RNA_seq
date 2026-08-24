@@ -10,7 +10,7 @@
 #' nuevo umbral. Eso seria un filtro post hoc y la lista no tendria la FDR que
 #' declara (McCarthy y Smyth, 2009).
 
-#' Matriz con senal conocida Y cola de baja expresion.
+#' Matriz con señal conocida Y cola de baja expresion.
 #'
 #' La cola no es decorativa: el filtrado independiente de DESeq2 descarta genes
 #' poco expresados, y sin ellos no descarta ninguno, de modo que cambiar `alpha`
@@ -27,7 +27,7 @@ datos_con_senal <- function(n_genes = 1500, n_de = 200, seed = 11) {
       if (j > 4) mu[seq_len(n_de)] <- mu[seq_len(n_de)] * 2.5
       stats::rnbinom(n_genes, mu = mu, size = 10)
     }, numeric(n_genes))
-    # Los genes de senal son los primeros, que estan en la parte expresada.
+    # Los genes de señal son los primeros, que estan en la parte expresada.
     rownames(m) <- sprintf("g%05d", seq_len(n_genes))
     colnames(m) <- sprintf("s%d", seq_len(n_s))
     list(counts = m,
@@ -261,7 +261,7 @@ test_that("con el ajuste desactualizado se avisa y no se reextrae", {
   withr::local_dir(tmp)
 
   # Firma que no puede coincidir con la que produce la interfaz: simula haber
-  # cambiado un parametro que define el ajuste (motor, diseno, prefiltrado...).
+  # cambiado un parametro que define el ajuste (motor, diseño, prefiltrado...).
   firma_vieja <- list(metodo = "otro-motor-cualquiera")
 
   shiny::testServer(servidor_deg_con_ajuste(d, ajuste, tmp, firma = firma_vieja), {

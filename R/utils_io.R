@@ -29,7 +29,7 @@ prepare_uploaded_input_file <- function(upload, output_dir, prefix = NULL, optio
   }
   dest_path <- file.path(upload_dir, dest_name)
   # Decision: copiar por defecto. Solo saltamos la copia si destino existe Y
-  # tanto el tamano como el hash MD5 coinciden con el origen. Cualquier fallo
+  # tanto el tamaño como el hash MD5 coinciden con el origen. Cualquier fallo
   # en la comparacion fuerza copia (mas seguro que asumir igualdad).
   should_copy <- TRUE
   if (file.exists(dest_path)) {
@@ -63,7 +63,7 @@ safe_run_label <- function(analysis_type, tool, time = Sys.time()) {
   paste(format(time, "%Y%m%d_%H%M%S"), analysis, tool, sep = "_")
 }
 
-#' Crea un directorio nuevo dentro de base_dir; si ya existe, le anade _2, _3, ...
+#' Crea un directorio nuevo dentro de base_dir; si ya existe, le añade _2, _3, ...
 create_run_output_dir <- function(base_dir, analysis_type, tool) {
   if (!dir.exists(base_dir)) dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
   label <- safe_run_label(analysis_type, tool)
@@ -96,26 +96,26 @@ result_choices <- function(base_dir) {
   setNames(dirs, labels)
 }
 
-#' Construye data.frame de archivos / tamanos a partir de paths relativos
+#' Construye data.frame de archivos / tamaños a partir de paths relativos
 file_table_for_files <- function(out_dir, files) {
   if (!length(files)) {
-    return(data.frame(Archivo = character(), Tamano = character(),
+    return(data.frame(Archivo = character(), Tamaño = character(),
                       stringsAsFactors = FALSE, check.names = FALSE))
   }
   sz <- file.info(file.path(out_dir, files))$size
-  data.frame(Archivo = files, Tamano = sapply(sz, fmt_bytes),
+  data.frame(Archivo = files, Tamaño = sapply(sz, fmt_bytes),
              stringsAsFactors = FALSE, check.names = FALSE)
 }
 
 #' Lista todos los archivos (recursive) de un directorio para mostrar en la app
 file_table_for_dir <- function(out_dir) {
   if (!nzchar(out_dir) || !dir.exists(out_dir)) {
-    return(data.frame(Archivo = "Directorio no existe.", `Tamano` = "—",
+    return(data.frame(Archivo = "Directorio no existe.", `Tamaño` = "—",
                       stringsAsFactors = FALSE, check.names = FALSE))
   }
   files <- list.files(out_dir, recursive = TRUE, full.names = FALSE)
   if (!length(files)) {
-    return(data.frame(Archivo = "Sin archivos.", `Tamano` = "—",
+    return(data.frame(Archivo = "Sin archivos.", `Tamaño` = "—",
                       stringsAsFactors = FALSE, check.names = FALSE))
   }
   file_table_for_files(out_dir, files)
@@ -130,7 +130,7 @@ read_tsv_safe <- function(path) {
   )
 }
 
-#' Tamano total (bytes) de un directorio (recursivo)
+#' Tamaño total (bytes) de un directorio (recursivo)
 dir_size <- function(path) {
   files <- list.files(path, recursive = TRUE, full.names = TRUE, all.files = TRUE, no.. = TRUE)
   if (!length(files)) return(0)

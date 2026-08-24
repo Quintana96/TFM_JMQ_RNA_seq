@@ -29,7 +29,7 @@ test_that("el script usa el denominador real del contraste, no el alfabetico", {
   expect_true(grepl('relevel(factor(meta$condition), ref = "trt")', script,
                     fixed = TRUE))
   expect_false(grepl('ref = "ctrl"', script, fixed = TRUE))
-  # Y el coeficiente pedido debe existir en ese diseno relevelado.
+  # Y el coeficiente pedido debe existir en ese diseño relevelado.
   expect_true(grepl(rv$coef, script, fixed = TRUE))
 })
 
@@ -65,7 +65,7 @@ test_that("el script exportado se ejecuta y reproduce las llamadas de significac
 })
 
 
-# ── Disenos con variables sustitutas ────────────────────────────────────────
+# ── Diseños con variables sustitutas ────────────────────────────────────────
 #
 # El caso que fallaba: sva + prefiltrado automatico, que es el modo por defecto.
 # El bloque de prefiltrado se emite ANTES del que crea las SV, pero interpolaba
@@ -77,7 +77,7 @@ test_that("el script exportado se ejecuta y reproduce las llamadas de significac
 
 #' Reproduce lo que hace el observer de la pestana 4 con sva activado:
 #' prefiltra, estima las SV sobre la matriz YA prefiltrada y ajusta con el
-#' diseno ampliado, registrando `design_base` y `design_code` por separado.
+#' diseño ampliado, registrando `design_base` y `design_code` por separado.
 fit_rv_sva <- function(counts, meta, num, den, batch = "lote", n_sv = 1L) {
   base_formula <- paste0("~ ", batch, " + condition")
   d <- build_design(meta, den, batch)
@@ -113,7 +113,7 @@ test_that("con sva el prefiltrado no referencia variables que aun no existen", {
   script <- build_deg_r_script(rv)
   lineas <- strsplit(script, "\n", fixed = TRUE)[[1]]
 
-  # El diseno del prefiltrado es el BASE: sin SV, porque en la app las SV se
+  # El diseño del prefiltrado es el BASE: sin SV, porque en la app las SV se
   # estiman despues, sobre la matriz ya prefiltrada.
   pref <- grep("^design <- model.matrix", lineas, value = TRUE)
   expect_length(pref, 1L)
@@ -127,7 +127,7 @@ test_that("con sva el prefiltrado no referencia variables que aun no existen", {
   expect_true(all(usa_sv[usa_sv < crea_sv] %in% grep("^#", lineas)))
 })
 
-test_that("con sva el modelo de svaseq es el diseno base real, no ~ condition", {
+test_that("con sva el modelo de svaseq es el diseño base real, no ~ condition", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   skip_if_not(requireNamespace("sva", quietly = TRUE), "sva no instalado")
   counts <- make_test_counts()
@@ -181,7 +181,7 @@ test_that("el script con sva parsea y se ejecuta de principio a fin", {
   expect_setequal(sort(app_sig), sort(scr_sig))
 })
 
-test_that("sin sva el prefiltrado sigue usando el diseno con batch", {
+test_that("sin sva el prefiltrado sigue usando el diseño con batch", {
   skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
   counts <- make_test_counts()
   meta <- make_test_meta(counts, batch = TRUE)

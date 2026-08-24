@@ -28,7 +28,7 @@ header_download_btn <- function(output_id, title) {
 #'
 #' @param title Titulo de la tarjeta.
 #' @param ... Controles que van a la derecha (selectores, botones).
-#' @param download_id Si se indica, anade el boton de descarga al final.
+#' @param download_id Si se indica, añade el boton de descarga al final.
 card_header_tools <- function(title, ..., download_id = NULL) {
   tools <- list(...)
   if (!is.null(download_id)) tools <- c(tools, list(header_download_btn(download_id, title)))

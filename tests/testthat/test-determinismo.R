@@ -39,7 +39,7 @@ test_that("estimate_surrogate_vars admite 0 variables sustitutas sin inventarse 
   # Se fuerza el caso limite por la via del recorte de grados de libertad, que
   # es determinista: con n_sv pedido = 0 y sva estimando 0, no debe devolverse
   # ninguna covariable. Forzar un minimo de 1 metia una variable espuria que
-  # consumia un grado de libertad y podia absorber senal de la condicion.
+  # consumia un grado de libertad y podia absorber señal de la condicion.
   counts <- make_test_counts(n_genes = 150, n_per_group = 4)
   meta <- make_test_meta(counts)
 

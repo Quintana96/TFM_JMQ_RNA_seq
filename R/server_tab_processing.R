@@ -20,7 +20,7 @@ server_tab_processing <- function(input, output, session, state) {
     if (isTRUE(proc_rv$running)) poll_timer()
   }
 
-  #' Anade un fragmento al log en disco y al reactivo
+  #' Añade un fragmento al log en disco y al reactivo
   append_run_log <- function(chunk) {
     chunk <- terminal_text(chunk)
     if (!nzchar(chunk)) return(invisible(FALSE))
@@ -325,7 +325,7 @@ server_tab_processing <- function(input, output, session, state) {
     if (length(cps) == 0) return(NULL)
     failed <- proc_rv$cp_failed
     kind   <- proc_rv$cp_failed_kind
-    # El simbolo va acompanado de texto porque el color por si solo no es un
+    # El simbolo va acompañado de texto porque el color por si solo no es un
     # canal accesible: sin el, un usuario con daltonismo o un lector de pantalla
     # no distinguen "completado" de "fallido".
     tags$ul(class = "list-unstyled mb-0",

@@ -192,7 +192,7 @@ ui_tab_results_content <- function(s, p = list()) {
             col_widths = c(6, 6),
             # rRNA como metrica de primer nivel: en procariotas supera el 85 % del
             # RNA celular y la depleccion es imperfecta, asi que un arrastre
-            # desigual entre muestras sesga los factores de tamano de TODA la
+            # desigual entre muestras sesga los factores de tamaño de TODA la
             # normalizacion.
             card(
               download_header("Lecturas asignadas a rRNA por muestra", "download_rrna_plot"),

@@ -1,7 +1,7 @@
 #' server_tab_deg_reports.R
 #' Replicabilidad, comparacion de metodos y reproducibilidad (items 20, 21 y 23).
 #'
-#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamano: el
+#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
 #' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
 #' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
@@ -11,7 +11,7 @@
 #' y contiene los reactivos que varias partes necesitan.
 
 server_tab_deg_reports <- function(input, output, session, state, ctx) {
-  # ── Sugerencia de metodo segun el tamano muestral (item 21) ────────────────
+  # ── Sugerencia de metodo segun el tamaño muestral (item 21) ────────────────
 
   # ── Replicabilidad por bootstrap (item 20) ─────────────────────────────────
   boot_rv <- reactiveVal(NULL)
@@ -32,10 +32,10 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
     withProgress(message = "Estimando replicabilidad...", value = 0, {
       # TODOS los parametros salen del estado del ajuste, no de la interfaz. Los
       # selectores siguen vivos despues de ajustar, asi que leerlos aqui podia
-      # medir la replicabilidad de un contraste o un diseno distintos de los que
+      # medir la replicabilidad de un contraste o un diseño distintos de los que
       # produjeron los resultados que se estan evaluando.
       #
-      # Limite conocido: si el diseno incluye variables sustitutas, el remuestreo
+      # Limite conocido: si el diseño incluye variables sustitutas, el remuestreo
       # reutiliza las SV estimadas sobre los datos COMPLETOS en lugar de
       # reestimarlas en cada remuestreo. Reestimarlas seria lo correcto en
       # sentido estricto, pero sva falla a menudo sobre submuestras y el coste se
@@ -139,7 +139,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
       compare_rv(NULL); return()
     }
     withProgress(message = paste0("Corriendo ", other, "..."), value = 0.4, {
-      # Mismo criterio que el bootstrap: el contraste y el diseno son los del
+      # Mismo criterio que el bootstrap: el contraste y el diseño son los del
       # ajuste, no los que tengan los selectores en este instante. De lo
       # contrario se compararian dos analisis distintos entre si.
       r2 <- tryCatch(run_deg(

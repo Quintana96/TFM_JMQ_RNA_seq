@@ -18,7 +18,7 @@
 #   2. `runtime` — parte de la imagen oficial de Bioconductor, que ya trae R y
 #      las dependencias de sistema de los paquetes de Bioconductor compiladas.
 #      Compilar DESeq2 y sus dependencias desde cero en una imagen generica de R
-#      anade decenas de minutos por construccion.
+#      añade decenas de minutos por construccion.
 #
 # Uso:
 #   docker build -t sara:1.0 .

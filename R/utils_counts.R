@@ -161,7 +161,7 @@ load_counts_from_workflow <- function(output_dir, tool, annotation_file = NULL) 
   # resuelto en pick_tx2gene_for_quant(), que elige la convencion que realmente
   # casa. Dejarlo en TRUE hace que tximport corte por el primer punto y descarte
   # en silencio los transcritos cuyo ID lleva un accession con version
-  # ("cds-AAC73112.1"), colapsando la matriz a un punado de genes.
+  # ("cds-AAC73112.1"), colapsando la matriz a un puñado de genes.
   txi <- tryCatch(
     tximport::tximport(qfiles, type = tool, tx2gene = pick$tx2gene,
                        countsFromAbundance = "lengthScaledTPM",

@@ -370,7 +370,7 @@ server_tab_config <- function(input, output, session, state) {
       } else NA_real_
       state$output_files_rv(data.frame(
         Archivo = "Matriz cargada sin directorio de resultados.",
-        `Tamano` = fmt_bytes(upload_size),
+        `Tamaño` = fmt_bytes(upload_size),
         stringsAsFactors = FALSE, check.names = FALSE
       ))
     }

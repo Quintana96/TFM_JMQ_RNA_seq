@@ -82,7 +82,7 @@ ui_deg_panel_metadatos <- function() {
                      class = "btn-sm btn-outline-secondary",
                      title = "Sincronizar con las muestras detectadas"),
         actionButton("deg_meta_add_row_btn",
-                     tagList(icon("plus"), " Anadir fila"),
+                     tagList(icon("plus"), " Añadir fila"),
                      class = "btn-sm btn-outline-secondary")
     ),
     tags$small(class = "text-muted d-block mb-2",
@@ -97,13 +97,13 @@ ui_deg_panel_metadatos <- function() {
   )
 }
 
-#' Panel 3: diseno y contraste. El contraste se elige explicitamente (numerador
+#' Panel 3: diseño y contraste. El contraste se elige explicitamente (numerador
 #' y denominador) en lugar de deducirse del nivel de referencia: con tres o mas
 #' niveles, "nivel de referencia" dejaba sin decir cual de las comparaciones
 #' posibles se estaba mostrando.
 ui_deg_panel_diseno <- function() {
   accordion_panel(
-    "3 · Diseno y contraste", value = "diseno", icon = icon("code-branch"),
+    "3 · Diseño y contraste", value = "diseno", icon = icon("code-branch"),
     selectInput("deg_condition_col", "Columna de condicion",
                 choices = c("condition"), selected = "condition"),
     layout_columns(
@@ -120,13 +120,13 @@ ui_deg_panel_diseno <- function() {
                   choices = c("batch"), selected = "batch")
     ),
     tags$hr(class = "my-2"),
-    checkboxInput("deg_advanced_design", "Diseno avanzado (formula libre)", FALSE),
+    checkboxInput("deg_advanced_design", "Diseño avanzado (formula libre)", FALSE),
     conditionalPanel(
       "input.deg_advanced_design === true",
       textInput("deg_design_formula", NULL, value = "~ condition",
                 placeholder = "~ subject + condition", width = "100%"),
       tags$small(class = "text-muted d-block mb-1",
-                 paste("Permite disenos pareados (~ subject + condition),",
+                 paste("Permite diseños pareados (~ subject + condition),",
                        "covariables continuas (~ edad + condition) e",
                        "interacciones (~ genotipo * condition). Se valida antes",
                        "de ajustar.")),
@@ -166,7 +166,7 @@ ui_deg_panel_analisis <- function() {
         numericInput("deg_min_samples", "Min. muestras", value = NA, min = 1, step = 1)
       ),
       tags$small(class = "text-muted d-block mb-2",
-                 "Min. muestras vacio = tamano del grupo mas pequeno.")
+                 "Min. muestras vacio = tamaño del grupo mas pequeño.")
     ),
     div(class = "border rounded p-2 mb-2",
       tags$small(class = "text-muted d-block mb-1",
@@ -196,7 +196,7 @@ ui_deg_panel_analisis <- function() {
       tags$div(class = "mt-2",
         checkboxInput("deg_shrink", "Encoger log2FC para visualizacion (apeglm)", TRUE),
         tags$small(class = "text-muted d-block mb-2",
-                   "Anade la columna log2FC_shrunk; no altera los p-valores."),
+                   "Añade la columna log2FC_shrunk; no altera los p-valores."),
         if (isTRUE(HAS_IHW)) tagList(
           checkboxInput("deg_use_ihw", "Ponderar hipotesis con IHW en lugar de BH", FALSE),
           tags$small(class = "text-muted d-block mb-2",
@@ -238,7 +238,7 @@ ui_deg_panel_variacion <- function() {
     tags$b(class = "small d-block", "En el modelo (afecta al test)"),
     if (isTRUE(HAS_SVA)) tagList(
       checkboxInput("deg_use_sva",
-                    "Estimar variables sustitutas (sva) y anadirlas al diseno",
+                    "Estimar variables sustitutas (sva) y añadirlas al diseño",
                     FALSE),
       conditionalPanel(
         "input.deg_use_sva === true",
@@ -283,7 +283,7 @@ ui_deg_panel_filtros <- function() {
 #' UI del Tab 4.
 #'
 #' Antes era un grid rigido de seis tarjetas en tres columnas seguido de la zona
-#' de resultados. Los seis bloques tienen tamanos muy distintos —el del test
+#' de resultados. Los seis bloques tienen tamaños muy distintos —el del test
 #' ocupaba mas que los otros cinco juntos— asi que el grid quedaba desigual, y
 #' habia que recorrer una pantalla entera de parametros antes de ver el primer
 #' grafico, incluso para volver a mirar un resultado ya calculado.
@@ -393,7 +393,7 @@ ui_tab_deg_diagnostics <- function() {
         ),
         tags$p(class = "small text-muted mb-1",
                paste("Todas las muestras deberian tener una forma parecida. Una moda",
-                     "desplazada senala una muestra que la normalizacion no ha",
+                     "desplazada señala una muestra que la normalizacion no ha",
                      "igualado; una segunda moda sugiere una poblacion distinta o",
                      "contaminacion. Compara las dos escalas del selector para ver",
                      "que ha hecho la normalizacion.")),
@@ -418,7 +418,7 @@ ui_tab_deg_diagnostics <- function() {
         download_header("Relative Log Expression por muestra", "download_deg_rle_plot"),
         tags$p(class = "small text-muted mb-1",
                paste("Cada muestra deberia tener la mediana cerca de 0 y un rango",
-                     "estrecho. Una mediana desplazada senala fallo de normalizacion o",
+                     "estrecho. Una mediana desplazada señala fallo de normalizacion o",
                      "una muestra problematica.")),
         plotly::plotlyOutput("deg_rle_plot", height = "420px")
       )
@@ -483,7 +483,7 @@ ui_tab_deg_results <- function() {
           DTOutput("deg_table"),
           # Desglose de por que hay genes sin padj. Colapsarlos a "no
           # significativo" oculta informacion util (un outlier de Cook puede ser
-          # el hallazgo mas interesante, o la senal de que una muestra esta mal).
+          # el hallazgo mas interesante, o la señal de que una muestra esta mal).
           uiOutput("deg_na_breakdown")
         )
       ),
@@ -569,7 +569,7 @@ ui_tab_deg_results <- function() {
           tags$p(class = "small text-muted mb-1",
                  paste("Remuestrea las muestras, repite el analisis y mide si la",
                        "lista aguanta. Es el procedimiento que recomienda el estudio",
-                       "de replicabilidad en cohortes pequenas: Spearman > 0,9 indica",
+                       "de replicabilidad en cohortes pequeñas: Spearman > 0,9 indica",
                        "precision alta y < 0,8 avisa de probables falsos positivos.",
                        "Cuesta un reajuste del modelo por remuestreo.")),
           uiOutput("deg_boot_verdict"),
@@ -619,7 +619,7 @@ ui_tab_deg_results <- function() {
             layout_columns(
               col_widths = c(4, 4, 4),
               # ORA parte de la lista umbralizada y por tanto es ciego a
-              # senales debiles pero coordinadas; GSEA usa el ranking completo.
+              # señales debiles pero coordinadas; GSEA usa el ranking completo.
               selectInput("deg_enrich_approach", "Enfoque",
                           choices = c(c("ORA (lista significativa)" = "ora"),
                                       if (isTRUE(HAS_FGSEA))
@@ -756,7 +756,7 @@ ui_tab_deg_results <- function() {
                           "Analizar tambien por separado los genes al alza y a la baja",
                           FALSE),
             tags$small(class = "text-muted d-block mb-2",
-                       paste("Mezclar las dos direcciones diluye la senal: una ruta con",
+                       paste("Mezclar las dos direcciones diluye la señal: una ruta con",
                              "la mitad de sus genes inducidos y la otra mitad reprimidos",
                              "da el mismo p-valor que una ruta coherentemente inducida.",
                              "Medido sobre GSE273773: la homeostasis del hierro pasa de",
@@ -779,9 +779,9 @@ ui_tab_deg_results <- function() {
                 tags$b(class = "small d-block mb-1", "Parametros de GSEA"),
                 layout_columns(
                   col_widths = c(3, 3, 3, 3),
-                  numericInput("deg_gsea_min_size", "Tamano minimo del conjunto",
+                  numericInput("deg_gsea_min_size", "Tamaño minimo del conjunto",
                                value = 10, min = 2, max = 500, step = 5),
-                  numericInput("deg_gsea_max_size", "Tamano maximo",
+                  numericInput("deg_gsea_max_size", "Tamaño maximo",
                                value = 500, min = 10, max = 5000, step = 50),
                   numericInput("deg_gsea_pcutoff", "Corte de p ajustado",
                                value = 0.05, min = 0.001, max = 1, step = 0.01),
@@ -789,8 +789,8 @@ ui_tab_deg_results <- function() {
                                 FALSE)
                 ),
                 tags$small(class = "text-muted d-block",
-                           paste("Los conjuntos muy pequenos dan NES inestables y los muy",
-                                 "grandes son inespecificos; acotar el tamano tambien",
+                           paste("Los conjuntos muy pequeños dan NES inestables y los muy",
+                                 "grandes son inespecificos; acotar el tamaño tambien",
                                  "reduce el numero de tests y con ello el castigo del",
                                  "ajuste multiple. El corte de p filtra la tabla que",
                                  "devuelve clusterProfiler: ponlo a 1 para ver todos los",
@@ -838,7 +838,7 @@ ui_tab_deg_results <- function() {
               conditionalPanel(
                 "input.deg_enrich_plot_tipo === 'cnet'",
                 checkboxInput("deg_cnet_genes",
-                              "Etiquetar tambien los genes (util solo con terminos pequenos)",
+                              "Etiquetar tambien los genes (util solo con terminos pequeños)",
                               value = FALSE)),
               uiOutput("deg_enrich_plot_ayuda"),
               uiOutput("deg_enrich_netplot_aviso"),
@@ -883,7 +883,7 @@ ui_tab_deg_results <- function() {
                            "el ORA pregunta si la lista umbralizada esta enriquecida y",
                            "GSEA si el conjunto esta desplazado en el ranking completo.",
                            "Un termino puede escaparsele al ORA por dos motivos",
-                           "distintos: porque su senal sea debil y no cruce el corte,",
+                           "distintos: porque su señal sea debil y no cruce el corte,",
                            "o porque sea fuerte pero direccional y quede diluida al",
                            "mezclar en una sola lista los genes al alza y a la baja.",
                            "Lo segundo se arregla sin cambiar de enfoque, marcando",
@@ -909,7 +909,7 @@ ui_tab_deg_results <- function() {
           tags$p(class = "small text-muted",
                  paste("Una app grafica no deja rastro de que se hizo. El informe",
                        "recoge todos los parametros, el contraste, la formula del",
-                       "diseno, los diagnosticos y las versiones de los paquetes;",
+                       "diseño, los diagnosticos y las versiones de los paquetes;",
                        "el script reproduce el mismo analisis con Bioconductor,",
                        "fuera de la app.")),
           div(style = "display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;",

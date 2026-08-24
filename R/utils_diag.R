@@ -21,7 +21,7 @@
 #'   - outlier detectado por distancia de Cook -> pvalue tambien es NA
 #'   - descartado por el filtrado independiente -> pvalue existe, padj es NA
 #' Colapsarlas a "no significativo" oculta informacion: un gen con un outlier
-#' extremo puede ser el hallazgo mas interesante, o la senal de que una muestra
+#' extremo puede ser el hallazgo mas interesante, o la señal de que una muestra
 #' esta mal.
 padj_na_breakdown <- function(deg_df) {
   if (is.null(deg_df) || !nrow(deg_df)) return(NULL)
@@ -86,7 +86,7 @@ cooks_sample_summary <- function(cooks_mat) {
 
 #' Estima la proporcion de hipotesis nulas ciertas (pi0).
 #'
-#' `limma::propTrueNull` es la via por defecto porque no anade dependencias y es
+#' `limma::propTrueNull` es la via por defecto porque no añade dependencias y es
 #' estable con pocos p-valores; `qvalue::qvalue` se usa como comprobacion
 #' cruzada y devuelve NA cuando hay muy pocos tests.
 estimate_pi0 <- function(pvalues) {
@@ -107,7 +107,7 @@ pvalue_hist_data <- function(pvalues, bins = 40) {
   h <- graphics::hist(p, breaks = brks, plot = FALSE)
   data.frame(
     mid = h$mids, count = h$counts,
-    # Suelo esperado bajo la nula: n * pi0 / bins. Se anade fuera con el pi0.
+    # Suelo esperado bajo la nula: n * pi0 / bins. Se añade fuera con el pi0.
     stringsAsFactors = FALSE
   )
 }
@@ -139,7 +139,7 @@ diagnose_pvalue_shape <- function(pvalues, pi0 = NA_real_) {
     return(list(verdict = "sospechoso",
       label = "pi0 implausiblemente bajo",
       detail = paste0("pi0 = ", round(pi0, 3), " implica que mas de la mitad de los genes ",
-                      "cambian. Es poco creible en la mayoria de disenos y suele indicar ",
+                      "cambian. Es poco creible en la mayoria de diseños y suele indicar ",
                       "estructura no modelada (batch, muestras mal asignadas).")))
   }
   if (r_last > 1.5 && r_last > r_first) {
@@ -158,7 +158,7 @@ diagnose_pvalue_shape <- function(pvalues, pi0 = NA_real_) {
   }
   if (r_first < 1.2) {
     return(list(verdict = "plano",
-      label = "Sin senal aparente",
+      label = "Sin señal aparente",
       detail = "No hay pico a la izquierda: pocos o ningun gen diferencialmente expresado."))
   }
   list(verdict = "esperado",
@@ -195,12 +195,12 @@ reference_pvalue_shapes <- function(n = 4000) {
 #' porque los transcritos largos tienen mas probabilidad de ser detectados como
 #' diferenciales, lo que arrastra a las categorias GO que los contienen.
 #'
-#' Decision de diseno: en lugar de ofrecer `goseq` a ciegas, se MIDE el sesgo en
+#' Decision de diseño: en lugar de ofrecer `goseq` a ciegas, se MIDE el sesgo en
 #' los datos del usuario. Es la informacion que decide: si en este dataset la
 #' probabilidad de ser DE no depende de la longitud, corregir no aporta nada; si
 #' depende, el enriquecimiento GO hay que leerlo con cautela. Se calcula tambien
 #' la funcion de ponderacion por probabilidad (la curva que dibuja `goseq`), sin
-#' anadir dependencia.
+#' añadir dependencia.
 #'
 #' @param deg_df tabla DEG estandar
 #' @param lengths vector de longitudes con nombres = identificadores de gen
@@ -281,7 +281,7 @@ interpret_length_bias <- function(rho, p_value, odds_ratio) {
     return(list(level = "leve", label = "Sesgo de longitud leve",
       detail = paste0(
         "La correlacion es estadisticamente detectable (rho = ", round(rho, 3),
-        ", p = ", signif(p_value, 3), ") pero pequena.", or_txt,
+        ", p = ", signif(p_value, 3), ") pero pequeña.", or_txt,
         " Con decenas de miles de genes casi cualquier correlacion sale ",
         "significativa; la magnitud importa mas que el p-valor.")))
   }
@@ -300,7 +300,7 @@ interpret_length_bias <- function(rho, p_value, odds_ratio) {
 #' normalizacion o un problema con esa muestra.
 #' @param normalized si TRUE (por defecto) el RLE se calcula sobre conteos
 #'   normalizados por COMPOSICION (TMM). El RLE es un diagnostico de la
-#'   normalizacion aplicada: calcularlo sobre CPM por tamano de libreria crudo
+#'   normalizacion aplicada: calcularlo sobre CPM por tamaño de libreria crudo
 #'   puede marcar como desviada una muestra que TMM o la mediana de ratios
 #'   corrigen perfectamente, y al reves. Se deja el modo crudo disponible para
 #'   poder comparar el antes y el despues.
@@ -334,7 +334,7 @@ rle_summary <- function(counts, normalized = TRUE) {
 # ── Distribucion de la expresion normalizada ────────────────────────────────
 #
 # Por que existe: el RLE responde "esta bien normalizada esta muestra respecto a
-# las demas", pero no ensena la FORMA de la distribucion. Son dos preguntas
+# las demas", pero no enseña la FORMA de la distribucion. Son dos preguntas
 # distintas y la segunda es la que detecta los problemas clasicos de una matriz
 # de conteos antes de modelarla: una muestra con la moda desplazada, una moda
 # secundaria que delata contaminacion o una poblacion celular distinta, y sobre
@@ -347,7 +347,7 @@ rle_summary <- function(counts, normalized = TRUE) {
 #' Matriz log2(CPM + 1) sobre la que se leen las distribuciones.
 #'
 #' @param normalized si TRUE (por defecto) los CPM se calculan sobre los factores
-#'   de normalizacion por COMPOSICION (TMM). El modo crudo —CPM por tamano de
+#'   de normalizacion por COMPOSICION (TMM). El modo crudo —CPM por tamaño de
 #'   libreria— se conserva a proposito: comparar las dos vistas es la unica forma
 #'   de VER que la normalizacion ha hecho algo, que es justo lo que un usuario sin
 #'   formacion estadistica no puede dar por supuesto.
@@ -382,7 +382,7 @@ expression_logcpm <- function(counts, normalized = TRUE, drop_zero_rows = TRUE) 
 
 #' Densidad y cuantiles de la expresion por muestra.
 #'
-#' Detalle que decide si el grafico es comparable o enganoso: TODAS las densidades
+#' Detalle que decide si el grafico es comparable o engañoso: TODAS las densidades
 #' se estiman con el MISMO ancho de banda y sobre la MISMA rejilla. `density()`
 #' elige por defecto un ancho por vector, asi que una muestra con menos dispersion
 #' sale con una curva mas picuda por construccion y no porque su distribucion lo
@@ -441,7 +441,7 @@ expression_distribution <- function(counts, normalized = TRUE,
        n_total = lc$n_total, normalized = isTRUE(normalized), bw = bw)
 }
 
-#' Anade a un resumen de distribucion la columna de grupo tomada del samplesheet.
+#' Añade a un resumen de distribucion la columna de grupo tomada del samplesheet.
 #'
 #' Colorear por condicion es lo que convierte el grafico en un diagnostico: una
 #' distribucion desplazada importa poco si es una muestra suelta y mucho si son
@@ -464,12 +464,12 @@ distribution_add_group <- function(df, meta = NULL, group_col = NULL) {
   df
 }
 
-#' Frase que acompana al grafico: cuantos genes lo componen y cuantos se dejaron
+#' Frase que acompaña al grafico: cuantos genes lo componen y cuantos se dejaron
 #' fuera por no tener conteo en ninguna muestra.
 distribution_caption <- function(dist) {
   if (is.null(dist)) return(NULL)
   escala <- if (isTRUE(dist$normalized)) "normalizados por composicion (TMM)"
-            else "sin normalizar (CPM por tamano de libreria)"
+            else "sin normalizar (CPM por tamaño de libreria)"
   paste0(fmt_int(dist$n_genes), " genes, ", escala,
          if (dist$n_dropped > 0)
            paste0("; ", fmt_int(dist$n_dropped), " genes sin conteo en ninguna ",

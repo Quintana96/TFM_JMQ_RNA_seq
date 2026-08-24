@@ -48,7 +48,7 @@ deg_run_parameters <- function(rv) {
     "Ultima reextraccion"      = if (is.null(rv$reextracted_at)) "—"
                                  else format(rv$reextracted_at, "%Y-%m-%d %H:%M:%S"),
     "Motor"                    = rv$method %||% "—",
-    "Diseno"                   = rv$design %||% "~ condition",
+    "Diseño"                   = rv$design %||% "~ condition",
     "Contraste"                = rv$contrast %||% "—",
     "Coeficiente testeado"     = rv$coef %||% "—",
     "FDR objetivo (alpha)"     = rv$fdr %||% 0.05,
@@ -138,7 +138,7 @@ deg_report_limitations <- function(rv, diagnostics = NULL, sig_n = NA_integer_) 
 
   if (!is.na(min_grp) && min_grp < 6) {
     lim <- c(lim, paste0(
-      "El grupo mas pequeno tiene ", min_grp, " replicas. Schurch et al. (RNA 2016) ",
+      "El grupo mas pequeño tiene ", min_grp, " replicas. Schurch et al. (RNA 2016) ",
       "recomiendan al menos 6 por condicion para una deteccion robusta, y 12 para ",
       "capturar la mayoria de los genes diferenciales. Con menos replicas la ",
       "potencia es limitada y la lista sera menos reproducible."))
@@ -177,8 +177,8 @@ deg_report_limitations <- function(rv, diagnostics = NULL, sig_n = NA_integer_) 
   if (!is.na(sig_n) && sig_n == 0) {
     lim <- c(lim, paste0(
       "Un resultado sin genes significativos no demuestra ausencia de efecto. ",
-      "Antes de concluir nada, comprueba la potencia del diseno y el histograma ",
-      "de p-valores: si es plano, o no hay senal o el modelo no la captura."))
+      "Antes de concluir nada, comprueba la potencia del diseño y el histograma ",
+      "de p-valores: si es plano, o no hay señal o el modelo no la captura."))
   }
   lim
 }
@@ -286,7 +286,7 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
       campos[["Ponderacion (exponent)"]] <- e$exponent
       # Estos cuatro cambian que conjuntos se testean y cuales se devuelven, de
       # modo que sin ellos el resultado no es reproducible.
-      campos[["Tamano de conjunto"]] <- paste0(e$gsea_min_size %||% "—", " - ",
+      campos[["Tamaño de conjunto"]] <- paste0(e$gsea_min_size %||% "—", " - ",
                                                e$gsea_max_size %||% "—", " genes")
       campos[["Corte de p ajustado"]] <- e$gsea_pcutoff %||% "—"
       campos[["Precision del p-valor (eps)"]] <-
@@ -487,7 +487,7 @@ build_deg_r_script <- function(rv) {
   # no parseaba. Cuando no hay modelo, el prefiltrado usa la via `group=`.
   design_code <- rv$design_code %||%
     (if (identical(rv$method %||% "", "Wilcoxon")) NULL else design)
-  # Diseno con el que se PREFILTRO, que no es `design_code`. La app construye la
+  # Diseño con el que se PREFILTRO, que no es `design_code`. La app construye la
   # matriz de `filterByExpr` con `build_design(meta, ref, batch)`, es decir sin
   # formula libre y —sobre todo— sin las variables sustitutas, porque estas se
   # estiman DESPUES, sobre la matriz ya prefiltrada. Emitir `design_code` aqui
@@ -524,14 +524,14 @@ build_deg_r_script <- function(rv) {
     "# Script equivalente al analisis ejecutado en SARA",
     paste0("# Generado el ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
     paste0("# Contraste: ", rv$contrast %||% "—",
-           "   |   Diseno: ", design,
+           "   |   Diseño: ", design,
            "   |   Motor: ", method),
     "#",
     "# Entradas que hay que proporcionar:",
     if (identical(method, "Swish"))
       "#   quant_dir   directorio 03_alignments de la ejecucion (salmon/kallisto)"
     else "#   counts.tsv  matriz de conteos (genes x muestras)",
-    "#   meta.tsv    samplesheet con sample_id, condition y las covariables del diseno",
+    "#   meta.tsv    samplesheet con sample_id, condition y las covariables del diseño",
     "",
     "# Semilla de todo lo estocastico del analisis. Sin fijarla, los resultados",
     "# que dependen de permutaciones no son reproducibles.",
@@ -550,17 +550,17 @@ build_deg_r_script <- function(rv) {
     ""
   )
 
-  # Variables sustitutas: la formula del diseno las menciona (SV1, SV2...) pero
+  # Variables sustitutas: la formula del diseño las menciona (SV1, SV2...) pero
   # no estan en meta.tsv, asi que hay que volver a estimarlas o el script no
   # correria. Se reproducen con la misma semilla y el mismo numero.
   #
-  # El modelo de interes que se pasa a svaseq es `design_base`, el diseno SIN las
+  # El modelo de interes que se pasa a svaseq es `design_base`, el diseño SIN las
   # SV: pasarle `design_code`, que ya las incluye, seria circular. El respaldo a
   # "~ condition" solo cubre estados guardados antes de que se registrara ese
   # campo; usarlo cuando el ajuste llevaba batch o formula libre estimaba las SV
   # con otro modelo y el script no reproducia el resultado.
   sva_block <- if (!is.null(seeds$n_sv) && seeds$n_sv > 0) c(
-    "# El diseno incluye variables sustitutas estimadas con sva. Para reproducir",
+    "# El diseño incluye variables sustitutas estimadas con sva. Para reproducir",
     "# el ajuste hay que volver a estimarlas: no viajan en el samplesheet.",
     paste0("mod  <- model.matrix(", rv$design_base %||% "~ condition", ", data = meta)"),
     "mod0 <- model.matrix(~ 1, data = meta)",
@@ -575,7 +575,7 @@ build_deg_r_script <- function(rv) {
   # emitirlo produciria un script que referencia un objeto `counts` inexistente.
   prefilter <- if (identical(method, "Swish")) character(0) else
     if (!is.null(pf) && identical(pf$mode, "filterByExpr")) c(
-    "# Prefiltrado: filterByExpr usa el tamano del grupo mas pequeno",
+    "# Prefiltrado: filterByExpr usa el tamaño del grupo mas pequeño",
     if (!is.null(prefilter_design_code))
       paste0("design <- model.matrix(", prefilter_design_code, ", data = meta)")
     else character(0),
@@ -645,7 +645,7 @@ build_deg_r_script <- function(rv) {
     ),
     "Wilcoxon" = c(
       "# Wilcoxon rank-sum sobre CPM: sin modelo, no ajusta covariables.",
-      "# La normalizacion es TMM y no CPM por tamano de libreria: sin corregir",
+      "# La normalizacion es TMM y no CPM por tamaño de libreria: sin corregir",
       "# por composicion, una diferencia de composicion entre grupos se",
       "# convierte en falsos positivos (Li et al., Genome Biology 2022).",
       "y <- edgeR::normLibSizes(edgeR::DGEList(counts = round(counts)))",

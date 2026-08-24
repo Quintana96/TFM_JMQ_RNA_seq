@@ -2,7 +2,7 @@
 #' Representaciones de red y distribucion del enriquecimiento funcional.
 #'
 #' Completan el esquema del pipeline de RNA-seq de la memoria: el dotplot y el
-#' running score ya estaban en la aplicacion, y aqui se anaden la barra, la red
+#' running score ya estaban en la aplicacion, y aqui se añaden la barra, la red
 #' gen-concepto, el mapa de terminos, el upset y el ridge.
 #'
 #' A diferencia del resto de graficos de la aplicacion, estos NO son de plotly.
@@ -160,7 +160,7 @@ enrich_plot_ayuda <- function(tipo) {
     tipo,
     barra = paste("Numero de genes de la lista en cada termino, coloreado por",
                   "significacion. Es la lectura mas directa del ORA, pero no",
-                  "dice nada del tamano del termino en el fondo."),
+                  "dice nada del tamaño del termino en el fondo."),
     cnet  = paste("Cada termino se une a los genes que lo sostienen. Sirve para",
                   "ver que un mismo gen aparece en varios terminos, que es la",
                   "razon por la que las listas de enriquecimiento parecen mas",
@@ -178,7 +178,7 @@ enrich_plot_ayuda <- function(tipo) {
     ridge = paste("Distribucion del estadistico de ordenacion de los genes de",
                   "cada conjunto. Un conjunto desplazado a la derecha esta",
                   "sobreexpresado en el contraste; uno centrado en cero no",
-                  "tiene senal coordinada aunque su p-valor sea bajo."),
+                  "tiene señal coordinada aunque su p-valor sea bajo."),
     ""
   )
 }

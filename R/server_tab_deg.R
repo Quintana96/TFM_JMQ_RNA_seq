@@ -4,7 +4,7 @@
 #' Responsabilidades de ESTE fichero:
 #'   - carga de la matriz de conteos desde las tres fuentes;
 #'   - editor inline del samplesheet y los selectores que dependen de el;
-#'   - validacion en vivo de la formula de diseno;
+#'   - validacion en vivo de la formula de diseño;
 #'   - el observer que ajusta el modelo, y el banner y el estado que lo resumen;
 #'   - `deg_filtered`, la seleccion de significativos con los filtros visuales.
 #'
@@ -178,7 +178,7 @@ server_tab_deg <- function(input, output, session, state) {
         paste(cols, collapse = ", "),
         tags$div(class = "mt-1",
                  paste("Viajaran al informe y a los ficheros guardados. Quitalas",
-                       "del samplesheet si no las necesitas para el diseno.")))
+                       "del samplesheet si no las necesitas para el diseño.")))
   })
 
   observeEvent(input$deg_meta_add_row_btn, {
@@ -253,7 +253,7 @@ server_tab_deg <- function(input, output, session, state) {
     }
   })
 
-  # ── Diseno avanzado: validacion en vivo ────────────────────────────────────
+  # ── Diseño avanzado: validacion en vivo ────────────────────────────────────
   # Se valida mientras se escribe, para que el error no llegue como un mensaje
   # criptico de DESeq2 despues de esperar el ajuste.
   design_validation <- reactive({
@@ -301,7 +301,7 @@ server_tab_deg <- function(input, output, session, state) {
   # Los parametros de la pestana se reparten en dos grupos que se comportan de
   # forma distinta, y la separacion no es de comodidad sino de coste medido:
   #
-  #   AJUSTE (5,05 s en 20.000 genes x 8 muestras). Motor, diseno, batch,
+  #   AJUSTE (5,05 s en 20.000 genes x 8 muestras). Motor, diseño, batch,
   #   variables sustitutas, prefiltrado, encogido, fuente de datos. Cambian el
   #   modelo, asi que exigen relanzar. `deg_fit_signature()` es su huella.
   #
@@ -409,7 +409,7 @@ server_tab_deg <- function(input, output, session, state) {
     div(class = "alert alert-warning py-2 px-3 mb-2",
         icon("triangle-exclamation"),
         tags$b(" Estos resultados corresponden a otro ajuste. "),
-        "Has cambiado un parametro que define el modelo (motor, diseno, batch, ",
+        "Has cambiado un parametro que define el modelo (motor, diseño, batch, ",
         "variables sustitutas, prefiltrado o encogido). El FDR y el umbral del ",
         "test se recalculan solos; esto no. Pulsa ",
         tags$b("Lanzar DEG"), " para actualizarlo.")
@@ -511,8 +511,8 @@ server_tab_deg <- function(input, output, session, state) {
                        type = "error"); return()
     }
 
-    # Prefiltrado. En modo automatico pasamos el diseno para que filterByExpr
-    # use el tamano del grupo mas pequeno; en manual, el grupo permite derivar
+    # Prefiltrado. En modo automatico pasamos el diseño para que filterByExpr
+    # use el tamaño del grupo mas pequeño; en manual, el grupo permite derivar
     # min_samples cuando el usuario lo deja vacio.
     pf_mode <- input$deg_prefilter_mode %||% "auto"
     mc <- input$deg_min_count %||% 10
@@ -536,7 +536,7 @@ server_tab_deg <- function(input, output, session, state) {
     if (is.null(lfc_thr) || !is.finite(lfc_thr) || lfc_thr < 0) lfc_thr <- 0
     do_shrink  <- isTRUE(input$deg_shrink)
 
-    # Formula del diseno: la libre si esta activada, y si no la construye el motor
+    # Formula del diseño: la libre si esta activada, y si no la construye el motor
     # a partir de ref_level/batch.
     dsg_formula <- if (isTRUE(input$deg_advanced_design)) {
       input$deg_design_formula %||% "~ condition"
@@ -551,15 +551,15 @@ server_tab_deg <- function(input, output, session, state) {
     # sustitutas no es reproducible aunque el resto de parametros coincida.
     seeds_used <- list()
 
-    # Diseno ANTES de anadir las variables sustitutas. Hay que registrarlo
+    # Diseño ANTES de añadir las variables sustitutas. Hay que registrarlo
     # aparte de `design_formula`, que acaba incluyendo las SV: el script
     # exportado necesita el modelo base para reestimarlas (`sva::svaseq(cm, mod,
-    # mod0)`), y usar el diseno con SV ahi seria circular. Sin este campo, el
+    # mod0)`), y usar el diseño con SV ahi seria circular. Sin este campo, el
     # script las reestimaba siempre con `~ condition` aunque el ajuste hubiera
     # llevado un batch o una formula libre, de modo que no reproducia nada.
     design_base <- NULL
 
-    # Variables sustitutas: se anaden al DISENO (no se corrigen los conteos),
+    # Variables sustitutas: se añaden al DISEÑO (no se corrigen los conteos),
     # que es la forma correcta de tratarlas para testear.
     if (isTRUE(input$deg_use_sva)) {
       base_f <- stats::as.formula(dsg_formula %||%
@@ -580,18 +580,18 @@ server_tab_deg <- function(input, output, session, state) {
       }
       # `num.sv` puede estimar 0: no hay estructura latente que modelar. Antes se
       # forzaba a 1 y se metia una covariable espuria que gastaba un grado de
-      # libertad y podia absorber senal de la condicion. Ahora se sigue sin SV.
+      # libertad y podia absorber señal de la condicion. Ahora se sigue sin SV.
       if (is.null(svres$sv) || !svres$n_sv) {
         showNotification(paste0("sva no ha encontrado variacion latente que ",
                                 "modelar (0 variables sustitutas): el analisis ",
-                                "continua con el diseno sin SV."),
+                                "continua con el diseño sin SV."),
                          type = "message", duration = 12)
       } else {
         meta_aln <- cbind(meta_aln, as.data.frame(svres$sv))
         dsg_formula <- paste(deparse1(base_f), "+",
                              paste(colnames(svres$sv), collapse = " + "))
         seeds_used$n_sv <- svres$n_sv
-        msg <- paste0(svres$n_sv, " variable(s) sustituta(s) anadidas al diseno")
+        msg <- paste0(svres$n_sv, " variable(s) sustituta(s) añadidas al diseño")
         if (!is.na(svres$n_sv_estimated %||% NA) && svres$n_sv_estimated > svres$n_sv) {
           msg <- paste0(msg, " (sva propuso ", svres$n_sv_estimated,
                         ", recortadas para conservar grados de libertad)")
@@ -705,7 +705,7 @@ server_tab_deg <- function(input, output, session, state) {
     state$deg_rv$coef          <- res$coef
     state$deg_rv$coef_available <- res$coef_available %||% character(0)
     state$deg_rv$viz_note      <- viz_note
-    # Contraste y diseno con los que se ha ajustado REALMENTE. Los selectores de
+    # Contraste y diseño con los que se ha ajustado REALMENTE. Los selectores de
     # la interfaz pueden cambiar despues sin relanzar el analisis, asi que el
     # informe, el script exportado, el bootstrap y la comparacion de metodos
     # leen de aqui y no de `input$...`.
@@ -765,7 +765,7 @@ server_tab_deg <- function(input, output, session, state) {
                                  outputs_dir = state$outputs_dir)
     append_audit_log("deg_run", list(
       motor = method, contraste = res$contrast, fdr = fdr_target,
-      lfc_umbral = lfc_thr, diseno = state$deg_rv$design,
+      lfc_umbral = lfc_thr, diseño = state$deg_rv$design,
       genes = nrow(res$table),
       significativos = sum(!is.na(res$table$padj) & res$table$padj <= fdr_target),
       origen = counts_origin_info$tipo %||% "—",
@@ -794,7 +794,7 @@ server_tab_deg <- function(input, output, session, state) {
       tags$b("Contraste: "), tags$span(ct %||% "no determinado"),
       tags$span(class = "text-muted",
                 paste0("  ·  motor ", state$deg_rv$method,
-                       "  ·  diseno ", state$deg_rv$design %||% "~ condition",
+                       "  ·  diseño ", state$deg_rv$design %||% "~ condition",
                        "  ·  coef ", state$deg_rv$coef %||% "—",
                        "  ·  FDR objetivo ", state$deg_rv$fdr,
                        " (", state$deg_rv$padj_method %||% "BH", ")",

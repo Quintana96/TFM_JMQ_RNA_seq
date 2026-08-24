@@ -1,11 +1,11 @@
 #' utils_design.R
-#' Funciones puras (sin Shiny) para construir y VALIDAR disenos experimentales
+#' Funciones puras (sin Shiny) para construir y VALIDAR diseños experimentales
 #' arbitrarios a partir de una formula escrita por el usuario.
 #'
 #' Por que existe (docs/REVISION_ESTADISTICA.md, B5): la app solo generaba
 #' `~ condition` o `~ batch + condition`, con todo convertido a factor. Eso deja
 #' fuera casos muy comunes:
-#'   - disenos pareados (`~ subject + condition`), probablemente el diseno mas
+#'   - diseños pareados (`~ subject + condition`), probablemente el diseño mas
 #'     frecuente que no se podia analizar, y el que mas potencia gana al
 #'     modelarse bien cuando hay pocas replicas;
 #'   - covariables continuas (edad, dosis, tiempo), que con `as.factor()` gastan
@@ -15,11 +15,11 @@
 #'   - varias covariables a la vez.
 #'
 #' La parte importante no es aceptar la formula, es VALIDARLA antes de ajustar:
-#' un diseno singular produce un error criptico de DESeq2 en ingles, y una
+#' un diseño singular produce un error criptico de DESeq2 en ingles, y una
 #' confusion perfecta entre dos covariables produce resultados que parecen
 #' correctos y no lo son.
 
-#' Columnas del samplesheet utilizables como terminos del diseno.
+#' Columnas del samplesheet utilizables como terminos del diseño.
 design_candidate_vars <- function(meta) {
   if (is.null(meta) || !is.data.frame(meta)) return(character(0))
   setdiff(names(meta), c("sample_id"))
@@ -37,7 +37,7 @@ is_continuous_var <- function(x, min_levels = 5L) {
   length(unique(v[!is.na(v)])) >= min_levels
 }
 
-#' Prepara `meta` para el diseno: convierte a factor lo que no sea continuo.
+#' Prepara `meta` para el diseño: convierte a factor lo que no sea continuo.
 #' Devuelve tambien el tipo asignado a cada variable, para poder mostrarlo.
 prepare_design_meta <- function(meta, vars = NULL, continuous = NULL) {
   if (is.null(meta)) return(NULL)
@@ -110,14 +110,14 @@ confounded_pairs_text <- function(pairs) {
   paste(vapply(pairs, function(p) p$detail, character(1)), collapse = "; ")
 }
 
-#' Valida una formula de diseno contra el samplesheet SIN ajustar el modelo.
+#' Valida una formula de diseño contra el samplesheet SIN ajustar el modelo.
 #'
 #' Comprueba, en este orden:
 #'   1. que la formula sea sintacticamente valida y solo tenga lado derecho;
 #'   2. que todas sus variables existan en el samplesheet;
 #'   3. que ninguna tenga NA en las muestras que se van a usar;
 #'   4. que `model.matrix()` se pueda construir;
-#'   5. que la matriz tenga RANGO COMPLETO (si no, senala los pares
+#'   5. que la matriz tenga RANGO COMPLETO (si no, señala los pares
 #'      confundidos que lo explican);
 #'   6. que queden grados de libertad residuales (n - rango > 0).
 #'
@@ -195,7 +195,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
     detail <- if (length(conf)) paste0(" Causa probable: ",
                                        confounded_pairs_text(conf), ".") else ""
     res$errors <- paste0(
-      "El diseno es singular: la matriz tiene ", ncol(mm), " coeficientes pero ",
+      "El diseño es singular: la matriz tiene ", ncol(mm), " coeficientes pero ",
       "rango ", res$rank, ", asi que sus efectos no se pueden separar.", detail
     )
     return(res)
@@ -203,7 +203,7 @@ validate_design_formula <- function(formula_text, meta, continuous = NULL) {
   if (res$residual_df <= 0) {
     res$errors <- paste0(
       "No quedan grados de libertad residuales (", res$n_samples,
-      " muestras y ", res$rank, " coeficientes). Simplifica el diseno o anade ",
+      " muestras y ", res$rank, " coeficientes). Simplifica el diseño o añade ",
       "muestras."
     )
     return(res)

@@ -3,11 +3,11 @@
 #' sustitutas (sva), ajuste de conteos (ComBat-seq) y eliminacion del efecto
 #' batch para VISUALIZAR (limma::removeBatchEffect).
 #'
-#' La distincion que la app debe ensenar explicitamente (docs/REVISION_ESTADISTICA.md,
+#' La distincion que la app debe enseñar explicitamente (docs/REVISION_ESTADISTICA.md,
 #' B6), porque es una fuente clasica de error:
 #'
 #'   - Para TESTEAR, lo correcto es incluir el batch como covariable en el
-#'     diseno y dejar los conteos intactos. El modelo estima y descuenta el
+#'     diseño y dejar los conteos intactos. El modelo estima y descuenta el
 #'     efecto sin destruir la estructura de la varianza.
 #'   - Para VISUALIZAR (PCA, heatmap), se corrige la matriz, porque un grafico no
 #'     puede "incluir una covariable".
@@ -20,7 +20,7 @@
 #'
 #' Es lo apropiado cuando hay estructura extra en los datos pero no se sabe que
 #' la causa: sva la estima a partir de los propios datos y devuelve covariables
-#' que se anaden al diseno.
+#' que se añaden al diseño.
 #'
 #' @param counts matriz de conteos (genes x muestras)
 #' @param meta metadatos alineados con las columnas de counts
@@ -28,7 +28,7 @@
 #' @param n_sv numero de variables sustitutas; NULL = lo estima sva
 #' @param min_residual_df grados de libertad residuales que se reservan. Cada
 #'   variable sustituta consume uno, y `num.sv` con el metodo de Leek tiende a
-#'   proponer tantas que el diseno se queda sin capacidad de estimar nada: con 12
+#'   proponer tantas que el diseño se queda sin capacidad de estimar nada: con 12
 #'   muestras llego a proponer 9, que sumadas a la condicion dejan 1 g.l.
 #'   residual. Se usa el metodo "be" (por permutacion, mas conservador) y se
 #'   recorta ademas para respetar este minimo.
@@ -62,7 +62,7 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
         withr::with_seed(seed, sva::num.sv(cm, mod, method = "be")),
         error = function(e) 0L)
     } else as.integer(n_sv)
-    # Tope: no dejar el diseno sin grados de libertad residuales.
+    # Tope: no dejar el diseño sin grados de libertad residuales.
     n_max <- ncol(cm) - ncol(mod) - as.integer(min_residual_df)
     if (n_max < 1) {
       stop(paste0("Con ", ncol(cm), " muestras y ", ncol(mod), " coeficientes no ",
@@ -70,7 +70,7 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
     }
     # Si sva estima 0, se devuelven 0. Forzar un minimo de 1 (lo que se hacia
     # antes) introduce una covariable espuria: consume un grado de libertad y
-    # puede absorber senal real de la condicion.
+    # puede absorber señal real de la condicion.
     #
     # Nota: nada de `return()` dentro de este `tryCatch`, porque retornaria de la
     # funcion entera y no del bloque; el valor del bloque es el de la ultima
@@ -106,7 +106,7 @@ estimate_surrogate_vars <- function(counts, meta, full_formula = ~ condition,
 #' A diferencia de ComBat clasico, usa regresion binomial negativa y devuelve
 #' una matriz de conteos ENTERA, compatible con DESeq2/edgeR aguas abajo
 #' (Zhang, Parmigiani y Johnson, 2020). Aun asi, el uso recomendado es
-#' visualizar: para testear, el batch va en el diseno.
+#' visualizar: para testear, el batch va en el diseño.
 combat_seq_counts <- function(counts, batch, group = NULL) {
   if (!requireNamespace("sva", quietly = TRUE)) {
     return(list(counts = NULL, error = "sva no esta instalado."))
@@ -130,7 +130,7 @@ combat_seq_counts <- function(counts, batch, group = NULL) {
 #' Elimina el efecto batch de una matriz transformada, SOLO para graficos.
 #'
 #' `design` preserva los efectos de interes: sin el, removeBatchEffect tambien
-#' se llevaria por delante la senal de la condicion.
+#' se llevaria por delante la señal de la condicion.
 remove_batch_for_plots <- function(mat, batch, design = NULL, covariates = NULL) {
   if (!requireNamespace("limma", quietly = TRUE)) {
     return(list(mat = mat, error = "limma no esta instalado."))

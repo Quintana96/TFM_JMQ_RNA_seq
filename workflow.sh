@@ -47,7 +47,7 @@ FEATURE_ATTR="locus_tag"
 # 2 inversa (el caso de los protocolos dUTP, que son la mayoria hoy). "auto"
 # la infiere de los propios datos.
 STRANDEDNESS="auto"
-# Hilos. Antes estaba cableado a 8, lo que sobresuscribe maquinas mas pequenas
+# Hilos. Antes estaba cableado a 8, lo que sobresuscribe maquinas mas pequeñas
 # y no quedaba registrado en ninguna parte.
 THREADS_ARG=""
 

@@ -11,7 +11,7 @@ test_that("las duraciones se escriben en la unidad que toca", {
   expect_equal(fmt_duracion(90), "1m 30s")
   expect_equal(fmt_duracion(290), "4m 50s")
   expect_equal(fmt_duracion(3661), "1h 01m")
-  # Ausencia y basura dan un guion, no un error ni un cero enganoso.
+  # Ausencia y basura dan un guion, no un error ni un cero engañoso.
   expect_equal(fmt_duracion(NA), "—")
   expect_equal(fmt_duracion(NULL), "—")
   expect_equal(fmt_duracion("no soy un numero"), "—")

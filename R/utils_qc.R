@@ -205,7 +205,7 @@ read_kallisto_quant_table <- function(out_dir) {
 #' procariota y la depleccion es imperfecta — hasta un 50 % de lecturas
 #' residuales de rRNA es un resultado habitual. Con normalizacion por
 #' composicion (TMM/RLE), un arrastre de rRNA que varie entre muestras sesga
-#' TODOS los factores de tamano, no solo los genes de rRNA. Por eso lo relevante
+#' TODOS los factores de tamaño, no solo los genes de rRNA. Por eso lo relevante
 #' no es el valor absoluto sino la VARIACION entre muestras.
 #'
 #' @param counts matriz de conteos (genes x muestras)
@@ -247,7 +247,7 @@ rrna_fraction_per_sample <- function(counts, rrna_ids = NULL) {
       "El porcentaje de rRNA varia ", round(100 * spread, 1),
       " puntos entre muestras (de ", round(100 * min(df$frac, na.rm = TRUE), 1),
       " % a ", round(100 * max(df$frac, na.rm = TRUE), 1),
-      " %). Un arrastre desigual de rRNA sesga los factores de tamano de la ",
+      " %). Un arrastre desigual de rRNA sesga los factores de tamaño de la ",
       "normalizacion por composicion, asi que afecta a todos los genes. ",
       "Considera excluir el rRNA antes del analisis diferencial.")
   } else if (is.finite(max(df$frac, na.rm = TRUE)) && max(df$frac, na.rm = TRUE) > 0.3) {
@@ -372,7 +372,7 @@ pseudo_qc_summary <- function(out_dir) {
 #' se arreglan igual.
 #'
 #' El modulo de duplicados NO cuenta para el veredicto: en RNA-seq de expresion
-#' los duplicados son senal, no artefacto, y su "fail" es esperable en los genes
+#' los duplicados son señal, no artefacto, y su "fail" es esperable en los genes
 #' muy expresados.
 #'
 #' @return data.frame(sample_id, estado, modulos_fail, modulos_warn) o NULL

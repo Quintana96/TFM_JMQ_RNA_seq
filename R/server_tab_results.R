@@ -139,7 +139,7 @@ server_tab_results <- function(input, output, session, state) {
         tags$span(paste("Umbrales de FastQC: aviso si el cuartil inferior de alguna",
                         "posicion baja de 10 o la mediana de 25; fallo si bajan de 5",
                         "y 20. El modulo de duplicados no cuenta para el veredicto:",
-                        "en RNA-seq de expresion los duplicados son senal.")))
+                        "en RNA-seq de expresion los duplicados son señal.")))
   })
 
   output$fastqc_light_table <- renderDT({
@@ -342,7 +342,7 @@ server_tab_results <- function(input, output, session, state) {
     items <- list(
       tags$li(tags$b("Estado: "), status_badge(s$status)),
       tags$li(tags$b("Carpeta: "), tags$code(out_dir)),
-      tags$li(tags$b("Tamano total: "), s$total_size),
+      tags$li(tags$b("Tamaño total: "), s$total_size),
       tags$li(tags$b("MultiQC: "), if (isTRUE(s$has_multiqc)) "disponible" else "no encontrado")
     )
 

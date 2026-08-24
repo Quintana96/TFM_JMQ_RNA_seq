@@ -106,7 +106,7 @@ ANALYSIS_SEED <- 1L
 #' El par anterior (verde #7BBF9A sobre gris #C0C0C0) tenia luminosidades muy
 #' parecidas, de modo que con protanopia o deuteranopia —en torno al 8 % de los
 #' hombres— los dos grupos resultaban casi indistinguibles. Se usa el par
-#' azul/naranja de la paleta de Okabe-Ito, disenada para ser distinguible con
+#' azul/naranja de la paleta de Okabe-Ito, diseñada para ser distinguible con
 #' las formas habituales de daltonismo y que ademas conserva contraste al
 #' imprimir en escala de grises.
 DEG_SIG_COLORS <- c("Significativo" = "#0072B2", "No significativo" = "#E69F00")
@@ -181,7 +181,7 @@ app_theme <- bs_theme(
 #' La version anterior pintaba las cabeceras de las tarjetas con
 #' `.card:nth-of-type(3n + 1)`, `(3n + 2)` y `(3n)`, es decir, azul, naranja o
 #' lavanda segun la POSICION de la tarjeta en el DOM. El color no decia nada del
-#' contenido, cambiaba al anadir o quitar una tarjeta, y hacia que dos vistas con
+#' contenido, cambiaba al añadir o quitar una tarjeta, y hacia que dos vistas con
 #' las mismas tarjetas en distinto orden se vieran distintas. Lo mismo ocurria
 #' con `.metric-card:nth-child(n)`. Ahora la cabecera es una sola y el color de
 #' las metricas lo fija un modificador semantico (`is-ok`, `is-warn`, `is-bad`).
@@ -357,7 +357,7 @@ app_css <- HTML("
   }
 
   /* Los textos de ayuda son abundantes en esta app y competian con el propio
-     control por ser del mismo tamano. */
+     control por ser del mismo tamaño. */
   .text-muted,
   small.text-muted {
     color: var(--muted) !important;
@@ -429,8 +429,8 @@ app_css <- HTML("
   /* ── Metricas ────────────────────────────────────────────────────────────
      Una sola forma para todas: el color lo pone el estado (is-ok / is-warn /
      is-bad), no la posicion en la fila. */
-  /* El nombre manda y la expansion del acronimo acompana: en una sola linea,
-     mas pequena y sin peso, para que no compita con el titulo. Se oculta en
+  /* El nombre manda y la expansion del acronimo acompaña: en una sola linea,
+     mas pequeña y sin peso, para que no compita con el titulo. Se oculta en
      pantallas estrechas, donde la barra ya va justa. */
   .app-brand { display: inline-flex; align-items: center; gap: .1rem; }
   .app-logo  { margin-right: .5rem; vertical-align: middle; }
@@ -517,7 +517,7 @@ app_css <- HTML("
     align-items: stretch;
   }
 
-  /* La tarjeta entera es el area pulsable: obligar a acertar un boton pequeno
+  /* La tarjeta entera es el area pulsable: obligar a acertar un boton pequeño
      al final de la tarjeta es justo lo que hacia torpe la navegacion. */
   .home-card {
     position: relative;

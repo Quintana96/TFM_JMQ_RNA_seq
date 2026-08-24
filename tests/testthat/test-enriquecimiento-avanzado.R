@@ -27,7 +27,7 @@ ranking_sintetico <- function(n = 2000) {
 
 # ── Gene sets propios (GMT) ─────────────────────────────────────────────────
 
-test_that("read_gene_sets_gmt devuelve TERM2GENE y el rango de tamanos", {
+test_that("read_gene_sets_gmt devuelve TERM2GENE y el rango de tamaños", {
   skip_if_not(tiene_cp())
   genes <- sprintf("g%04d", 1:500)
   f <- gmt_temporal(list(chico = genes[1:12], grande = genes[100:179]))
@@ -36,7 +36,7 @@ test_that("read_gene_sets_gmt devuelve TERM2GENE y el rango de tamanos", {
   expect_null(gs$error)
   expect_equal(gs$n_sets, 2L)
   expect_setequal(names(gs$term2gene), c("term", "gene"))
-  # El rango de tamanos es lo que permite ver de un vistazo si el GMT es
+  # El rango de tamaños es lo que permite ver de un vistazo si el GMT es
   # utilizable: conjuntos de 2 genes o de 5.000 no dan nada interpretable.
   expect_equal(sort(gs$sizes), c(12L, 80L))
   expect_equal(gs$n_genes, 92L)
@@ -169,7 +169,7 @@ test_that("minGSSize y maxGSSize acotan los conjuntos testeados", {
 
 # ── ORA direccional ─────────────────────────────────────────────────────────
 
-test_that("separar por direccion recupera la senal que la lista mezclada diluye", {
+test_that("separar por direccion recupera la señal que la lista mezclada diluye", {
   skip_if_not(tiene_cp())
   genes <- sprintf("g%04d", 1:2000)
   set.seed(3)
@@ -515,7 +515,7 @@ test_that("GSEA sobre datos reales: corte de p, running score y ORA que no lo ve
                            ont = "CC", keyType = "ENSEMBL", readable = TRUE)
   cmp <- compare_ora_gsea(ora$table, gsea$table)
   expect_equal(cmp$n_gsea, n_sig)
-  # Los terminos que solo ve GSEA son la razon de tener los dos enfoques: senal
+  # Los terminos que solo ve GSEA son la razon de tener los dos enfoques: señal
   # coordinada que ningun gen individual lleva mas alla del corte de la lista.
   expect_gt(cmp$n_gsea - cmp$n_comun, 0)
   tb <- compare_ora_gsea_table(cmp)

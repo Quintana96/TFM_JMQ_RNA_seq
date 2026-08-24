@@ -1,7 +1,7 @@
 #' server_tab_deg_diag.R
 #' Diagnosticos post-ajuste de la pestana 4 (item 10 y B3c).
 #'
-#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamano: el
+#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
 #' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
 #' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
@@ -225,7 +225,7 @@ server_tab_deg_diag <- function(input, output, session, state, ctx) {
     if (is.null(dist)) return(plotly_message("Sin conteos para la distribucion."))
     # Las cajas se dibujan a partir de los cuantiles ya calculados y no de la
     # matriz entera: con decenas de miles de genes por muestra, mandar los puntos
-    # al navegador cuelga la pestana sin anadir nada legible.
+    # al navegador cuelga la pestana sin añadir nada legible.
     df <- distribution_add_group(dist$box, meta, group_col)
     cols <- grupo_colores(df$grupo)
     plotly::plot_ly(df, x = ~sample_id) |>

@@ -18,7 +18,7 @@ audit_log_path <- function(outputs_dir = NULL) {
   file.path(base, "audit_log.tsv")
 }
 
-#' Anade una linea al registro de auditoria.
+#' Añade una linea al registro de auditoria.
 #'
 #' Nunca falla hacia fuera: un problema al escribir el registro no puede tumbar
 #' un analisis que ya se ha calculado correctamente.

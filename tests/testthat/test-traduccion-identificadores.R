@@ -4,7 +4,7 @@
 # conteos trae locus tags y ningun OrgDb los conoce. La anotacion es la unica
 # fuente que relaciona BW25113_RS00005 con thrL. Sin traducir, el
 # enriquecimiento mapea el 0 % y devuelve "sin terminos", que no se distingue
-# de la ausencia de senal.
+# de la ausencia de señal.
 
 # Un GTF minimo con los mismos atributos que el de RefSeq, para no depender de
 # ningun fichero externo.

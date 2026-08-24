@@ -1,7 +1,7 @@
 #' server_tab_deg_results.R
 #' Tabla de resultados, volcano, MA, PCA y heatmaps de la pestana 4.
 #'
-#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamano: el
+#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
 #' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
 #' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.

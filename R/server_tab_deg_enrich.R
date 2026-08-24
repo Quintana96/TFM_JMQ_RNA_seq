@@ -1,7 +1,7 @@
 #' server_tab_deg_enrich.R
 #' Enriquecimiento funcional y GSEA de la pestana 4 (items 13 y 14, B3).
 #'
-#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamano: el
+#' Parte del modulo de la pestana 4, separado de server_tab_deg.R por tamaño: el
 #' fichero original llego a 1.608 lineas en una unica funcion. NO se usa
 #' moduleServer(): igual que el resto de la aplicacion, se conservan los IDs
 #' Shiny originales y el estado se pasa explicitamente.
@@ -108,7 +108,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
 
   # Diagnostico ANTES de calcular: dice si la traduccion hace falta y si va a
   # funcionar. Sin esto, el unico sintoma de unos identificadores equivocados es
-  # un enriquecimiento vacio, que no se distingue de la ausencia de senal.
+  # un enriquecimiento vacio, que no se distingue de la ausencia de señal.
   deg_translate_diag <- reactive({
     path <- deg_annotation_path()
     tab <- state$deg_rv$results
@@ -900,7 +900,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
             paste0("GSEA ve ", cmp$n_gsea - cmp$n_comun, " terminos que el ORA no ve: ",
                    "conjuntos desplazados en el ranking cuyos genes no llegan al corte ",
                    "de la lista.")
-          else "GSEA no anade ningun termino sobre los del ORA."),
+          else "GSEA no añade ningun termino sobre los del ORA."),
       if (!is.na(cmp$error_ora %||% NA))
         div(class = "small text-muted", tags$b("ORA: "), cmp$error_ora) else NULL,
       if (!is.na(cmp$error_gsea %||% NA))

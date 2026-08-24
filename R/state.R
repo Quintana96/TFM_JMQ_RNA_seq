@@ -30,7 +30,7 @@ create_app_state <- function(session) {
   # otro volumen o fuera de la carpeta del usuario.
   #
   # getVolumes() enumera los volumenes montados (en macOS incluye
-  # /Volumes/<disco>, y los externos segun se conecten). Se anade la raiz del
+  # /Volumes/<disco>, y los externos segun se conecten). Se añade la raiz del
   # sistema para poder navegar a cualquier ruta absoluta.
   roots <- function() {
     vols <- tryCatch(shinyFiles::getVolumes()(), error = function(e) character(0))
@@ -61,7 +61,7 @@ create_app_state <- function(session) {
 
   # Tabla de archivos del output_dir actual
   state$output_files_rv <- reactiveVal(
-    data.frame(Archivo = character(), `Tamano` = character(),
+    data.frame(Archivo = character(), `Tamaño` = character(),
                stringsAsFactors = FALSE, check.names = FALSE)
   )
 
@@ -115,7 +115,7 @@ create_app_state <- function(session) {
   # operaciones separadas (ver `deg_reextract()`), y la segunda cuesta un 4 % de
   # la primera, asi que el FDR y el umbral del test se recalculan en vivo sobre
   # el mismo ajuste. Lo que sigue exigiendo relanzar es lo que cambia el AJUSTE:
-  # motor, diseno, batch, variables sustitutas, prefiltrado y encogido.
+  # motor, diseño, batch, variables sustitutas, prefiltrado y encogido.
   state$deg_rv <- reactiveValues(
     counts        = NULL,
     meta          = NULL,
@@ -147,14 +147,14 @@ create_app_state <- function(session) {
     # para el equivalente de plotDispEsts y reparto de los maximos de Cook.
     disp_data     = NULL,
     cooks         = NULL,
-    # Diseno efectivamente ajustado, coeficiente testeado y coeficientes
+    # Diseño efectivamente ajustado, coeficiente testeado y coeficientes
     # disponibles (para el selector del modo avanzado).
     #
-    # Hay TRES formas del diseno y no son intercambiables:
+    # Hay TRES formas del diseño y no son intercambiables:
     #   `design`       etiqueta legible (banner, informe). Para Wilcoxon es prosa.
     #   `design_code`  la misma formula como CODIGO, o NULL si el motor no ajusta
     #                  modelo. La consume el script exportado.
-    #   `design_base`  el diseno ANTES de anadir las variables sustitutas, o NULL
+    #   `design_base`  el diseño ANTES de añadir las variables sustitutas, o NULL
     #                  si no se uso sva. Es el modelo con el que hay que
     #                  reestimarlas para reproducir el ajuste; usar `design_code`
     #                  (que ya las incluye) seria circular.
@@ -167,14 +167,14 @@ create_app_state <- function(session) {
     outliers      = "na",
     coef          = NULL,
     coef_available = character(0),
-    # Contraste y diseno CONGELADOS en el momento del ajuste. Los selectores de
+    # Contraste y diseño CONGELADOS en el momento del ajuste. Los selectores de
     # la interfaz siguen vivos despues de ajustar, asi que leerlos mas tarde
     # (informe, bootstrap, comparacion de metodos) puede describir un analisis
     # distinto del que se ejecuto. Todo lo que reproduzca o evalue el ajuste
     # debe consumir estos campos y NO `input$...`.
     ref_level      = NULL,   # denominador del contraste
     contrast_num   = NULL,   # numerador del contraste
-    batch          = NULL,   # columna de batch incluida en el diseno, si la hay
+    batch          = NULL,   # columna de batch incluida en el diseño, si la hay
     design_formula = NULL,   # formula libre usada (incluye las SV), o NULL
     test_coef      = NULL,   # coeficiente elegido en el modo avanzado, o NULL
     quant_tool     = NULL,   # salmon/kallisto: lo necesita el motor Swish

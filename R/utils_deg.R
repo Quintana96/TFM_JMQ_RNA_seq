@@ -77,7 +77,7 @@ align_counts_to_metadata <- function(counts, meta) {
   list(counts = counts_sub, meta = meta_sub, warnings = warns)
 }
 
-#' Tamano del grupo mas pequeno de `group`. Solo cuando no hay informacion de
+#' Tamaño del grupo mas pequeño de `group`. Solo cuando no hay informacion de
 #' grupo utilizable cae al fallback historico (la mitad de las muestras).
 smallest_group_size <- function(group, n_samples) {
   if (!is.null(group) && length(group) == n_samples) {
@@ -91,14 +91,14 @@ smallest_group_size <- function(group, n_samples) {
 #' Prefiltrado de genes de baja expresion.
 #'
 #' `mode = "auto"` (recomendado) delega en `edgeR::filterByExpr()`, que decide
-#' en cuantas muestras debe superarse el umbral a partir del tamano del grupo
-#' MAS PEQUENO. `mode = "manual"` mantiene el criterio explicito "al menos
+#' en cuantas muestras debe superarse el umbral a partir del tamaño del grupo
+#' MAS PEQUEÑO. `mode = "manual"` mantiene el criterio explicito "al menos
 #' `min_count` lecturas en >= `min_samples` muestras".
 #'
 #' Ojo con el fallback de `min_samples`: la version anterior usaba la mitad de
-#' las muestras TOTALES, lo que en un diseno desequilibrado (3 control vs 9
+#' las muestras TOTALES, lo que en un diseño desequilibrado (3 control vs 9
 #' tratados -> min_samples = 6) descarta precisamente los genes expresados solo
-#' en el grupo pequeno. Ahora se deriva del grupo menor via
+#' en el grupo pequeño. Ahora se deriva del grupo menor via
 #' `smallest_group_size()`.
 #'
 #' Devuelve la matriz filtrada con un atributo "prefilter" que resume la
@@ -140,12 +140,12 @@ prefilter_counts <- function(counts, min_count = 10, min_samples = NULL,
   out
 }
 
-#' Construye matriz de diseno.
+#' Construye matriz de diseño.
 #'
 #' Tres modos, de menos a mas expresivo:
 #'   - `~ condition` (por defecto);
 #'   - `~ batch + condition` si se indica `batch`;
-#'   - `design_formula` arbitraria, que permite disenos pareados
+#'   - `design_formula` arbitraria, que permite diseños pareados
 #'     (`~ subject + condition`), covariables continuas e interacciones. En ese
 #'     caso las variables se tipan con `prepare_design_meta()`, que respeta las
 #'     numericas en lugar de convertirlas a factor.
@@ -198,7 +198,7 @@ resolve_test_coef <- function(coef_names, test_coef = NULL, num = NULL, ref = NU
 #' Si se pide un numerador concreto (`num`) se devuelve su coeficiente, que es
 #' como se implementa el selector de contraste: el denominador se ha puesto como
 #' nivel de referencia del factor, asi que "num vs den" ES un coeficiente del
-#' diseno. Eso importa porque `lfcShrink(type = "apeglm")` solo acepta `coef` y
+#' diseño. Eso importa porque `lfcShrink(type = "apeglm")` solo acepta `coef` y
 #' no `contrast`, de modo que la via del relevel es la unica que permite
 #' contrastes arbitrarios CON encogido.
 #'
@@ -251,7 +251,7 @@ edger_is_v4 <- function() {
 
 #' Estructura de metadatos que devuelven todos los motores.
 #'
-#' Centraliza el contrato: si se anade un campo, se anade una vez y no cinco. El
+#' Centraliza el contrato: si se añade un campo, se añade una vez y no cinco. El
 #' bloque estaba repetido literalmente en cada motor.
 deg_engine_info <- function(d) {
   list(contrast = NA_character_, coef = NA_character_,
@@ -477,11 +477,11 @@ limma_extract <- function(lmfit, coef_test, lfc_threshold = 0) {
 #'   pierden descubrimientos.
 #' @param lfc_threshold Umbral de |log2FC| aplicado dentro del test. 0 = test
 #'   clasico contra H0: log2FC = 0.
-#' @param shrink Si TRUE, anade `log2FC_shrunk` via `lfcShrink()`. El encogido
+#' @param shrink Si TRUE, añade `log2FC_shrunk` via `lfcShrink()`. El encogido
 #'   cambia el log2FC pero NO los p-valores, asi que se testea con el estimador
 #'   de maxima verosimilitud y se visualiza/ordena con el encogido.
 #' @param contrast_num Nivel que actua de numerador. `ref_level` es el
-#'   denominador, de modo que el contraste pedido es un coeficiente del diseno.
+#'   denominador, de modo que el contraste pedido es un coeficiente del diseño.
 #' @param use_ihw Si TRUE, sustituye el filtrado independiente por IHW.
 run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
                            fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
@@ -555,7 +555,7 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
 #'   - Sin `estimateDisp()`: en v4 `glmQLFit()` estima la dispersion NB y la
 #'     cuasi-dispersion internamente usando devianzas corregidas por sesgo, lo
 #'     que corrige la subestimacion historica de las cuasi-dispersiones en
-#'     conteos pequenos (Chen et al., NAR 2025) — justo el regimen de un
+#'     conteos pequeños (Chen et al., NAR 2025) — justo el regimen de un
 #'     experimento con pocas replicas.
 #'   - `glmTreat()` cuando hay umbral de fold-change, en lugar de filtrar la
 #'     tabla despues.
@@ -647,7 +647,7 @@ run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
 
 #' CPM normalizados por composicion (TMM cuando edgeR esta disponible).
 #'
-#' Los motores robustos usaban CPM por tamano de libreria crudo. El benchmark
+#' Los motores robustos usaban CPM por tamaño de libreria crudo. El benchmark
 #' que motiva el motor de Wilcoxon (Li et al., Genome Biology 2022) normaliza
 #' con TMM, y sin corregir por composicion una diferencia de composicion entre
 #' grupos se convierte en falsos positivos — justo en el regimen de n grande en
@@ -665,7 +665,7 @@ normalized_cpm <- function(counts) {
     }, error = function(e) NULL)
     if (!is.null(out)) return(out)
   }
-  # Respaldo sin edgeR: CPM por tamano de libreria, peor pero utilizable.
+  # Respaldo sin edgeR: CPM por tamaño de libreria, peor pero utilizable.
   libs <- colSums(cm); libs[libs == 0] <- 1
   t(t(cm) / libs) * 1e6
 }
@@ -701,7 +701,7 @@ deg_method_overlap <- function(tab_a, tab_b, fdr = 0.05,
 #'
 #' El contraste se especifica como `contrast_num` (numerador) y `ref_level`
 #' (denominador). Poner el denominador como nivel de referencia del factor hace
-#' que la comparacion pedida sea un coeficiente del diseno, lo que permite usar
+#' que la comparacion pedida sea un coeficiente del diseño, lo que permite usar
 #' `lfcShrink(coef = ...)`: `apeglm` no admite `contrast`. La diferencia
 #' numerica frente a `results(contrast = ...)` es ruido del ajuste iterativo
 #' (del orden de 1e-6 en log2FC, sin cambios en las llamadas de significacion).
@@ -766,7 +766,7 @@ run_deg <- function(counts, meta,
     res$fit$extract <- list(fdr = fdr, lfc_threshold = res$lfc_threshold,
                             use_ihw = isTRUE(use_ihw), outliers = outliers)
   }
-  # El diseno REPORTADO tiene que ser el que el motor ajusto de verdad.
+  # El diseño REPORTADO tiene que ser el que el motor ajusto de verdad.
   # `design` es la etiqueta LEGIBLE (banner, informe) y `design_code` la formula
   # como CODIGO; se mantienen separadas porque el generador del script interpola
   # la segunda dentro de model.matrix().
@@ -793,7 +793,7 @@ run_deg <- function(counts, meta,
 #' se recalculan como corresponde.
 #'
 #' Lo que NO puede cambiar por esta via, porque cambia el AJUSTE y no su lectura:
-#' el motor, la formula del diseno, el batch o las variables sustitutas, el
+#' el motor, la formula del diseño, el batch o las variables sustitutas, el
 #' prefiltrado, el encogido y el modo de outliers "sustituir". Para todo eso la
 #' interfaz sigue exigiendo relanzar, y avisa cuando el ajuste se ha quedado
 #' desactualizado.
@@ -885,14 +885,14 @@ has_lfc_threshold <- function(lfc_thr) {
   isTRUE(is.finite(lfc_thr[1]) && lfc_thr[1] > 0)
 }
 
-#' Anade intervalo de confianza de Wald al log2FC, donde haya error estandar.
+#' Añade intervalo de confianza de Wald al log2FC, donde haya error estandar.
 #'
 #' Cierra A9 (docs/REVISION_ESTADISTICA.md): la interfaz declaraba una columna
 #' `lfcSE` que solo DESeq2 rellenaba, y sin error estandar "no se pueden dibujar
 #' intervalos de confianza". Ahora la rellenan DESeq2 y limma, asi que el
 #' intervalo se puede calcular y exportar.
 #'
-#' Nota de diseno: el IC se anade a la TABLA, no como barras de error en el
+#' Nota de diseño: el IC se añade a la TABLA, no como barras de error en el
 #' volcano. Con miles de genes, las barras de error se solapan hasta hacer el
 #' grafico ilegible y esconden justo lo que el volcano sirve para ver. El valor
 #' del IC esta en la tabla y en los datos exportados, donde se puede leer gen a

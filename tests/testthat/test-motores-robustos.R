@@ -35,7 +35,7 @@ test_that("los motores parametricos siguen reportando su formula", {
 })
 
 test_that("el bootstrap estratifica por condicion x batch cuando hay batch", {
-  # Diseno exigente: una sola muestra por celda condicion x lote. Sin
+  # Diseño exigente: una sola muestra por celda condicion x lote. Sin
   # estratificar por lote, un remuestreo puede perder un lote entero y ese
   # ajuste falla; como los fallos solo se cuentan, la estimacion queda apoyada
   # en los remuestreos faciles y sale optimista.
@@ -56,7 +56,7 @@ test_that("el bootstrap estratifica por condicion x batch cuando hay batch", {
 
 test_that("bootstrap_sample_indices no confunde un indice con un rango", {
   # Trampa clasica de R: sample(pos, 1) con pos de longitud 1 interpreta pos
-  # como 1:pos. Con estratos de tamano 1 (frecuentes al cruzar condicion x
+  # como 1:pos. Con estratos de tamaño 1 (frecuentes al cruzar condicion x
   # batch) eso devolveria indices inventados.
   meta <- data.frame(sample_id = paste0("s", 1:4),
                      condition = rep(c("ctrl", "trt"), each = 2),

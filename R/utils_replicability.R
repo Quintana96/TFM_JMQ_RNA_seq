@@ -2,12 +2,12 @@
 #' Evaluacion por bootstrap de la replicabilidad de un analisis diferencial.
 #'
 #' Por que existe (docs/REVISION_ESTADISTICA.md, B8): el estudio de
-#' replicabilidad en cohortes pequenas (PLOS Comput Biol) submuestreo 18.000
+#' replicabilidad en cohortes pequeñas (PLOS Comput Biol) submuestreo 18.000
 #' experimentos sobre 18 datasets y encontro que con 3 replicas la
 #' replicabilidad es pobre (mediana < 0,5) en casi todos, que el minimo
 #' aceptable esta en 5-7, y que con 10 la mayoria supera precision 0,9. Su
 #' recomendacion es operativa: estimar por BOOTSTRAP la replicabilidad de tus
-#' propios resultados antes de publicarlos, con Spearman > 0,9 como senal de
+#' propios resultados antes de publicarlos, con Spearman > 0,9 como señal de
 #' precision alta y < 0,8 como aviso de probables falsos positivos.
 #'
 #' Ninguna de las apps Shiny comparables ofrece esto.
@@ -15,11 +15,11 @@
 #' El coste computacional es el obstaculo real: son N reajustes del modelo, por
 #' lo que el numero de remuestreos es configurable.
 
-#' Umbrales de interpretacion del estudio de cohortes pequenas.
+#' Umbrales de interpretacion del estudio de cohortes pequeñas.
 REPLICABILITY_HIGH <- 0.9
 REPLICABILITY_LOW  <- 0.8
 
-#' Remuestrea muestras dentro de cada grupo, conservando el diseno.
+#' Remuestrea muestras dentro de cada grupo, conservando el diseño.
 #'
 #' El remuestreo es ESTRATIFICADO por condicion: un bootstrap ingenuo sobre
 #' todas las muestras puede dejar un grupo vacio y hacer imposible el contraste.
@@ -39,7 +39,7 @@ bootstrap_sample_indices <- function(meta, min_per_group = 2L, batch = NULL) {
   } else {
     as.character(meta$condition)
   }
-  # Con estratos muy pequenos (frecuente en condicion x batch) exigir 2 muestras
+  # Con estratos muy pequeños (frecuente en condicion x batch) exigir 2 muestras
   # distintas por estrato es imposible; el minimo se aplica entonces por
   # CONDICION, que es lo que el contraste necesita de verdad.
   min_estrato <- if (usar_batch) 1L else min_per_group
@@ -51,7 +51,7 @@ bootstrap_sample_indices <- function(meta, min_per_group = 2L, batch = NULL) {
     for (attempt in 1:20) {
       # sample.int y no sample(pos, ...): con un estrato de un solo elemento,
       # sample(pos, 1) interpreta `pos` como 1:pos y devuelve un indice
-      # cualquiera en ese rango en lugar de esa muestra. Los estratos de tamano
+      # cualquiera en ese rango en lugar de esa muestra. Los estratos de tamaño
       # 1 son frecuentes al cruzar condicion x batch.
       s <- pos[sample.int(length(pos), length(pos), replace = TRUE)]
       if (length(unique(s)) >= min(min_estrato, length(pos))) break
@@ -73,7 +73,7 @@ bootstrap_sample_indices <- function(meta, min_per_group = 2L, batch = NULL) {
 #'
 #' Tres metricas complementarias:
 #'   - `spearman`: correlacion de rangos del estadistico sobre los genes comunes.
-#'     Es la que el estudio de cohortes pequenas usa como criterio.
+#'     Es la que el estudio de cohortes pequeñas usa como criterio.
 #'   - `jaccard_topn`: estabilidad de la lista top-N por p-valor.
 #'   - `overlap_sig`: solapamiento de las listas de significativos.
 deg_concordance <- function(ref, boot, fdr = 0.05, top_n = 100,
@@ -132,10 +132,10 @@ interpret_replicability <- function(median_spearman) {
     return(list(level = "baja", label = "Replicabilidad baja",
       detail = paste0("La correlacion de Spearman mediana es ",
                       round(median_spearman, 3), " (< ", REPLICABILITY_LOW,
-                      "). Es la senal de aviso que el estudio de cohortes ",
-                      "pequenas asocia a probables falsos positivos: quitar una ",
+                      "). Es la señal de aviso que el estudio de cohortes ",
+                      "pequeñas asocia a probables falsos positivos: quitar una ",
                       "muestra cambia sustancialmente el resultado. Con este ",
-                      "tamano muestral, interpreta la lista con cautela.")))
+                      "tamaño muestral, interpreta la lista con cautela.")))
   }
   list(level = "intermedia", label = "Replicabilidad intermedia",
     detail = paste0("La correlacion de Spearman mediana es ",
@@ -165,7 +165,7 @@ bootstrap_replicability <- function(counts, meta, method = "DESeq2",
   # Con menos de 3 muestras por grupo el bootstrap es DEGENERADO: el unico
   # remuestreo que conserva 2 muestras distintas es el original, asi que la
   # correlacion sale 1 y se reportaria "replicabilidad alta" cuando en realidad
-  # no se ha medido nada. Es justo el tipo de conclusion enganosa que este panel
+  # no se ha medido nada. Es justo el tipo de conclusion engañosa que este panel
   # existe para evitar, asi que se rechaza en lugar de devolver un numero bonito.
   g <- as.character(meta$condition)
   g <- g[!is.na(g) & nzchar(g)]
@@ -173,7 +173,7 @@ bootstrap_replicability <- function(counts, meta, method = "DESeq2",
   min_group <- min(table(g))
   if (min_group < 3) {
     return(fail(paste0(
-      "El grupo mas pequeno tiene ", min_group, " muestras. Con menos de 3 por ",
+      "El grupo mas pequeño tiene ", min_group, " muestras. Con menos de 3 por ",
       "grupo el remuestreo solo puede reproducir las mismas muestras, de modo ",
       "que la correlacion saldria 1 sin haber medido nada. Este diagnostico ",
       "necesita al menos 3 replicas por grupo (la literatura situa el minimo ",

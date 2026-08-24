@@ -204,7 +204,7 @@ run_enrichment_go <- function(genes, universe = NULL, OrgDb = NULL,
 #' `from_keytype` es el espacio de identificadores de la matriz de conteos, y
 #' `OrgDb` la anotacion con la que traducirlo. Sin ellos, pedir "ncbi-geneid" con
 #' una matriz de simbolos mapeaba el 0 %% y devolvia "sin terminos enriquecidos",
-#' que no distingue "no hay senal" de "los IDs no eran los que KEGG esperaba".
+#' que no distingue "no hay señal" de "los IDs no eran los que KEGG esperaba".
 #' Reactome ya traducia; KEGG no, y era la unica coleccion que no lo hacia.
 run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
                                 keyType = "kegg", OrgDb = NULL,
@@ -288,7 +288,7 @@ run_enrichment_kegg <- function(genes, universe = NULL, organism = "eco",
 #     regulones de RegulonDB, firmas propias del laboratorio.
 # El precio es que el fichero manda: si sus identificadores no son los de la
 # matriz de conteos el solapamiento es cero y ningun OrgDb lo arregla. Por eso
-# se reporta cuantos conjuntos se han leido y de que tamano son.
+# se reporta cuantos conjuntos se han leido y de que tamaño son.
 
 #' Lee un .gmt y devuelve el TERM2GENE que consumen enricher() y GSEA().
 #'
@@ -328,7 +328,7 @@ read_gene_sets_gmt <- function(path) {
 gmt_summary_text <- function(gs) {
   if (is.null(gs)) return(NULL)
   if (!is.null(gs$error)) return(gs$error)
-  paste0(fmt_int(gs$n_sets), " conjuntos leidos; tamanos entre ", min(gs$sizes),
+  paste0(fmt_int(gs$n_sets), " conjuntos leidos; tamaños entre ", min(gs$sizes),
          " y ", max(gs$sizes), " genes (mediana ",
          round(stats::median(gs$sizes)), "); ", fmt_int(gs$n_genes),
          " genes distintos.")
@@ -392,7 +392,7 @@ run_enrichment_gmt <- function(genes, universe = NULL, term2gene = NULL,
 
 #' Ejecuta el mismo ORA sobre el conjunto, los genes al alza y los genes a la baja.
 #'
-#' Mezclar las dos direcciones diluye la senal: una ruta con la mitad de sus
+#' Mezclar las dos direcciones diluye la señal: una ruta con la mitad de sus
 #' genes reprimidos y la otra mitad inducidos aporta el mismo numero de genes al
 #' test hipergeometrico que una ruta coherentemente inducida, y sale con el
 #' mismo p-valor pese a significar cosas distintas. Separar por signo devuelve
@@ -427,7 +427,7 @@ run_ora_directional <- function(deg_df, runner, include_all = TRUE) {
     }
     r <- runner(g)
     # El mapeo del conjunto describe la lista entera; los de las mitades son el
-    # mismo diccionario sobre menos genes y no anaden informacion.
+    # mismo diccionario sobre menos genes y no añaden informacion.
     if (is.null(mapping) || identical(nm, "Conjunto")) mapping <- r$mapping %||% mapping
     if (is.null(r$table) || !nrow(r$table)) {
       errores[nm] <- r$error %||% "Sin terminos enriquecidos."
@@ -454,7 +454,7 @@ run_ora_directional <- function(deg_df, runner, include_all = TRUE) {
 
 #' Construye el vector ordenado de genes para GSEA.
 #'
-#' La eleccion de metrica es la decision de diseno real:
+#' La eleccion de metrica es la decision de diseño real:
 #'   - `stat` (por defecto): el estadistico moderado del motor. Incorpora la
 #'     variabilidad y es la opcion habitual.
 #'   - `log2FC`: interpretable, pero ignora la varianza.
@@ -522,11 +522,11 @@ deg_ranking_metric <- function(deg_df, metric = c("stat", "log2FC", "signed_p"),
 #' se traslada a RNA-seq. En fgsea el parametro equivalente es `gseaParam`.
 #'
 #' A diferencia del ORA, GSEA parte del ranking completo sin umbralizar, asi que
-#' ve senales debiles pero coordinadas: si veinte genes de una ruta suben un 30 %
+#' ve señales debiles pero coordinadas: si veinte genes de una ruta suben un 30 %
 #' cada uno, ninguno pasa el corte de la lista y la ruta no aparece en el ORA.
 #'
-#' @param minGSSize,maxGSSize Tamano minimo y maximo de conjunto que se testea.
-#'   Los conjuntos muy pequenos dan NES inestables y los muy grandes son
+#' @param minGSSize,maxGSSize Tamaño minimo y maximo de conjunto que se testea.
+#'   Los conjuntos muy pequeños dan NES inestables y los muy grandes son
 #'   demasiado inespecificos para interpretarse; ademas recortan el numero de
 #'   tests y con ello el castigo del ajuste multiple.
 #' @param pvalueCutoff Filtro sobre el p-valor AJUSTADO con el que
@@ -698,7 +698,7 @@ as_orgdb_object <- function(OrgDb) {
 #'
 #' Para GO se consulta GOALL y no GO: gseGO testea cada termino con todos los
 #' genes anotados en el y en sus descendientes (GO2ALLEGS), asi que usar GO
-#' devolveria un conjunto mas pequeno que el testeado y una curva que no
+#' devolveria un conjunto mas pequeño que el testeado y una curva que no
 #' corresponde al NES de la tabla.
 #'
 #' @return list(genes, error)
@@ -827,7 +827,7 @@ leading_edge_genes <- function(core) {
 #' pregunta si la lista umbralizada esta enriquecida en un termino, GSEA si el
 #' termino esta desplazado en el ranking completo. Un solapamiento bajo no es un
 #' error de ninguno de los dos, y los terminos que solo ve GSEA son justamente
-#' los de senal debil pero coordinada que el corte de la lista deja fuera. Es el
+#' los de señal debil pero coordinada que el corte de la lista deja fuera. Es el
 #' argumento por el que la app ofrece ambos y no solo el ORA.
 #'
 #' @return list(n_ora, n_gsea, n_comun, jaccard, solo_gsea, solo_ora, comunes)
@@ -912,7 +912,7 @@ compare_ora_gsea_table <- function(cmp) {
 #' Ordena el enriquecimiento por p.adjust y devuelve top_n filas.
 #'
 #' Con ORA direccional la tabla trae varias direcciones apiladas, y entonces el
-#' top se toma DENTRO de cada direccion: si no, la direccion con la senal mas
+#' top se toma DENTRO de cada direccion: si no, la direccion con la señal mas
 #' fuerte se lleva las 15 filas y la otra desaparece del grafico, que es
 #' precisamente la comparacion que se queria ver.
 enrichment_dotplot_data <- function(enrich_df, top_n = 15) {
@@ -943,7 +943,7 @@ enrichment_dotplot_data <- function(enrich_df, top_n = 15) {
 # ── Reactome ────────────────────────────────────────────────────────────────
 #
 # Por que existe: GO describe funciones y KEGG mapas metabolicos, pero las rutas
-# de senalizacion, el ciclo celular o la respuesta inmune estan mucho mejor
+# de señalizacion, el ciclo celular o la respuesta inmune estan mucho mejor
 # representadas en Reactome, que es una base curada manualmente y revisada por
 # pares (Milacic et al., NAR 2024). Es la tercera coleccion de referencia y la
 # que cierra el hueco entre las otras dos.
@@ -1055,7 +1055,7 @@ translate_to_entrez <- function(genes, OrgDb, keyType = "SYMBOL") {
 #' Cuando dos identificadores caen en el mismo ENTREZID se conserva el de MAYOR
 #' valor absoluto. Quedarse con el primero haria depender el resultado del orden
 #' de las filas de la matriz, que es arbitrario; quedarse con el mas extremo es
-#' reproducible y conserva la senal que GSEA va a leer.
+#' reproducible y conserva la señal que GSEA va a leer.
 translate_ranking_to_entrez <- function(ranked, OrgDb, keyType = "SYMBOL") {
   if (is.null(ranked) || !length(ranked) || is.null(names(ranked))) {
     return(list(ranked = NULL, error = "Ranking de genes vacio.", mapping = NULL))

@@ -28,7 +28,7 @@ for (f in sort(list.files(file.path(app_root, "R"), pattern = "[.]R$",
   sys.source(f, envir = globalenv())
 }
 
-#' Matriz de conteos sintetica con senal diferencial conocida.
+#' Matriz de conteos sintetica con señal diferencial conocida.
 #'
 #' Se genera con semilla fija para que los tests sean deterministas. `n_de`
 #' genes tienen un efecto real entre grupos; el resto es ruido.
@@ -50,7 +50,7 @@ make_test_counts <- function(n_genes = 400, n_per_group = 4, n_de = 40,
   })
 }
 
-#' Samplesheet acompanante de `make_test_counts()`.
+#' Samplesheet acompañante de `make_test_counts()`.
 #'
 #' Los niveles se eligen a proposito de forma que el orden alfabetico NO
 #' coincida con el contraste habitual: "trt" vs "ctrl" tiene como denominador

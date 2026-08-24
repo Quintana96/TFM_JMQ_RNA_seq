@@ -23,7 +23,7 @@ ui_tab_processing_content <- function(cfg, total_sz) {
               tags$dt(class = "col-6", "Fragmento:"),
               tags$dd(class = "col-6", paste0(cfg$fragment_length, " ± ", cfg$fragment_sd))
             ),
-          tags$dt(class = "col-6", "Tamano est.:"), tags$dd(class = "col-6", total_sz),
+          tags$dt(class = "col-6", "Tamaño est.:"), tags$dd(class = "col-6", total_sz),
           tags$dt(class = "col-6", "Entrada:"),
           tags$dd(class = "col-6", tags$code(class = "small", cfg$input_dir)),
           tags$dt(class = "col-6", "Salida:"),

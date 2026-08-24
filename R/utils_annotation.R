@@ -20,7 +20,7 @@
 #'
 #' Se guarda una sola entrada: el patron de uso es una anotacion por ejecucion, y
 #' el data.frame de un GTF humano ocupa cientos de MB. La clave incluye mtime y
-#' tamano para que un fichero modificado se vuelva a leer.
+#' tamaño para que un fichero modificado se vuelva a leer.
 .annotation_cache <- new.env(parent = emptyenv())
 
 #' Lee un GFF/GTF y devuelve sus atributos como data.frame.
@@ -416,7 +416,7 @@ translate_ids_with_annotation <- function(ids, path, from = NULL, to = "gene") {
 #' Cuando dos identificadores de origen caen en el mismo destino se conserva el
 #' de mayor valor absoluto. Es el criterio "max" que usa el GSEA original al
 #' colapsar sondas a genes: quedarse con el primero seria arbitrario, y
-#' promediar diluye la senal que el test busca.
+#' promediar diluye la señal que el test busca.
 translate_ranking_with_annotation <- function(ranked, path, from = NULL, to = "gene") {
   tr <- translate_ids_with_annotation(names(ranked), path, from = from, to = to)
   if (!length(tr$ids)) return(list(ranked = NULL, error = tr$error,

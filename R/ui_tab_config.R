@@ -18,7 +18,7 @@
 #'   - `uiOutput("validation_ui")` estaba definido en el server pero no existia
 #'     en ninguna parte de la interfaz: la lista de errores concretos no se
 #'     mostraba nunca y el boton de continuar se quedaba gris sin explicar por
-#'     que. Ahora acompana al checklist.
+#'     que. Ahora acompaña al checklist.
 #'   - Las opciones avanzadas y la calculadora de potencia bajan a un acordeon
 #'     plegado. Son utiles, pero no forman parte de configurar una ejecucion, y
 #'     ocupaban dos terceras partes del alto de la pestana.
@@ -71,14 +71,14 @@ ui_config_extras <- function() {
   # informa (cuantas replicas) se toma ANTES de secuenciar, no despues.
   if (isTRUE(HAS_RNASEQPOWER)) {
     paneles <- c(paneles, list(accordion_panel(
-      "Potencia y tamano muestral",
+      "Potencia y tamaño muestral",
       icon = icon("chart-line"),
       value = "power",
       tags$p(class = "small text-muted mb-2",
-             paste("El tamano muestral es el determinante mas fuerte de la",
+             paste("El tamaño muestral es el determinante mas fuerte de la",
                    "calidad del resultado. Esta calculadora orienta, no",
                    "garantiza: ninguna herramienta es fiable cuando se exigen",
-                   "efectos pequenos y potencias altas, porque los parametros",
+                   "efectos pequeños y potencias altas, porque los parametros",
                    "no se pueden fijar bien desde datos piloto limitados.")),
       layout_columns(
         col_widths = c(3, 3, 3, 3),

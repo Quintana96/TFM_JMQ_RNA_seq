@@ -16,7 +16,7 @@
 #' Es un `<button class="action-button">`, no un div con un boton dentro: Shiny
 #' vincula cualquier elemento con la clase `action-button` como si fuera un
 #' actionButton, de modo que toda la tarjeta es el area pulsable. Obligar a
-#' acertar un boton pequeno al pie de la tarjeta era parte de lo que hacia
+#' acertar un boton pequeño al pie de la tarjeta era parte de lo que hacia
 #' torpe la navegacion.
 home_step_card <- function(id, step, title, desc, pill, cta = "Abrir") {
   tags$button(
