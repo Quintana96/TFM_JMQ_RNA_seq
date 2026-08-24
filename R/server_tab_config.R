@@ -22,14 +22,59 @@ server_tab_config <- function(input, output, session, state) {
                 accept = c(".fa", ".fasta", ".fna", ".gz"), multiple = FALSE)
   })
 
-  # ── Seleccion de directorio con shinyFiles ─────────────────────────────────
-  shinyFiles::shinyDirChoose(input, "input_dir_btn", roots = state$roots, session = session)
+  # ── Seleccion del directorio de FASTQ ──────────────────────────────────────
+  #
+  # El dialogo del sistema es el camino principal: se abre donde el usuario
+  # quiera, sin raices ni arbol web que aprender. Cuando no se puede abrir
+  # —dentro de un contenedor o sin escritorio— se cae al selector de shinyFiles,
+  # que sigue funcionando aunque el servidor este en otra maquina.
+  #
+  # Lo que se muestra y lo que consume el resto de la pestana es SIEMPRE el
+  # campo de texto: el dialogo se limita a rellenarlo. Con dos fuentes de verdad
+  # (el dialogo y el campo) habria que decidir cual gana cada vez que difieren,
+  # y esa decision no tiene una respuesta buena.
+  usar_dialogo_nativo <- isTRUE(dialogo_nativo_disponible())
+
+  output$input_dir_btn_ui <- renderUI({
+    if (usar_dialogo_nativo) {
+      actionButton("input_dir_nativo_btn", "Examinar...", icon = icon("folder-open"),
+                   class = "btn-picker")
+    } else {
+      shinyFiles::shinyDirButton("input_dir_btn", "Examinar...", "Seleccionar...",
+                                 class = "btn-picker")
+    }
+  })
+
+  if (!usar_dialogo_nativo) {
+    shinyFiles::shinyDirChoose(input, "input_dir_btn", roots = state$roots,
+                               session = session)
+    observeEvent(input$input_dir_btn, {
+      ruta <- as.character(shinyFiles::parseDirPath(state$roots, input$input_dir_btn))
+      if (length(ruta) && nzchar(ruta)) {
+        updateTextInput(session, "input_dir_texto", value = ruta)
+      }
+    })
+  }
+
+  observeEvent(input$input_dir_nativo_btn, {
+    # Se parte de lo que ya haya escrito para no obligar a volver a navegar
+    # desde el principio al corregir una seleccion.
+    actual <- validar_directorio(input$input_dir_texto)$ruta
+    ruta <- elegir_directorio_nativo(
+      titulo = "Selecciona la carpeta con los FASTQ",
+      inicio = if (nzchar(actual)) actual else path.expand("~"))
+    # NULL significa que se cancelo: se deja lo que hubiera, sin avisos.
+    if (!is.null(ruta)) updateTextInput(session, "input_dir_texto", value = ruta)
+  })
 
   input_dir_val <- reactive({
-    if (!is.null(input$input_dir_btn)) {
-      path <- shinyFiles::parseDirPath(state$roots, input$input_dir_btn)
-      as.character(path)
-    } else ""
+    validar_directorio(input$input_dir_texto)$ruta
+  })
+
+  output$input_dir_aviso <- renderUI({
+    v <- validar_directorio(input$input_dir_texto)
+    if (is.null(v$error)) return(NULL)
+    div(class = "text-danger small mb-2", icon("triangle-exclamation"), " ", v$error)
   })
 
   output_dir_val <- reactive(state$pending_output_dir() %||% "")

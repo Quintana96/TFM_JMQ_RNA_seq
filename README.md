@@ -61,7 +61,8 @@ La aplicación puede operar en dos modos:
 - Selección del modo de inicio: workflow completo o carga de matriz de conteos.
 - Elección del tipo de análisis: **alineamiento clásico** (Bowtie2 + featureCounts) o **pseudoalineamiento** (Salmon / Kallisto).
 - Soporte para lecturas **paired-end** y **single-end**.
-- Selección interactiva de directorios para archivos FASTQ de entrada, genoma de referencia y anotación.
+- Selección del directorio de FASTQ con el **diálogo del sistema** —Finder, Explorador o el del escritorio—, o pegando la ruta directamente. No hay raíces ni árbol web que aprender: se navega a cualquier carpeta del equipo, dentro o fuera de la del proyecto. Genoma y anotación usan el diálogo nativo del navegador.
+- Cuando no hay escritorio (contenedor o servidor remoto) se cae al selector web de shinyFiles, que sigue funcionando con el servidor en otra máquina.
 - Detección automática de muestras y previsualización del número de archivos FASTQ detectados.
 - Checklist de validación que verifica todos los parámetros antes de permitir continuar, con la lista de errores concretos junto al botón de continuar.
 - En modo "matriz de conteos" se ocultan los campos del pipeline, que en ese modo no aplican.

@@ -206,8 +206,19 @@ ui_tab_config <- function() {
 
           card(
             card_header("Rutas y archivos"),
-            shinyDirButton("input_dir_btn", "Seleccionar directorio de FASTQs",
-                           "Seleccionar...", class = "btn-picker"),
+            # Dos caminos hacia la misma ruta. El boton abre el dialogo del
+            # sistema —Finder, Explorador o el del escritorio— que es donde la
+            # gente sabe moverse; el campo de texto permite pegarla directamente,
+            # que es mas rapido cuando ya se conoce. El campo muestra ademas la
+            # seleccion actual, asi que no hace falta una etiqueta aparte.
+            tags$label(class = "control-label", "Directorio de FASTQs"),
+            div(class = "d-flex gap-2 align-items-start mb-1",
+                uiOutput("input_dir_btn_ui", inline = TRUE),
+                div(class = "flex-grow-1",
+                    textInput("input_dir_texto", label = NULL, value = "",
+                              placeholder = "/ruta/a/los/fastq  (o pulsa Examinar)",
+                              width = "100%"))),
+            uiOutput("input_dir_aviso"),
             uiOutput("genome_label_ui"),
             conditionalPanel(
               "input.analysis_type === 'alignment'",
