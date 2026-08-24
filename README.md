@@ -35,7 +35,8 @@
 8. [Pipeline bioinformático](#pipeline-bioinformático)
 9. [Arquitectura de la aplicación](#arquitectura-de-la-aplicación)
 10. [Despliegue con Docker](#despliegue-con-docker)
-11. [Notas técnicas](#notas-técnicas)
+11. [Validación](#validación)
+12. [Notas técnicas](#notas-técnicas)
 
 ---
 
@@ -438,6 +439,65 @@ docker run --rm sara:1.0 verify
 
 Detalles de construcción, montajes, límites de recursos y limitaciones conocidas
 en [`docker/README.md`](docker/README.md).
+
+---
+
+## Validación
+
+SARA se ha contrastado contra los resultados publicados de **GSE273773**
+(Salazar-Alemán & Turner, 2025, *Sci Rep* 15:1389), reprocesando los FASTQ
+originales por las dos rutas del pipeline.
+
+Primero se comprueba que el criterio aplicado es el de los autores: con
+`padj < 0,05` y `|log2FC| > 1` sobre *su propia tabla* salen **581 genes
+inducidos y 791 reprimidos**, exactamente las cifras del artículo. A partir de
+ahí, cualquier diferencia es de datos o de método.
+
+| | Alineamiento (bowtie2) | Pseudoalineamiento (salmon) |
+|---|---|---|
+| Genes diferenciales publicados recuperados | **96,8 %** | 95,2 % |
+| Índice de Jaccard de las listas | 0,912 | 0,888 |
+| Coincidencia en el sentido del cambio | **99,9 %** | 99,9 % |
+| log2FC · correlación de Pearson | 0,974 | 0,976 |
+| log2FC · diferencia absoluta mediana | **0,042** | 0,073 |
+
+Los diez genes más significativos del artículo se recuperan los diez. Las
+discrepancias se concentran en el borde de los umbrales y en genes poco
+expresados: los que solo detecta SARA tienen un `|log2FC|` mediano de 0,97,
+justo por debajo del corte de 1. Hay **una sola discrepancia de sentido en
+1.320 genes**, y ambas rutas coinciden entre sí en ella, lo que apunta a la
+asignación de lecturas y no a la estadística.
+
+Las dos rutas concuerdan más entre ellas (Pearson 0,9925, Jaccard 0,937) que
+cualquiera de las dos con la publicada, que es lo esperable: comparten recorte,
+anotación y modelo, y solo difieren en cómo asignan las lecturas.
+
+### Un caso que justifica ofrecer los tres enfoques de enriquecimiento
+
+El artículo destaca homeostasis del hierro, metabolismo del sulfato,
+biosíntesis de cisteína y reparación del ADN. A nivel de gen se reproducen sin
+discusión (`cysD` +4,11; `cysK` +3,86; `fecA` +2,43; `recA` +1,42;
+`sodA` −2,29), pero **el ORA sobre la lista completa no los saca**.
+
+La causa es que esa lista junta 587 genes al alza con 790 a la baja, y la
+mezcla cancela cualquier señal direccional:
+
+| Término | Lista completa | Solo al alza |
+|---|---|---|
+| Homeostasis del hierro | 20/52, esperados 19,3 → p = 0,475 | 18/52, esperados 8,2 → **p = 0,0006** |
+| Biosíntesis de cisteína | 7/11 → p = 0,068 | 6/11 → **p = 0,0035** |
+| Asimilación de sulfato | 7/9 → p = 0,016 | 6/9 → **p = 0,0008** |
+
+Se recupera de dos maneras, ambas disponibles en la aplicación: marcando el
+**ORA direccional**, que parte la lista por sentido, o usando **GSEA**, que
+recorre el ranking con signo sin umbralizar (homeostasis del hierro NES +2,22,
+p ajustado 1,6e-05).
+
+> Descartadas por medición otras dos explicaciones: no es el tamaño de la lista
+> —recortándola de 1.377 a 100 genes el término sigue sin salir— ni la
+> traducción de identificadores —el 97,9 % de los diferenciales tiene símbolo
+> frente al 92,1 % de los no diferenciales, así que recorta lista y fondo por
+> igual—.
 
 ---
 
