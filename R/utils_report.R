@@ -85,7 +85,7 @@ app_provenance <- function() {
                                     stdout = TRUE, stderr = FALSE))) > 0,
     error = function(e) FALSE)
   list(
-    "Aplicacion" = "RNA-seq Workflow Runner",
+    "Aplicacion" = "SARA (Shiny App for RNA-seq Analysis)",
     "Commit de git" = if (length(commit))
       paste0(commit[1], if (isTRUE(sucio)) " (con cambios sin commitear)" else "")
       else "no disponible",
@@ -229,6 +229,24 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
     paste0("<h3>Herramientas del pipeline</h3>",
            html_kv_table(stats::setNames(as.list(inst$version), inst$tool)))
   } else ""
+  # Coste de la ejecucion del pipeline. Es parte de la procedencia: dice en que
+  # equipo y en cuanto tiempo se obtuvo la matriz, que es lo que permite juzgar
+  # si el analisis es repetible con los medios de quien lo lee.
+  mt <- if (!is.null(rd) && nzchar(rd %||% "") && dir.exists(rd)) read_run_metrics(rd) else NULL
+  metricas_html <- if (!is.null(mt) && nrow(mt)) {
+    filas <- vapply(seq_len(nrow(mt)), function(i) paste0(
+      "<tr><td>", html_escape(mt$paso[i]), "</td><td>",
+      html_escape(mt$duracion[i]), "</td><td>",
+      html_escape(fmt_memoria(mt$pico_rss_mb[i])), "</td></tr>"), character(1))
+    paste0("<h3>Coste de la ejecucion del pipeline</h3>",
+           "<table><thead><tr><th>Paso</th><th>Duracion</th>",
+           "<th>Memoria maxima</th></tr></thead><tbody>",
+           paste(filas, collapse = ""), "</tbody></table>",
+           "<p class=\"nota\">La memoria es el maximo del arbol de procesos, ",
+           "muestreado una vez por segundo: un pico mas corto que eso puede no ",
+           "quedar registrado.</p>")
+  } else ""
+
   checks_html <- if (!is.null(ck) && nrow(ck)) {
     paste0("<h3>Huella de los ficheros de entrada</h3>",
            "<table><thead><tr><th>Fichero</th><th>Bytes</th><th>md5</th></tr></thead><tbody>",
@@ -422,7 +440,7 @@ html_escape(rv$fdr %||% 0.05), '</span>',
 '<span class="metric"><b>', fmt_int(up), ' / ', fmt_int(down),
 '</b>up / down</span></p>',
 '<h2>Parametros del analisis</h2>', html_kv_table(params),
-proc_html, pipeline_html, checks_html,
+proc_html, pipeline_html, metricas_html, checks_html,
 diag_html,
 enrich_html,
 lims_html,
@@ -448,7 +466,7 @@ html_kv_table(app_provenance()),
 seeds_html,
 '<h3>Versiones de los paquetes</h3>', html_kv_table(pkg_versions),
 '<h3>sessionInfo()</h3><pre>', html_escape(paste(si, collapse = "\n")), '</pre>',
-'<footer>Generado por RNA-seq Workflow Runner el ',
+'<footer>Generado por SARA el ',
 html_escape(format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
 '. Este informe recoge los parametros con los que se ejecuto el analisis; ',
 'el script R equivalente se puede descargar aparte para reproducirlo fuera de la app.',
@@ -503,7 +521,7 @@ build_deg_r_script <- function(rv) {
   pf <- rv$prefilter
 
   header <- c(
-    "# Script equivalente al analisis ejecutado en RNA-seq Workflow Runner",
+    "# Script equivalente al analisis ejecutado en SARA",
     paste0("# Generado el ", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
     paste0("# Contraste: ", rv$contrast %||% "—",
            "   |   Diseno: ", design,

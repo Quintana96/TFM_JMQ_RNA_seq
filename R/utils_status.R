@@ -159,3 +159,43 @@ infer_result_params <- function(out_dir, workflow_path) {
     r_version = paste(R.version$major, R.version$minor, sep = ".")
   )
 }
+
+# ── Metricas de coste de la ejecucion ───────────────────────────────────────
+#
+# El workflow mide dos cosas que hacen falta para decidir si un conjunto de
+# datos cabe en el equipo que se tiene: cuanto tarda y cuanta memoria pide.
+#
+# Sobre la memoria: el dato util es el PICO, no un promedio ni un minimo. Un
+# promedio no dice nada —la mayor parte del tiempo el pipeline esta escribiendo
+# a disco— y el minimo seria el consumo en reposo. Lo que responde a "cuanta
+# RAM necesito" es el maximo que llego a ocupar el arbol de procesos.
+
+#' Metricas por paso que escribe el workflow.
+#'
+#' @return data.frame(paso, segundos, duracion, pico_rss_mb) o NULL.
+read_run_metrics <- function(out_dir) {
+  f <- file.path(out_dir, "metrics.tsv")
+  if (!file.exists(f)) return(NULL)
+  df <- tryCatch(
+    utils::read.delim(f, stringsAsFactors = FALSE, check.names = FALSE),
+    error = function(e) NULL)
+  if (is.null(df) || !nrow(df)) return(NULL)
+  df
+}
+
+#' Duracion en segundos como texto legible.
+fmt_duracion <- function(segundos) {
+  s <- suppressWarnings(as.numeric(segundos))
+  if (length(s) != 1L || is.na(s) || s < 0) return("—")
+  h <- s %/% 3600; m <- (s %% 3600) %/% 60; seg <- round(s %% 60)
+  if (h > 0) sprintf("%dh %02dm", h, m)
+  else if (m > 0) sprintf("%dm %02ds", m, seg)
+  else sprintf("%ds", seg)
+}
+
+#' Memoria en MB como texto legible, pasando a GB cuando toca.
+fmt_memoria <- function(mb) {
+  v <- suppressWarnings(as.numeric(mb))
+  if (length(v) != 1L || is.na(v) || v <= 0) return("—")
+  if (v >= 1024) sprintf("%.1f GB", v / 1024) else sprintf("%.0f MB", v)
+}

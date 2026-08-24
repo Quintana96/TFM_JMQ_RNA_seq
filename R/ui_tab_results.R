@@ -43,7 +43,14 @@ ui_results_tiles <- function(s) {
     # etiquetas distintas induce a error: ahora son los genes con al menos una
     # lectura asignada.
     stat_tile(if (!is.null(s)) (s$n_detected %||% "—") else "—",
-              "Genes con conteo > 0", if (is.null(s)) "neutral" else "info")
+              "Genes con conteo > 0", if (is.null(s)) "neutral" else "info"),
+    # Coste de la ejecucion. Es lo que permite responder a "esto cabe en mi
+    # portatil o necesito un servidor", que es una pregunta que se hace antes
+    # de lanzar un conjunto de datos grande, no despues.
+    stat_tile(if (!is.null(s)) fmt_duracion(s$duration_seconds) else "—",
+              "Duracion", if (is.null(s)) "neutral" else "info"),
+    stat_tile(if (!is.null(s)) fmt_memoria(s$peak_rss_mb) else "—",
+              "RAM maxima", if (is.null(s)) "neutral" else "info")
   )
 }
 

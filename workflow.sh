@@ -149,6 +149,152 @@ file_size() {
     stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo 0
 }
 
+
+# ── Metricas de ejecucion: tiempo y memoria ────────────────────────────────
+#
+# Responden a la pregunta practica de "cuanto tarda y cuanta RAM hace falta",
+# que es lo que hay que saber para decidir si esto corre en un portatil o
+# necesita un servidor.
+#
+# La memoria se mide con un MUESTREADOR en segundo plano y no con
+# `/usr/bin/time`, por dos razones. La primera es de portabilidad: la version
+# BSD de macOS y la GNU de Linux difieren en las opciones (-l frente a -v), en
+# las unidades (bytes frente a kilobytes) y en si aceptan -o para escribir a
+# fichero, de modo que habria que mantener dos caminos. La segunda es que
+# `time` mide un proceso, y aqui interesa el arbol entero: cuando bowtie2
+# escribe a samtools por una tuberia los dos estan vivos a la vez, y lo que hay
+# que reservar es lo que ocupan juntos.
+#
+# Limitacion, que conviene declarar en lugar de aparentar precision: al
+# muestrear una vez por segundo, un pico mas corto que eso puede pasar
+# desapercibido. Para herramientas que tardan minutos la aproximacion es buena;
+# para medir con exactitud haria falta cgroups o un `time` especifico de la
+# plataforma.
+RUN_START_EPOCH=$(date +%s)
+SAMPLES_FILE=""      # epoch <TAB> rss_kb del arbol de procesos
+STEPS_FILE=""        # paso <TAB> inicio <TAB> fin
+METRICS_FILE=""      # resumen por paso, ya agregado
+SAMPLER_PID=""
+RSS_INTERVAL="${RSS_INTERVAL:-1}"
+
+# Memoria residente sumada de un proceso y todos sus descendientes, en KB.
+# `ps -eo pid=,ppid=,rss=` se comporta igual en macOS y en Linux, y el RSS
+# viene en KB en las dos.
+rss_tree_kb() {
+    ps -eo pid=,ppid=,rss= 2>/dev/null | awk -v raiz="$1" '
+        { padre[$1] = $2; rss[$1] = $3 }
+        END {
+            descendiente[raiz] = 1
+            # El arbol es poco profundo, asi que basta con repetir hasta que
+            # deje de crecer en vez de ordenarlo topologicamente.
+            do {
+                nuevo = 0
+                for (p in padre)
+                    if (!(p in descendiente) && (padre[p] in descendiente)) {
+                        descendiente[p] = 1; nuevo = 1
+                    }
+            } while (nuevo)
+            total = 0
+            for (p in descendiente) total += rss[p]
+            printf "%d\n", total
+        }'
+}
+
+start_sampler() {
+    [[ -n "$SAMPLES_FILE" ]] || return 0
+    local raiz=$$
+    (
+        # El muestreador muere solo si el script desaparece: sin esto, un fallo
+        # duro dejaria un proceso huerfano muestreando para siempre.
+        while kill -0 "$raiz" 2>/dev/null; do
+            printf '%s\t%s\n' "$(date +%s)" "$(rss_tree_kb "$raiz")" >> "$SAMPLES_FILE"
+            sleep "$RSS_INTERVAL"
+        done
+    ) &
+    SAMPLER_PID=$!
+}
+
+stop_sampler() {
+    [[ -n "$SAMPLER_PID" ]] || return 0
+    kill "$SAMPLER_PID" 2>/dev/null || true
+    wait "$SAMPLER_PID" 2>/dev/null || true
+    SAMPLER_PID=""
+}
+
+# Marca de paso. Cada llamada cierra el paso anterior y abre uno nuevo, de modo
+# que no hay que emparejar inicio y fin a mano en un script de 700 lineas.
+CURRENT_STEP=""
+CURRENT_STEP_START=0
+step_close() {
+    [[ -n "$CURRENT_STEP" && -n "$STEPS_FILE" ]] || return 0
+    printf '%s\t%s\t%s\n' "$CURRENT_STEP" "$CURRENT_STEP_START" "$(date +%s)" \
+        >> "$STEPS_FILE"
+    CURRENT_STEP=""
+}
+step() {
+    step_close
+    CURRENT_STEP="$1"; shift
+    CURRENT_STEP_START=$(date +%s)
+    log "$*"
+}
+
+# Cruza los pasos con las muestras de memoria y escribe metrics.tsv.
+write_metrics() {
+    [[ -n "$METRICS_FILE" && -s "$STEPS_FILE" ]] || return 0
+    local total=$(( $(date +%s) - RUN_START_EPOCH ))
+    {
+        printf 'paso\tsegundos\tduracion\tpico_rss_mb\n'
+        awk -F'\t' -v muestras="$SAMPLES_FILE" '
+            function humano(s,   h, m) {
+                h = int(s / 3600); m = int((s % 3600) / 60)
+                if (h > 0) return sprintf("%dh %02dm %02ds", h, m, s % 60)
+                if (m > 0) return sprintf("%dm %02ds", m, s % 60)
+                return sprintf("%ds", s)
+            }
+            BEGIN {
+                n = 0
+                while ((getline linea < muestras) > 0) {
+                    split(linea, c, "\t")
+                    t[n] = c[1] + 0; r[n] = c[2] + 0; n++
+                }
+            }
+            {
+                paso = $1; ini = $2 + 0; fin = $3 + 0
+                pico = 0
+                # Ventana abierta por la izquierda, (inicio, fin).
+                #
+                # Con los dos extremos incluidos la muestra de la frontera se
+                # contaba dos veces, y ademas el instante en que un paso empieza
+                # es justo aquel en el que los procesos del anterior TODAVIA no
+                # han terminado de cerrarse. Medido: al arrancar el conteo, la
+                # muestra de ese segundo daba 2,4 GB porque FastQC seguia vivo;
+                # un segundo despues, 82 MB. Atribuir ese pico al conteo es
+                # falso, asi que la ventana empieza despues del instante de
+                # arranque. El total de la ejecucion no se ve afectado: ese se
+                # calcula sobre todas las muestras.
+                for (i = 0; i < n; i++)
+                    if (t[i] > ini && t[i] < fin && r[i] > pico) pico = r[i]
+                printf "%s\t%d\t%s\t%.0f\n", paso, fin - ini, humano(fin - ini), pico / 1024
+            }' "$STEPS_FILE"
+        # Fila final con el total, para no tener que sumar a ojo.
+        awk -F'\t' -v total="$total" -v muestras="$SAMPLES_FILE" '
+            function humano(s,   h, m) {
+                h = int(s / 3600); m = int((s % 3600) / 60)
+                if (h > 0) return sprintf("%dh %02dm %02ds", h, m, s % 60)
+                if (m > 0) return sprintf("%dm %02ds", m, s % 60)
+                return sprintf("%ds", s)
+            }
+            BEGIN {
+                pico = 0
+                while ((getline linea < muestras) > 0) {
+                    split(linea, c, "\t")
+                    if (c[2] + 0 > pico) pico = c[2] + 0
+                }
+                printf "TOTAL\t%d\t%s\t%.0f\n", total, humano(total), pico / 1024
+            }'
+    } > "$METRICS_FILE"
+}
+
 trap 'log "ERROR: fallo en la linea ${BASH_LINENO[0]:-$LINENO}${FUNCNAME[0]:+ (funcion ${FUNCNAME[0]})}. Revisa el comando anterior."' ERR
 
 # Estado de salida como FICHERO, no solo como texto en el log.
@@ -161,11 +307,23 @@ trap 'log "ERROR: fallo en la linea ${BASH_LINENO[0]:-$LINENO}${FUNCNAME[0]:+ (f
 RUN_STATUS_FILE=""
 write_exit_status() {
     local code=$1
+    # Las metricas se cierran aqui y no en el camino feliz: una ejecucion que
+    # falla a mitad tambien consumio tiempo y memoria, y saber cuanto es justo
+    # lo que hace falta para diagnosticarla.
+    step_close
+    stop_sampler
+    write_metrics
     [[ -n "$RUN_STATUS_FILE" ]] || return 0
+    local total=$(( $(date +%s) - RUN_START_EPOCH ))
+    local pico=0
+    [[ -s "${SAMPLES_FILE:-/dev/null}" ]] && pico=$(awk -F'\t' \
+        'BEGIN{m=0} $2+0>m{m=$2+0} END{printf "%.0f", m/1024}' "$SAMPLES_FILE")
     {
-        printf 'exit_code\t%s\n'   "$code"
-        printf 'status\t%s\n'      "$([[ "$code" -eq 0 ]] && echo success || echo error)"
-        printf 'finished_at\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+        printf 'exit_code\t%s\n'        "$code"
+        printf 'status\t%s\n'           "$([[ "$code" -eq 0 ]] && echo success || echo error)"
+        printf 'finished_at\t%s\n'      "$(date '+%Y-%m-%d %H:%M:%S')"
+        printf 'duration_seconds\t%s\n' "$total"
+        printf 'peak_rss_mb\t%s\n'      "$pico"
     } > "$RUN_STATUS_FILE"
 }
 trap 'write_exit_status $?' EXIT
@@ -207,9 +365,14 @@ salmon_index_type() {
 # esa ejecucion tambien tiene que dejar constancia de por que murio.
 mkdir -p "$OUTPUT"
 RUN_STATUS_FILE="${OUTPUT}/exit_status.tsv"
+SAMPLES_FILE="${OUTPUT}/.rss_samples.tsv"
+STEPS_FILE="${OUTPUT}/.steps.tsv"
+METRICS_FILE="${OUTPUT}/metrics.tsv"
+: > "$SAMPLES_FILE"; : > "$STEPS_FILE"
+start_sampler
 
 # Validate required tools early
-log "Validando herramientas en PATH..."
+step preparacion "Validando herramientas en PATH..."
 log "PATH=$PATH"
 check_command fastqc
 check_command fastp
@@ -410,7 +573,7 @@ else
 fi
 
 # Build genome index based on alignment type
-log "Building ${ALIGNMENT_TYPE} index..."
+step indice "Building ${ALIGNMENT_TYPE} index..."
 
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
     if [[ -s "${BOWTIE_INDEX}.1.bt2" && -s "${BOWTIE_INDEX}.2.bt2" && -s "${BOWTIE_INDEX}.3.bt2" && -s "${BOWTIE_INDEX}.4.bt2" && -s "${BOWTIE_INDEX}.rev.1.bt2" && -s "${BOWTIE_INDEX}.rev.2.bt2" ]]; then
@@ -440,7 +603,7 @@ elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
 fi
 
 # Initial quality control
-log "Control de calidad inicial con FastQC..."
+step qc_inicial "Control de calidad inicial con FastQC..."
 run_cmd fastqc "${FASTQ_FILES[@]}" -t "$THREADS" -o "$QC"
 
 if [[ "$READ_TYPE" == "pe" ]]; then
@@ -450,6 +613,9 @@ else
 fi
 
 # Process each sample
+# Es el paso que domina el tiempo total: recorte con fastp mas alineamiento o
+# cuantificacion, una vez por muestra.
+step procesado "Procesando ${#SAMPLE_FILES[@]} muestras (recorte y ${ALIGNMENT_TYPE})..."
 for READ1 in "${SAMPLE_FILES[@]}"; do
 
     [ -e "$READ1" ] || continue
@@ -581,7 +747,7 @@ if [[ ${#TRIMMED_FASTQ[@]} -eq 0 ]]; then
     log "Error: no se encontraron FASTQ recortados en $TRIMMED."
     exit 1
 fi
-log "Control de calidad post-trimming con FastQC..."
+step qc_final "Control de calidad post-trimming con FastQC..."
 run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 
 # ── Orientacion de la libreria ─────────────────────────────────────────────
@@ -663,6 +829,7 @@ fi
 printf 'strandedness\t%s\n' "$STRANDEDNESS" >> "${OUTPUT}/run_params.tsv"
 
 # Generate count matrix based on alignment type
+step conteo "Generando la matriz de conteos..."
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
     log "Generating count matrix from Bowtie2 alignments..."
     # Count reads per gene
@@ -750,7 +917,7 @@ elif [[ "$ALIGNMENT_TYPE" == "salmon" || "$ALIGNMENT_TYPE" == "kallisto" ]]; the
 fi
 
 # Generate combined quality and alignment report
-log "Generando informe MultiQC..."
+step multiqc "Generando informe MultiQC..."
 run_cmd multiqc "$OUTPUT" -o "$OUTPUT"
 
 log "Analysis completed successfully."

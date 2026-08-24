@@ -40,6 +40,8 @@ summarise_result <- function(out_dir, params) {
     sum(as.matrix(fq[, qc_cols, drop = FALSE]) == "fail", na.rm = TRUE)
   } else NA_integer_
 
+  estado <- read_exit_status(out_dir)
+
   list(
     status = status,
     tool = tool,
@@ -55,6 +57,11 @@ summarise_result <- function(out_dir, params) {
     mean_trim_survival = if (length(trim_vals)) mean(trim_vals, na.rm = TRUE) else NA_real_,
     mean_q30 = if (length(q30_vals)) mean(q30_vals, na.rm = TRUE) else NA_real_,
     fastqc_fail = fastqc_fail,
+    # Coste de la ejecucion. Salen de exit_status.tsv, que el workflow escribe
+    # en un trap EXIT: estan tambien cuando la ejecucion ha fallado, que es
+    # cuando mas falta hacen para diagnosticar.
+    duration_seconds = suppressWarnings(as.numeric(estado$duration_seconds %||% NA)),
+    peak_rss_mb = suppressWarnings(as.numeric(estado$peak_rss_mb %||% NA)),
     has_multiqc = file.exists(file.path(out_dir, "multiqc_report.html"))
   )
 }
