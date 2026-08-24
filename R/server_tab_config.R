@@ -136,8 +136,20 @@ server_tab_config <- function(input, output, session, state) {
   })
 
   # ── Validaciones ──────────────────────────────────────────────────────────
+
+  # Las ocho herramientas del pipeline. El workflow ya las comprueba en su
+  # primer paso y aborta si falta alguna, pero para entonces la ejecucion ya
+  # esta lanzada y el motivo queda enterrado en el log: arriba se lee "Error
+  # (codigo 1)" y la causa aparece veinte lineas mas abajo. Comprobarlo aqui
+  # convierte eso en una frase antes de empezar.
+  estado_herramientas <- reactive({
+    comprobar_herramientas(input$analysis_type %||% "alignment", effective_tool())
+  })
+
   val_errors <- reactive({
     errs <- character(0)
+    msg_tools <- mensaje_herramientas(estado_herramientas())
+    if (!is.null(msg_tools)) errs <- c(errs, msg_tools)
     dir_in  <- input_dir_val() %||% ""
     gf      <- if (!is.null(input$genome_file_upload) && nrow(input$genome_file_upload) > 0)
                   input$genome_file_upload$datapath else ""
@@ -200,6 +212,7 @@ server_tab_config <- function(input, output, session, state) {
     }
     valid_ok <- if (length(val_errors()) == 0) "ok" else "missing"
     list(
+      "Herramientas"          = if (!length(estado_herramientas()$faltan)) "ok" else "missing",
       "Directorio FASTQ"      = if (dir_ok) "ok" else "missing",
       "Muestras detectadas"   = if (samples_ok) "ok" else "missing",
       "Genoma/transcriptoma"  = genome_ok,
@@ -290,13 +303,16 @@ server_tab_config <- function(input, output, session, state) {
     samps <- samples_eff()
     run_output_dir <- create_run_output_dir(state$outputs_dir, input$analysis_type, effective_tool())
     state$pending_output_dir(run_output_dir)
-    state$config_snap(list(
-      analysis_type = input$analysis_type, tool = effective_tool(),
-      input_dir  = input_dir_val(), output_dir = run_output_dir,
-      genome_file = effective_genome_file(), annotation = effective_annotation(),
-      n_samples = length(samps), read_type = read_type_label(effective_read_type()),
-      fragment_length = effective_fragment_length(), fragment_sd = effective_fragment_sd()
-    ))
+    # Solo el directorio de salida, y a proposito.
+    #
+    # Antes se guardaba aqui una copia completa de la configuracion y la pestana
+    # de procesamiento la usaba para su resumen. El problema es que esa copia
+    # dejaba de valer en cuanto se cambiaba algo en el paso 1 y se volvia por la
+    # barra de navegacion: el resumen seguia mostrando lo validado mientras el
+    # comando se armaba con los valores nuevos. Ahora el resumen lee los mismos
+    # reactivos que el comando, y lo unico que necesita conservarse es la
+    # carpeta de salida, que se crea justo aqui y no debe moverse despues.
+    state$config_snap(list(output_dir = run_output_dir))
     state$log_text(paste(
       ts_log("=== Configuracion validada ==="),
       ts_log(paste("Analisis:", input$analysis_type, "/", effective_tool())),

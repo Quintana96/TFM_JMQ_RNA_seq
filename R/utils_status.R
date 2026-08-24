@@ -199,3 +199,78 @@ fmt_memoria <- function(mb) {
   if (length(v) != 1L || is.na(v) || v <= 0) return("—")
   if (v >= 1024) sprintf("%.1f GB", v / 1024) else sprintf("%.0f MB", v)
 }
+
+# ── Herramientas del pipeline ───────────────────────────────────────────────
+#
+# El workflow comprueba en su primer paso que las ocho estan en el PATH y aborta
+# si falta alguna. Hasta ahora la interfaz no lo comprobaba, de modo que dejaba
+# lanzar una ejecucion condenada a fallar y el motivo quedaba enterrado en el
+# log: "Error (codigo 1)" arriba y la causa real veinte lineas mas abajo.
+#
+# La causa habitual no es que falten instaladas, sino arrancar la aplicacion sin
+# activar el entorno donde viven. Por eso, cuando no se encuentran en el PATH se
+# buscan en los sitios donde conda las deja: poder decir "estan instaladas pero
+# no en el PATH" ahorra el rato de comprobar si hay que instalar algo.
+
+#' Herramientas que exige cada estrategia, en el mismo orden en que las
+#' comprueba workflow.sh.
+herramientas_requeridas <- function(analysis_type = "alignment", tool = "bowtie2") {
+  comunes <- c("fastqc", "fastp", "multiqc")
+  if (identical(analysis_type, "alignment")) {
+    return(c(comunes, "bowtie2", "samtools", "featureCounts"))
+  }
+  c(comunes, if (identical(tool, "kallisto")) "kallisto" else "salmon")
+}
+
+#' Entornos de conda donde buscar cuando una herramienta no esta en el PATH.
+entornos_conda_probables <- function() {
+  bases <- c(Sys.getenv("CONDA_PREFIX", ""),
+             path.expand("~/miniforge3/envs"), path.expand("~/miniconda3/envs"),
+             path.expand("~/anaconda3/envs"), path.expand("~/mambaforge/envs"),
+             "/opt/miniforge3/envs", "/opt/conda/envs")
+  bases <- bases[nzchar(bases)]
+  dirs <- unlist(lapply(bases, function(b) {
+    if (!dir.exists(b)) return(character(0))
+    # CONDA_PREFIX apunta al entorno, no a la carpeta de entornos.
+    if (dir.exists(file.path(b, "bin"))) return(b)
+    list.dirs(b, recursive = FALSE)
+  }))
+  unique(dirs[dir.exists(file.path(dirs, "bin"))])
+}
+
+#' Estado de las herramientas del pipeline.
+#'
+#' @return list(faltan, encontradas_fuera, entorno). `faltan` son las que no
+#'   estan en el PATH; `entorno` es la ruta de un entorno que las contiene
+#'   todas, si existe, para poder decir exactamente que hacer.
+#' `necesarias` y `entornos` entran como argumentos con valor por defecto para
+#' poder probar la logica sin depender de que herramientas haya instaladas en la
+#' maquina donde corren los tests.
+comprobar_herramientas <- function(analysis_type = "alignment", tool = "bowtie2",
+                                   entornos = entornos_conda_probables(),
+                                   necesarias = herramientas_requeridas(analysis_type, tool)) {
+  faltan <- necesarias[!nzchar(Sys.which(necesarias))]
+  if (!length(faltan)) return(list(faltan = character(0), entorno = NULL))
+
+  # Un entorno solo sirve si tiene TODAS las que faltan: mandar al usuario a uno
+  # que resuelve la mitad del problema es peor que no decir nada.
+  entorno <- NULL
+  for (e in entornos) {
+    if (all(file.exists(file.path(e, "bin", faltan)))) { entorno <- e; break }
+  }
+  list(faltan = faltan, entorno = entorno)
+}
+
+#' Mensaje de error para la lista de validacion, o NULL si esta todo.
+mensaje_herramientas <- function(estado) {
+  if (!length(estado$faltan)) return(NULL)
+  lista <- paste(estado$faltan, collapse = ", ")
+  if (!is.null(estado$entorno)) {
+    return(paste0(
+      "Herramientas no encontradas en el PATH (", lista, "). ",
+      "Estan instaladas en ", estado$entorno, ", pero la aplicacion se ha ",
+      "arrancado sin ese entorno activo: cierrala y usa lanzar_app.sh."))
+  }
+  paste0("Herramientas no encontradas (", lista,
+         "). Instalalas con requirements.sh o activa el entorno donde esten.")
+}

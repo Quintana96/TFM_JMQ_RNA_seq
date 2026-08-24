@@ -205,13 +205,37 @@ server_tab_processing <- function(input, output, session, state) {
   output$tab2_content <- renderUI({
     if (!state$process_unlocked())
       return(ui_tab_processing_locked())
-    cfg <- state$config_snap()
-    if (length(cfg) == 0) return(NULL)
+    snap <- state$config_snap()
+    if (length(snap) == 0) return(NULL)
+
+    # El resumen se construye con los MISMOS reactivos que arman el comando, no
+    # con la foto que se tomo al pulsar "Continuar".
+    #
+    # Con la foto, cambiar algo en el paso 1 y volver por la barra de navegacion
+    # —sin pasar otra vez por "Continuar"— dejaba un resumen que ya no describia
+    # lo que se iba a ejecutar: decia "Single-end" mientras el comando llevaba
+    # "--READ_TYPE pe". Un resumen que miente sobre lo que va a correr es peor
+    # que no tener resumen.
+    #
+    # Del snapshot se conserva solo el directorio de salida, que se crea al
+    # validar y no debe moverse despues.
+    rt <- shared$effective_read_type()
+    dir_in <- shared$input_dir_val()
+    cfg <- list(
+      analysis_type   = input$analysis_type,
+      tool            = shared$effective_tool(),
+      input_dir       = dir_in,
+      output_dir      = snap$output_dir %||% shared$output_dir_val(),
+      genome_file     = shared$effective_genome_file(),
+      annotation      = shared$effective_annotation(),
+      n_samples       = length(shared$samples_eff()),
+      read_type       = read_type_label(rt),
+      fragment_length = shared$effective_fragment_length(),
+      fragment_sd     = shared$effective_fragment_sd()
+    )
 
     total_sz <- {
-      cfg_read_type <- if (identical(cfg$read_type, "Single-end")) "se" else "pe"
-      cfg_samples <- detect_samples(cfg$input_dir, cfg_read_type)
-      sizes <- sample_fastq_sizes(cfg$input_dir, cfg_samples, cfg_read_type)
+      sizes <- sample_fastq_sizes(dir_in, detect_samples(dir_in, rt), rt)
       if (length(sizes)) fmt_bytes(sum(sizes, na.rm = TRUE)) else "—"
     }
 
