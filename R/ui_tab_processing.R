@@ -14,8 +14,13 @@ ui_tab_processing_content <- function(cfg, total_sz) {
         card_header("Resumen del análisis"),
         tags$dl(class = "row small mb-1",
           tags$dt(class = "col-6", "Tipo:"),
-          tags$dd(class = "col-6", if (cfg$analysis_type == "alignment")
-            "Alineamiento (Bowtie2)" else paste0("Pseudoalineamiento (", cfg$tool, ")")),
+          # El motor sale de cfg$tool en las dos ramas. Antes la rama de
+          # alineamiento tenia "Bowtie2" escrito a mano, asi que una ejecucion
+          # de subjunc se resumia como si fuera de bowtie2 —y esa es la captura
+          # que acababa en la memoria.
+          tags$dd(class = "col-6", paste0(
+            if (cfg$analysis_type == "alignment") "Alineamiento (" else "Pseudoalineamiento (",
+            cfg$tool, ")")),
           tags$dt(class = "col-6", "Muestras:"), tags$dd(class = "col-6", cfg$n_samples),
           tags$dt(class = "col-6", "Lectura:"),  tags$dd(class = "col-6", cfg$read_type),
           if (identical(cfg$tool, "kallisto") && identical(cfg$read_type, "Single-end"))

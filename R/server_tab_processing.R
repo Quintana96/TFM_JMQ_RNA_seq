@@ -67,7 +67,7 @@ server_tab_processing <- function(input, output, session, state) {
       if (grepl("fastqc", line, ignore.case = TRUE) && proc_rv$cp_idx < 1L)
         proc_rv$cp_idx <- 1L
       if (grepl("Processing sample:", line, ignore.case = TRUE) ||
-          grepl("bowtie2|salmon quant|kallisto quant|fastp", line, ignore.case = TRUE)) {
+          grepl("bowtie2|subjunc|salmon quant|kallisto quant|fastp", line, ignore.case = TRUE)) {
         proc_rv$cp_idx <- max(proc_rv$cp_idx, 2L)
       }
       if (grepl("samtools sort|samtools index|featureCounts|abundance\\.tsv|abundance\\.h5|quant(?:\\.sf)?", line, ignore.case = TRUE))
@@ -443,9 +443,9 @@ server_tab_processing <- function(input, output, session, state) {
 
     # Checkpoints según tipo de análisis
     cps <- if (input$analysis_type == "alignment")
-      c("Construyendo índice Bowtie2",
+      c(paste0("Construyendo índice (", shared$effective_tool(), ")"),
         "Control de calidad inicial (FastQC)",
-        "Alineamiento de muestras (Bowtie2 + fastp)",
+        paste0("Alineamiento de muestras (", shared$effective_tool(), " + fastp)"),
         "Procesando BAM (samtools sort + index)",
         "Conteos por gen (featureCounts)",
         "Control de calidad post-trimming (FastQC)",
