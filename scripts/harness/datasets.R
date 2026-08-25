@@ -143,6 +143,58 @@ DATASETS$GSE52778 <- list(
   )
 )
 
+# ── GSE268517 ───────────────────────────────────────────────────────────────
+# Segundo procariota y primer conjunto SINGLE-END. Aporta además un contraste
+# metodológico útil: estos autores SÍ contaron con hebra (htseq-count -s reverse),
+# al contrario que los de GSE273773, de modo que sirve para comprobar que la
+# concordancia alta no dependía de replicar un error ajeno.
+DATASETS$GSE268517 <- list(
+  id = "GSE268517",
+  organismo = "Streptococcus pyogenes S119",
+  descripcion = "Medio definido con asparagina frente a sin asparagina",
+  read_type = "se",
+  rutas = list(
+    fastq         = "~/Desktop/TFM_ejecuciones/GSE268517/fastq",
+    genoma        = "~/Desktop/TFM_ejecuciones/GSE268517/referencia/genoma.fna",
+    transcriptoma = "~/Desktop/TFM_ejecuciones/GSE268517/referencia/transcriptoma_locustag.fna",
+    anotacion     = "~/Desktop/TFM_ejecuciones/GSE268517/referencia/anotacion.gtf"
+  ),
+  # El orden de los SRR vuelve a estar invertido respecto al de las muestras del
+  # GEO: SRR29208037 es la réplica 1 sin asparagina. Verificado GSM -> SRX -> SRR.
+  muestras = c(SRR29208037 = "SinAsn", SRR29208036 = "SinAsn",
+               SRR29208035 = "SinAsn", SRR29208034 = "SinAsn",
+               SRR29208033 = "ConAsn", SRR29208032 = "ConAsn",
+               SRR29208031 = "ConAsn", SRR29208030 = "ConAsn"),
+  # Sentido deducido de sus propios conteos, no supuesto: la correlación entre
+  # su log2FoldChange y log2(conAsn/sinAsn) es +0,9943.
+  contraste = list(num = "ConAsn", den = "SinAsn"),
+  # Procariota sin intrones: las cuatro rutas son legítimas.
+  pipelines = c("bowtie2", "subjunc", "salmon", "kallisto"),
+  motores = c("DESeq2", "edgeR", "limma-voom"),
+  publicado = list(
+    tabla    = "~/Desktop/TFM_ejecuciones/GSE268517/publicado/deseq2_publicado.tsv",
+    sep      = "\t",
+    col_id   = "Gene.ID",          # read.delim convierte "Gene ID" a "Gene.ID"
+    col_lfc  = "log2FoldChange",
+    col_padj = "padj",
+    fdr = 0.05, lfc = 1,
+    deg_declarados = c(up = 227, down = 228)
+  ),
+  enriquecimiento = list(
+    # S. pyogenes no tiene OrgDb en Bioconductor, así que GO por OrgDb no es
+    # posible. KEGG sí lo cubre (código spy) y es la vía para este organismo.
+    orgdb = NULL, keytype = NULL,
+    kegg_organismo = "spy", kegg_keytype = "kegg",
+    reactome = FALSE,
+    colecciones = c("KEGG")
+  ),
+  articulo = list(
+    cita = "EMBO Rep 2025, DOI 10.1038/s44319-025-00447-z",
+    pmid = "40229432", doi = "10.1038/s44319-025-00447-z",
+    herramientas = "Cutadapt 2.10, bowtie2 2.3.4.3, htseq-count 0.6.0 (-s reverse, CDS), DESeq2 1.26.0"
+  )
+)
+
 #' Devuelve la configuración de un dataset, con las rutas ya expandidas.
 dataset_config <- function(id) {
   d <- DATASETS[[id]]
