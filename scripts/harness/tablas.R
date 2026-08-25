@@ -15,8 +15,16 @@
 #'   T7  ¿De dónde viene el desacuerdo que queda?
 #'   T8  ¿Con qué versiones exactas?
 
-fmt <- function(x, d = 4) if (is.null(x) || length(x) == 0 || is.na(x)) "—" else formatC(x, format = "f", digits = d)
-pct <- function(x, d = 1) if (is.null(x) || length(x) == 0 || is.na(x)) "—" else paste0(formatC(100*x, format = "f", digits = d), " %")
+# Decimales con coma y millares con punto: es una memoria en castellano, y una
+# tabla con las dos convenciones mezcladas se lee mal.
+fmt <- function(x, d = 4) {
+  if (is.null(x) || length(x) == 0 || is.na(x)) return("—")
+  formatC(x, format = "f", digits = d, decimal.mark = ",")
+}
+pct <- function(x, d = 1) {
+  if (is.null(x) || length(x) == 0 || is.na(x)) return("—")
+  paste0(formatC(100 * x, format = "f", digits = d, decimal.mark = ","), " %")
+}
 ent <- function(x) if (is.null(x) || length(x) == 0 || is.na(x)) "—" else format(x, big.mark = ".", decimal.mark = ",")
 
 #' Escribe una tabla en Markdown y en TSV.
@@ -24,10 +32,13 @@ escribir <- function(df, id, titulo, nota = NULL, dir_salida = RAIZ_VALIDACION) 
   dir.create(file.path(dir_salida, "tablas"), recursive = TRUE, showWarnings = FALSE)
   base <- file.path(dir_salida, "tablas", id)
   utils::write.table(df, paste0(base, ".tsv"), sep = "\t", quote = FALSE, row.names = FALSE)
+  # Se escapan las barras verticales del contenido: sin escapar, un nombre de
+  # columna como "|dif| mediana" parte la tabla y Markdown la renderiza torcida.
+  esc <- function(x) gsub("|", "\\|", as.character(x), fixed = TRUE)
   md <- c(paste0("### ", id, ". ", titulo), "",
-          paste0("| ", paste(names(df), collapse = " | "), " |"),
+          paste0("| ", paste(esc(names(df)), collapse = " | "), " |"),
           paste0("|", paste(rep("---", ncol(df)), collapse = "|"), "|"),
-          apply(df, 1, function(r) paste0("| ", paste(r, collapse = " | "), " |")))
+          apply(df, 1, function(r) paste0("| ", paste(esc(r), collapse = " | "), " |")))
   if (!is.null(nota)) md <- c(md, "", paste0("> ", nota))
   writeLines(md, paste0(base, ".md"))
   invisible(df)
@@ -160,7 +171,10 @@ generar_tablas <- function(ids) {
     "Leídas de versions.tsv, que el propio workflow escribe invocando cada herramienta: no son las declaradas, son las que realmente se ejecutaron.")
 
   # Índice
-  tablas <- sort(list.files(file.path(RAIZ_VALIDACION, "tablas"), pattern = "\\.md$"))
+  # Se excluye TODAS.md: es el índice, y si se incluyera se anidaría en sí mismo
+  # cada vez que se regenera.
+  tablas <- setdiff(sort(list.files(file.path(RAIZ_VALIDACION, "tablas"),
+                                    pattern = "\\.md$")), "TODAS.md")
   writeLines(c("# Tablas para la defensa del TFM", "",
                paste0("Generadas el ", format(Sys.time(), "%d de %B de %Y a las %H:%M"), "."),
                "", "Cada tabla está en Markdown, para pegar en la memoria, y en TSV.", "",

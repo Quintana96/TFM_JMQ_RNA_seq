@@ -38,6 +38,11 @@ source("scripts/harness/harness.R")
 source("scripts/harness/tablas.R")
 
 if (solo_tablas) {
+  # Las tablas leen el estado y las métricas de las ejecuciones con funciones de
+  # la propia aplicación (read_exit_status, read_run_metrics, fmt_duracion...),
+  # así que hay que cargarla también en este camino.
+  msg("Cargando SARA")
+  cargar_app()
   msg("Generando las tablas de defensa")
   generar_tablas(if (length(ids)) ids else datasets_disponibles())
   quit(save = "no", status = 0)

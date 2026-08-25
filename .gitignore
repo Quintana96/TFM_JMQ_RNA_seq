@@ -35,6 +35,9 @@ Output/
 output/
 outputs/
 results/
+# Salida del harness de validación: son resultados, no código. Se regeneran con
+# `Rscript scripts/harness/correr.R`, que sí se versiona.
+validacion/
 01_quality/
 02_trimmed_reads/
 03_alignment/
