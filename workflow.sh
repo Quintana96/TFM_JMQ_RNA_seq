@@ -500,6 +500,57 @@ log "Anotación: $ANNOTATION_FILE"
 log "Tipo de alineamiento: $ALIGNMENT_TYPE"
 log "Tipo de lectura: $READ_TYPE"
 
+# ── Atributo de conteo: comprobarlo contra la anotación de verdad ──────────
+# FEATURE_ATTR viene por defecto como `locus_tag` porque el trabajo empezó con
+# procariotas de NCBI, donde ese atributo es la norma. Las anotaciones de
+# Ensembl para eucariotas NO lo traen: el GTF de S. cerevisiae tiene cero
+# apariciones de locus_tag. featureCounts con `-g locus_tag` sobre ese fichero
+# no cuenta nada, y el fallo salia como una matriz vacía después de haber
+# alineado todas las muestras.
+#
+# La interfaz tampoco pasa --FEATURE_ATTR, así que desde la aplicación era
+# imposible corregirlo. Aquí se comprueba si el atributo pedido existe y, si no,
+# se cae a la primera alternativa que si esté, dejandolo dicho en el log y en
+# run_params.tsv.
+if [[ -f "$ANNOTATION_FILE" ]]; then
+    # El tipo de feature va primero y NO se sustituye. Un tipo equivocado da
+    # cero conteos sin que ninguna alternativa sea evidentemente la buena, así
+    # que es mejor pararse aquí que entregar una matriz vacía. Comprobarlo antes
+    # que el atributo tambien da el mensaje correcto: con un tipo que no existe,
+    # ningún atributo aparece, y el error del atributo despistaria.
+    if ! awk -F'\t' -v tipo="$FEATURE_TYPE" '
+            /^#/ { next } $3 == tipo { encontrado = 1; exit }
+            END { exit(encontrado ? 0 : 1) }' "$ANNOTATION_FILE"; then
+        log "Error: la anotación no contiene ninguna linea de tipo '$FEATURE_TYPE'."
+        log "  Tipos presentes: $(awk -F'\t' '!/^#/ {print $3}' "$ANNOTATION_FILE" | sort -u | head -12 | tr '\n' ' ')"
+        exit 1
+    fi
+
+    attr_presente() {
+        awk -F'\t' -v tipo="$2" -v attr="$3" '
+            /^#/ { next }
+            $3 == tipo && $9 ~ attr" [\"=]" { encontrado = 1; exit }
+            END { exit(encontrado ? 0 : 1) }
+        ' "$1"
+    }
+    if ! attr_presente "$ANNOTATION_FILE" "$FEATURE_TYPE" "$FEATURE_ATTR"; then
+        FEATURE_ATTR_PEDIDO="$FEATURE_ATTR"
+        FEATURE_ATTR=""
+        for cand in locus_tag gene_id ID Name gene; do
+            if attr_presente "$ANNOTATION_FILE" "$FEATURE_TYPE" "$cand"; then
+                FEATURE_ATTR="$cand"; break
+            fi
+        done
+        if [[ -z "$FEATURE_ATTR" ]]; then
+            log "Error: en las lineas de tipo '$FEATURE_TYPE' la anotación no trae"
+            log "  ninguno de los atributos conocidos (locus_tag, gene_id, ID, Name, gene)."
+            exit 1
+        fi
+        log "Atributo de conteo: '$FEATURE_ATTR_PEDIDO' no existe en la anotación; se usa '$FEATURE_ATTR'."
+    fi
+    log "Conteo: -t $FEATURE_TYPE -g $FEATURE_ATTR"
+fi
+
 # Parámetros en formato legible por la app. Sin esto, una ejecución guardada no
 # deja rastro de con que anotación se hizo, y la app no puede construir el mapa
 # transcrito-gen para tximport ni identificar los genes de rRNA.
@@ -911,7 +962,7 @@ printf 'strandedness\t%s\n' "$STRANDEDNESS" >> "${OUTPUT}/run_params.tsv"
 # Generate count matrix based on alignment type
 step conteo "Generando la matriz de conteos..."
 if [[ "$ALIGNMENT_TYPE" == "bowtie2" || "$ALIGNMENT_TYPE" == "subjunc" ]]; then
-    log "Generating count matrix from Bowtie2 alignments..."
+    log "Generando la matriz de conteos a partir de los alineamientos de ${ALIGNMENT_TYPE}..."
     # Count reads per gene
     BAM_FILES=( "$ALIGNMENTS"/*.bam )
     if [[ ${#BAM_FILES[@]} -eq 0 ]]; then
