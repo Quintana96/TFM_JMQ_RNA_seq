@@ -648,6 +648,36 @@ if [[ "$READ_TYPE" == "se" && "$ALIGNMENT_TYPE" == "kallisto" ]]; then
     log "Fragment length for kallisto single-end: mean=$FRAGMENT_LENGTH sd=$FRAGMENT_SD"
 fi
 log "FASTQ detectados: ${#FASTQ_FILES[@]}"
+# ── Orientación de la librería en pseudoalineamiento ──────────────────────
+# STRANDEDNESS solo se usaba en las llamadas a featureCounts, es decir solo en la
+# ruta de alineamiento. En pseudoalineamiento el valor se escribia en
+# run_params.tsv y NO se pasaba a ningun cuantificador: elegir «Directa (-s 1)»
+# en la interfaz y lanzar salmon o kallisto no tenia ningun efecto, y el registro
+# de auditoria afirmaba una orientacion que nadie habia aplicado.
+#
+# Ahora `auto` conserva el comportamiento de antes —salmon autodetecta con -l A,
+# kallisto corre sin orientar, que es su valor por defecto— y un valor explicito
+# se traduce al flag que cada herramienta entiende.
+SALMON_LIBTYPE="A"
+KALLISTO_STRAND=()
+if [[ "$ALIGNMENT_TYPE" == "salmon" || "$ALIGNMENT_TYPE" == "kallisto" ]]; then
+    case "$STRANDEDNESS" in
+        0) SALMON_LIBTYPE=$([[ "$READ_TYPE" == "pe" ]] && echo IU  || echo U) ;;
+        1) SALMON_LIBTYPE=$([[ "$READ_TYPE" == "pe" ]] && echo ISF || echo SF)
+           KALLISTO_STRAND=(--fr-stranded) ;;
+        2) SALMON_LIBTYPE=$([[ "$READ_TYPE" == "pe" ]] && echo ISR || echo SR)
+           KALLISTO_STRAND=(--rf-stranded) ;;
+        auto) : ;;   # salmon: -l A. kallisto: sin orientar, su valor por defecto.
+    esac
+    if [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
+        log "Orientación para salmon: -l $SALMON_LIBTYPE"
+    elif [[ ${#KALLISTO_STRAND[@]} -gt 0 ]]; then
+        log "Orientación para kallisto: ${KALLISTO_STRAND[*]}"
+    else
+        log "Orientación para kallisto: sin orientar (kallisto no la autodetecta)."
+    fi
+fi
+
 if [[ "$READ_TYPE" == "pe" ]]; then
     log "R1 detectados: ${#R1_FILES[@]}"
 else
@@ -821,7 +851,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
         if [[ "$READ_TYPE" == "pe" ]]; then
             run_cmd salmon quant \
                 -i "$SALMON_INDEX" \
-                -l A \
+                -l "$SALMON_LIBTYPE" \
                 -1 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
                 -2 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
                 -p "$THREADS" \
@@ -830,7 +860,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
         else
             run_cmd salmon quant \
                 -i "$SALMON_INDEX" \
-                -l A \
+                -l "$SALMON_LIBTYPE" \
                 -r "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz" \
                 -p "$THREADS" \
                 --numGibbsSamples "$INFERENTIAL_REPS" \
@@ -845,6 +875,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
                 -o "${ALIGNMENTS}/${SAMPLE}" \
                 -t "$THREADS" \
                 -b "$INFERENTIAL_REPS" \
+                ${KALLISTO_STRAND[@]+"${KALLISTO_STRAND[@]}"} \
                 "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
                 "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz"
         else
@@ -853,6 +884,7 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
                 -o "${ALIGNMENTS}/${SAMPLE}" \
                 -t "$THREADS" \
                 -b "$INFERENTIAL_REPS" \
+                ${KALLISTO_STRAND[@]+"${KALLISTO_STRAND[@]}"} \
                 --single \
                 -l "$FRAGMENT_LENGTH" \
                 -s "$FRAGMENT_SD" \
@@ -954,10 +986,34 @@ if [[ ( "$ALIGNMENT_TYPE" == "bowtie2" || "$ALIGNMENT_TYPE" == "subjunc" ) && "$
         STRANDEDNESS=0
     fi
 elif [[ "$STRANDEDNESS" == "auto" ]]; then
-    # En pseudoalineamiento la detecta el propio cuantificador (salmon -l A).
+    # En pseudoalineamiento con `auto`, salmon la detecta el mismo con -l A y deja
+    # el resultado escrito en lib_format_counts.json. Antes se registraba un 0
+    # fijo, es decir «sin orientar», aunque salmon hubiera detectado y aplicado
+    # una libreria orientada: el registro de auditoria afirmaba lo contrario de lo
+    # que habia pasado. Ahora se lee lo que salmon decidio de verdad.
     STRANDEDNESS=0
+    if [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
+        lfc=$( (shopt -s nullglob; f=( "$ALIGNMENTS"/*/lib_format_counts.json ); echo "${f[0]:-}") )
+        if [[ -n "$lfc" && -f "$lfc" ]]; then
+            det=$(sed -n 's/.*"expected_format"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$lfc" | head -1)
+            case "$det" in
+                SF|ISF)  STRANDEDNESS=1 ;;
+                SR|ISR)  STRANDEDNESS=2 ;;
+                U|IU)    STRANDEDNESS=0 ;;
+            esac
+            [[ -n "$det" ]] && log "+ Orientación detectada por salmon: $det (equivale a -s $STRANDEDNESS)"
+        fi
+    else
+        # kallisto no autodetecta la orientación: sin flag corre sin orientar.
+        log "+ Orientación en kallisto: sin orientar (no la autodetecta)."
+    fi
 fi
 printf 'strandedness\t%s\n' "$STRANDEDNESS" >> "${OUTPUT}/run_params.tsv"
+if [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
+    printf 'salmon_libtype\t%s\n' "$SALMON_LIBTYPE" >> "${OUTPUT}/run_params.tsv"
+elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
+    printf 'kallisto_strand\t%s\n' "${KALLISTO_STRAND[*]:-ninguno}" >> "${OUTPUT}/run_params.tsv"
+fi
 
 # Generate count matrix based on alignment type
 step conteo "Generando la matriz de conteos..."
