@@ -472,6 +472,36 @@ Las dos rutas concuerdan más entre ellas (Pearson 0,9925, Jaccard 0,937) que
 cualquiera de las dos con la publicada, que es lo esperable: comparten recorte,
 anotación y modelo, y solo difieren en cómo asignan las lecturas.
 
+### El desacuerdo residual está explicado: la orientación de la librería
+
+Los autores contaron **sin tener en cuenta la hebra**, con una librería que sí la
+conserva. Replicando su configuración (`-s 0`), la concordancia pasa de 0,959 a
+**0,999**, los genes recuperados del 96,1 % al **98,8 %**, y la única
+discrepancia de sentido de todo el trabajo desaparece.
+
+| Conteo | Pearson | Recuperados | Signo opuesto |
+|---|---|---|---|
+| `-s 2` inversa (la correcta) | 0,9594 | 96,1 % | 1 |
+| `-s 0` sin hebra (la de ellos) | **0,9990** | **98,8 %** | **0** |
+| `-s 1` directa | 0,3070 | 6,8 % | 20 |
+
+Que `-s 1` dé 0,307 demuestra que la librería **está orientada**: si no lo
+estuviera, las tres opciones darían resultados parecidos. El registro de GEO
+declara además el kit NEBNext Ultra II *Directional*. Es decir, la inferencia
+automática de SARA —98 % del reparto en sentido inverso, confirmado de forma
+independiente por el `-l A` de salmon, que devuelve ISR— acertó donde el análisis
+publicado no.
+
+Ignorar la hebra apenas cambia el total (+0,9 % de lecturas asignadas) pero
+distorsiona un subconjunto concreto: **184 genes (4,1 %) más que duplican** su
+conteo y 36 se multiplican por cinco o más, con un máximo de ×159. Son los genes
+con transcripción antisentido dominante, y ese 4,1 % es del mismo orden que el
+desacuerdo que explicaba.
+
+Antes de dar con esto se descartaron tres hipótesis midiendo: el tipo de feature
+(`-t gene` frente a `-t CDS`), el multimapeo y el solapamiento (`-M -O`), y el
+alineador (bowtie2 frente a subjunc, que es el mismo motor que usó Rsubread).
+
 ### La etapa estadística no introduce error
 
 Corriendo el mismo análisis de SARA sobre la **matriz de conteos de los autores**
