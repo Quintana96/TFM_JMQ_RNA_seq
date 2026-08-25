@@ -257,7 +257,7 @@ server_tab_config <- function(input, output, session, state) {
 
   # ── Herramienta y anotación efectivas (compartidas) ────────────────────────
   effective_tool <- reactive({
-    if (isTRUE(input$analysis_type == "alignment")) "bowtie2"
+    if (isTRUE(input$analysis_type == "alignment")) input$align_tool %||% "bowtie2"
     else input$pseudo_tool %||% "salmon"
   })
   effective_read_type <- reactive({
@@ -375,7 +375,7 @@ server_tab_config <- function(input, output, session, state) {
       ))
     }
     state$run_params_rv(list(
-      analysis_type = if (identical(loaded_tool, "bowtie2")) "alignment" else "pseudo",
+      analysis_type = if (loaded_tool %in% c("bowtie2", "subjunc")) "alignment" else "pseudo",
       tool = loaded_tool,
       input_dir = "resultados previos",
       output_dir = loaded_dir,
@@ -417,6 +417,10 @@ server_tab_config <- function(input, output, session, state) {
   # al usuario por el organismo, se deduce de la anotación que acaba de cargar.
   splice_check <- reactive({
     if (!isTRUE(input$analysis_type == "alignment")) return(NULL)
+    # Con subjunc no hay nada que avisar: reconoce las uniones exón-exón. Dejar
+    # el aviso puesto sería una advertencia falsa, y una advertencia falsa
+    # enseña a ignorar las verdaderas.
+    if (!identical(input$align_tool %||% "bowtie2", "bowtie2")) return(NULL)
     af <- effective_annotation()
     if (is.null(af) || !nzchar(af %||% "") || !file.exists(af)) return(NULL)
     detect_spliced_annotation(af)

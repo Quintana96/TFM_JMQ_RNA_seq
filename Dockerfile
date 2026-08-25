@@ -67,7 +67,7 @@ RUN CRAN_SNAPSHOT="${CRAN_SNAPSHOT}" BUILD_CPUS="${BUILD_CPUS}" \
 # con versions_r.txt es la procedencia del entorno: lo que la memoria del TFM
 # puede citar como "esta imagen contiene exactamente esto".
 RUN { for t in fastqc fastp multiqc bowtie2 samtools featureCounts salmon kallisto; do \
-        printf '%s\t%s\n' "$t" "$(command -v "$t" >/dev/null 2>&1 && ("$t" --versión 2>&1 | head -1) || echo AUSENTE)"; \
+        printf '%s\t%s\n' "$t" "$(command -v "$t" >/dev/null 2>&1 && ("$t" --version 2>&1 | head -1) || echo AUSENTE)"; \
       done; } > /opt/env/versions_cli.txt \
     && cat /opt/env/versions_cli.txt
 

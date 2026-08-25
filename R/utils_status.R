@@ -120,11 +120,13 @@ infer_result_params <- function(out_dir, workflow_path) {
   saved_params <- read_run_params_file(out_dir)
   tool <- if (dir.exists(file.path(out_dir, "03_alignments", "bowtie2"))) {
     "bowtie2"
+  } else if (dir.exists(file.path(out_dir, "03_alignments", "subjunc"))) {
+    "subjunc"
   } else if (dir.exists(file.path(out_dir, "03_alignments", "salmon"))) {
     "salmon"
   } else if (dir.exists(file.path(out_dir, "03_alignments", "kallisto"))) {
     "kallisto"
-  } else if (isTRUE(saved_params$tool %in% c("bowtie2", "salmon", "kallisto"))) {
+  } else if (isTRUE(saved_params$tool %in% c("bowtie2", "subjunc", "salmon", "kallisto"))) {
     # La carpeta 03_alignments puede no estar: se borra para ahorrar espacio (los
     # BAM son lo más pesado de una ejecución) o la ejecución se copio sin ella.
     # El workflow deja la herramienta escrita en run_params.tsv, así que se
@@ -138,7 +140,7 @@ infer_result_params <- function(out_dir, workflow_path) {
   } else {
     "desconocida"
   }
-  analysis <- if (identical(tool, "bowtie2")) "alignment" else "pseudo"
+  analysis <- if (tool %in% c("bowtie2", "subjunc")) "alignment" else "pseudo"
   saved <- saved_params
   counts <- tryCatch(
     load_counts_from_workflow(out_dir, tool, annotation_file = annotation_file_for_run(out_dir)),
@@ -217,7 +219,11 @@ fmt_memoria <- function(mb) {
 herramientas_requeridas <- function(analysis_type = "alignment", tool = "bowtie2") {
   comunes <- c("fastqc", "fastp", "multiqc")
   if (identical(analysis_type, "alignment")) {
-    return(c(comunes, "bowtie2", "samtools", "featureCounts"))
+    # subjunc y subread-buildindex vienen en el mismo paquete que featureCounts,
+    # de modo que esta ruta no exige instalar nada nuevo.
+    alineador <- if (identical(tool, "subjunc")) c("subjunc", "subread-buildindex")
+                 else "bowtie2"
+    return(c(comunes, alineador, "samtools", "featureCounts"))
   }
   c(comunes, if (identical(tool, "kallisto")) "kallisto" else "salmon")
 }

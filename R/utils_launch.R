@@ -98,10 +98,10 @@ modo_de_apertura <- function(contenedor = en_contenedor(),
 #'
 #' @return TRUE si se lanzo el navegador, FALSE si no había ninguno compatible.
 abrir_ventana_de_aplicacion <- function(url, navegador = buscar_navegador_de_aplicacion(),
-                                        tamaño = Sys.getenv("SARA_UI_SIZE", "1440,900"),
+                                        tamano = Sys.getenv("SARA_UI_SIZE", "1440,900"),
                                         ejecutar = system2) {
   if (is.null(navegador)) return(FALSE)
-  args <- c(paste0("--app=", url), paste0("--window-size=", tamaño),
+  args <- c(paste0("--app=", url), paste0("--window-size=", tamano),
             "--no-first-run", "--no-default-browser-check")
   ok <- tryCatch({
     # wait = FALSE es imprescindible: runApp() sigue bloqueado sirviendo la

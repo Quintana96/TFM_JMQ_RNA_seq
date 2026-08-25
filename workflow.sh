@@ -79,8 +79,8 @@ if [[ -z "${INPUT:-}" || -z "${OUTPUT:-}" || -z "${GENOME_FILE:-}" || -z "${ANNO
 fi
 
 # Validate alignment type
-if [[ ! "$ALIGNMENT_TYPE" =~ ^(bowtie2|salmon|kallisto)$ ]]; then
-    echo "Error: Invalid ALIGNMENT_TYPE. Choose: bowtie2, salmon, or kallisto"
+if [[ ! "$ALIGNMENT_TYPE" =~ ^(bowtie2|subjunc|salmon|kallisto)$ ]]; then
+    echo "Error: ALIGNMENT_TYPE no válido. Opciones: bowtie2, subjunc, salmon, kallisto"
     exit 1
 fi
 
@@ -381,6 +381,13 @@ if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
     check_command bowtie2
     check_command samtools
     check_command featureCounts
+elif [[ "$ALIGNMENT_TYPE" == "subjunc" ]]; then
+    # subjunc y subread-buildindex vienen en el mismo paquete que featureCounts,
+    # así que esta ruta no añade ninguna dependencia nueva.
+    check_command subjunc
+    check_command subread-buildindex
+    check_command samtools
+    check_command featureCounts
 elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
     check_command salmon
     validate_salmon
@@ -409,6 +416,7 @@ mkdir -p "$INDEX_CACHE" 2>/dev/null || INDEX_CACHE="${OUTPUT}/indices"
 BOWTIE_INDEX="${INDEX_CACHE}/bowtie2/ref"
 SALMON_INDEX="${INDEX_CACHE}/salmon/ref"
 KALLISTO_INDEX="${INDEX_CACHE}/kallisto/ref.idx"
+SUBJUNC_INDEX="${INDEX_CACHE}/subjunc/ref"
 
 mkdir -p "$QC" "$TRIMMED" "$ALIGNMENTS" "$COUNTS"
 mkdir -p "$(dirname "$BOWTIE_INDEX")" "$(dirname "$SALMON_INDEX")" "$(dirname "$KALLISTO_INDEX")"
@@ -508,7 +516,7 @@ RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
 log "Registrando versiones de las herramientas..."
 {
     printf 'tool\tversion\tpath\n'
-    for t in fastqc fastp multiqc bowtie2 samtools featureCounts salmon kallisto; do
+    for t in fastqc fastp multiqc bowtie2 subjunc samtools featureCounts salmon kallisto; do
         if command -v "$t" >/dev/null 2>&1; then
             # Dos cuidados aquí, los dos aprendidos ejecutando.
             #
@@ -519,15 +527,15 @@ log "Registrando versiones de las herramientas..."
             # líneas: la ejecución moria al registrar versiones, antes de
             # alinear nada.
             #
-            # Segundo, no todas aceptan `--versión`: featureCounts usa `-v` y
-            # kallisto usa `versión`. Y bowtie2 antepone dos líneas de aviso a
+            # Segundo, no todas aceptan `--version`: featureCounts usa `-v` y
+            # kallisto usa `version`. Y bowtie2 antepone dos líneas de aviso a
             # la versión real. Coger la primera línea a ciegas registraba un
             # aviso o un mensaje de error en el fichero de procedencia, que es
             # justo el fichero que debe poder creerse.
             case "$t" in
-                featureCounts) v_full="$("$t" -v 2>&1 || true)" ;;
-                kallisto)      v_full="$("$t" versión 2>&1 || true)" ;;
-                *)             v_full="$("$t" --versión 2>&1 || true)" ;;
+                featureCounts|subjunc) v_full="$("$t" -v 2>&1 || true)" ;;
+                kallisto)      v_full="$("$t" version 2>&1 || true)" ;;
+                *)             v_full="$("$t" --version 2>&1 || true)" ;;
             esac
             # Primera línea no vacia que no sea un aviso ni un error, en UNA
             # sola pasada de awk. Encadenar dos filtros donde el segundo sale
@@ -600,6 +608,18 @@ elif [[ "$ALIGNMENT_TYPE" == "kallisto" ]]; then
         rm -f "$KALLISTO_INDEX"
         run_cmd kallisto index -i "$KALLISTO_INDEX" "$GENOME_FILE"
     fi
+elif [[ "$ALIGNMENT_TYPE" == "subjunc" ]]; then
+    # subread-buildindex deja varios ficheros con el mismo prefijo; el .00.b.tab
+    # es el último que escribe, así que su presencia indica un índice completo.
+    if [[ -s "${SUBJUNC_INDEX}.00.b.tab" && -s "${SUBJUNC_INDEX}.reads" ]]; then
+        log "Índice Subread existente detectado; se reutiliza."
+    else
+        mkdir -p "$(dirname "$SUBJUNC_INDEX")"
+        rm -f "${SUBJUNC_INDEX}".*
+        log "Construyendo índice Subread. Puede tardar varios minutos."
+        run_cmd subread-buildindex -o "$SUBJUNC_INDEX" "$GENOME_FILE"
+    fi
+    INDEX="$SUBJUNC_INDEX"
 fi
 
 # Initial quality control
@@ -692,6 +712,34 @@ for READ1 in "${SAMPLE_FILES[@]}"; do
         fi
 
         # Index BAM file for downstream analysis
+        run_cmd samtools index "${ALIGNMENTS}/${SAMPLE}.bam"
+
+    elif [[ "$ALIGNMENT_TYPE" == "subjunc" ]]; then
+        # subjunc SÍ es splice-aware, a diferencia de bowtie2: detecta las
+        # uniones exón-exón y por tanto vale para eucariotas con intrones, donde
+        # bowtie2 perdería las lecturas que cruzan una unión y subestimaría los
+        # conteos de forma sistemática.
+        #
+        # Escribe el BAM directamente en lugar de por tubería, porque no tiene
+        # salida a stdout: se ordena después con samtools, igual que bowtie2.
+        log "  Aligning with Subjunc (splice-aware)..."
+        if [[ "$READ_TYPE" == "pe" ]]; then
+            run_cmd subjunc \
+                -i "$INDEX" \
+                -r "${TRIMMED}/${SAMPLE}_R1_trimmed.fastq.gz" \
+                -R "${TRIMMED}/${SAMPLE}_R2_trimmed.fastq.gz" \
+                -o "${ALIGNMENTS}/${SAMPLE}.unsorted.bam" \
+                -T "$THREADS"
+        else
+            run_cmd subjunc \
+                -i "$INDEX" \
+                -r "${TRIMMED}/${SAMPLE}_trimmed.fastq.gz" \
+                -o "${ALIGNMENTS}/${SAMPLE}.unsorted.bam" \
+                -T "$THREADS"
+        fi
+        run_cmd samtools sort -@ "$THREADS" \
+            -o "${ALIGNMENTS}/${SAMPLE}.bam" "${ALIGNMENTS}/${SAMPLE}.unsorted.bam"
+        rm -f "${ALIGNMENTS}/${SAMPLE}.unsorted.bam"
         run_cmd samtools index "${ALIGNMENTS}/${SAMPLE}.bam"
 
     elif [[ "$ALIGNMENT_TYPE" == "salmon" ]]; then
@@ -813,7 +861,7 @@ infer_strandedness() {
     printf '%s' "$best"
 }
 
-if [[ "$ALIGNMENT_TYPE" == "bowtie2" && "$STRANDEDNESS" == "auto" ]]; then
+if [[ ( "$ALIGNMENT_TYPE" == "bowtie2" || "$ALIGNMENT_TYPE" == "subjunc" ) && "$STRANDEDNESS" == "auto" ]]; then
     FIRST_BAM=$( (shopt -s nullglob; b=( "$ALIGNMENTS"/*.bam ); echo "${b[0]:-}") )
     if [[ -n "$FIRST_BAM" && -f "$FIRST_BAM" ]]; then
         log "Infiriendo la orientación de la libreria a partir de $(basename "$FIRST_BAM")..."
@@ -830,7 +878,7 @@ printf 'strandedness\t%s\n' "$STRANDEDNESS" >> "${OUTPUT}/run_params.tsv"
 
 # Generate count matrix based on alignment type
 step conteo "Generando la matriz de conteos..."
-if [[ "$ALIGNMENT_TYPE" == "bowtie2" ]]; then
+if [[ "$ALIGNMENT_TYPE" == "bowtie2" || "$ALIGNMENT_TYPE" == "subjunc" ]]; then
     log "Generating count matrix from Bowtie2 alignments..."
     # Count reads per gene
     BAM_FILES=( "$ALIGNMENTS"/*.bam )

@@ -184,8 +184,23 @@ ui_tab_config <- function() {
             ),
             conditionalPanel(
               "input.analysis_type === 'alignment'",
-              tags$p(class = "text-muted small mb-0",
-                     icon("circle-info"), " Bowtie2 + featureCounts")
+              selectInput("align_tool", "Alineador",
+                          choices = c("Bowtie2" = "bowtie2", "Subjunc" = "subjunc"),
+                          selected = "bowtie2"),
+              # La diferencia que importa elegir: bowtie2 no reconoce las uniones
+              # exón-exón, así que sobre un eucariota con intrones pierde las
+              # lecturas que las cruzan. subjunc sí las reconoce, viene en el
+              # mismo paquete que featureCounts y no añade dependencias.
+              conditionalPanel(
+                "input.align_tool === 'bowtie2'",
+                tags$p(class = "text-muted small mb-0",
+                       icon("circle-info"),
+                       " Bowtie2 + featureCounts. Rápido, pero NO reconoce uniones exón-exón: úsalo con procariotas.")),
+              conditionalPanel(
+                "input.align_tool === 'subjunc'",
+                tags$p(class = "text-muted small mb-0",
+                       icon("circle-info"),
+                       " Subjunc + featureCounts. Splice-aware: es el que vale para eucariotas con intrones."))
             ),
             conditionalPanel(
               "input.analysis_type === 'pseudo'",

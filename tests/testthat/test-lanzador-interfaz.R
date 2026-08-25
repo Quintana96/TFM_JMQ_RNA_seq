@@ -79,7 +79,7 @@ test_that("se pasan los argumentos que quitan los adornos del navegador", {
   falso <- file.path(d, "navegador"); file.create(falso)
   recibidos <- NULL
   expect_true(abrir_ventana_de_aplicacion(
-    "http://127.0.0.1:3838", navegador = falso, tamaño = "1280,800",
+    "http://127.0.0.1:3838", navegador = falso, tamano = "1280,800",
     ejecutar = function(command, args, ...) { recibidos <<- args; 0L }))
   # --app es lo que convierte la pestana en ventana: sin el, sale un navegador
   # normal con barra de direcciones y el efecto se pierde entero.

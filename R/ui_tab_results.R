@@ -118,7 +118,7 @@ ui_results_pseudo_qc <- function() {
 ui_tab_results_content <- function(s, p = list()) {
   tool      <- tolower(p$tool %||% "")
   es_pseudo <- tool %in% c("salmon", "kallisto")
-  es_align  <- tool %in% c("bowtie2", "alignment")
+  es_align  <- tool %in% c("bowtie2", "subjunc", "alignment")
   # Herramienta desconocida (por ejemplo, una matriz subida): se ofrecen las dos
   # y que decida quien mira, en lugar de esconder la que si tiene datos.
   if (!es_pseudo && !es_align) { es_pseudo <- TRUE; es_align <- TRUE }

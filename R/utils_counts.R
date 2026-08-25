@@ -112,10 +112,13 @@ quant_tx_ids <- function(qfile, tool) {
 #' @param annotation_file GFF/GTF con el que construir `tx2gene`. Sin el, no hay
 #'   forma de resumir transcritos a genes.
 load_counts_from_workflow <- function(output_dir, tool, annotation_file = NULL) {
-  if (identical(tool, "bowtie2")) {
+  # Las dos rutas de alineamiento acaban en featureCounts, así que la matriz se
+  # lee igual: lo que cambia es quién colocó las lecturas, no cómo se cuentan.
+  if (tool %in% c("bowtie2", "subjunc")) {
     m <- load_count_matrix_tsv(file.path(output_dir, "04_counts", "count_matrix.tsv"))
     if (!is.null(m)) attr(m, "counts_source") <- list(
-      method = "featureCounts", detail = "Conteos por gen de featureCounts.",
+      method = "featureCounts",
+      detail = paste0("Conteos por gen de featureCounts sobre alineamientos de ", tool, "."),
       ok = TRUE)
     return(m)
   }
