@@ -429,6 +429,10 @@ server_tab_config <- function(input, output, session, state) {
   output$splice_warning_ui <- renderUI({
     s <- splice_check()
     if (is.null(s) || !isTRUE(s$spliced)) return(NULL)
+    # El aviso solo aplica a bowtie2. subjunc SI es splice-aware, asi que
+    # avisar con subjunc seleccionado seria decirle al usuario que arregle
+    # algo que ya tiene bien.
+    if ((input$align_tool %||% "bowtie2") != "bowtie2") return(NULL)
     div(class = "alert alert-warning py-2 px-3 small mb-2",
         icon("triangle-exclamation"),
         tags$b(" La anotación describe genes con splicing y bowtie2 no es splice-aware."),
@@ -437,16 +441,15 @@ server_tab_config <- function(input, output, session, state) {
           paste0("El ", round(100 * s$frac, 1), " % de los genes con exones anotados ",
                  "tiene más de uno (", fmt_int(s$n_genes_multiexon), " de ",
                  fmt_int(s$n_genes_with_exons), "). bowtie2 no alinea lecturas que ",
-                 "cruzan uniones exon-exon, así que los conteos quedaran ",
+                 "cruzan uniones exón-exón, así que los conteos quedarán ",
                  "subestimados de forma sistemática, y más en los genes con más ",
                  "intrones.")),
         tags$div(class = "mt-1",
-                 tags$b("Que hacer: "),
-                 paste("usa la ruta de pseudoalineamiento (salmon o kallisto) con un",
-                       "transcriptoma, que si maneja isoformas. Si necesitas",
-                       "alineamiento sobre el genoma, hace falta un alineador",
-                       "splice-aware como STAR o HISAT2, que este pipeline no",
-                       "incluye.")))
+                 tags$b("Qué hacer: "),
+                 paste("cambia el alineador a Subjunc, que sí es splice-aware y",
+                       "está en este pipeline, o usa la ruta de",
+                       "pseudoalineamiento (salmon o kallisto) con un",
+                       "transcriptoma, que maneja isoformas.")))
   })
 
   # ── Calculadora de potencia a priori (item 22) ─────────────────────────────
