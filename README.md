@@ -472,6 +472,40 @@ Las dos rutas concuerdan más entre ellas (Pearson 0,9925, Jaccard 0,937) que
 cualquiera de las dos con la publicada, que es lo esperable: comparten recorte,
 anotación y modelo, y solo difieren en cómo asignan las lecturas.
 
+### La etapa estadística no introduce error
+
+Corriendo el mismo análisis de SARA sobre la **matriz de conteos de los autores**
+en lugar de la propia, el resultado coincide con el publicado a nivel de
+precisión de doble: diferencia máxima en log2FC de 9,4 × 10⁻¹⁰ sobre 4.378 genes,
+4.357 de 4.357 idénticos con tolerancia 10⁻⁶, y ningún gen ganado ni perdido.
+
+Eso descompone el error: **todo** el desacuerdo del 4 % procede del alineamiento
+y el conteo, no del test. Se comprobó además que no se reduce ajustando el
+recuento —ni cambiando el tipo de feature (`-t gene` frente a `-t CDS`) ni
+activando multimapeo y solapamiento (`-M -O`)—, de modo que el residuo es la
+diferencia esperable entre dos alineadores distintos.
+
+### Control de permutación
+
+Barajando las etiquetas de grupo, SARA encuentra **0 genes diferenciales**
+(mediana de 18 permutaciones 3-vs-3; 16 de ellas dan exactamente cero) frente a
+**1.408** con las etiquetas reales. Las demás métricas miden concordancia con lo
+publicado; esta mide que el pipeline no invente señal.
+
+### Concordancia entre los tres motores
+
+Sobre la misma matriz de conteos, para validar la aplicación y no el trabajo
+ajeno:
+
+| Pareja | Pearson del log2FC | Jaccard | Mismo signo |
+|---|---|---|---|
+| DESeq2 vs edgeR | 0,9943 | 0,902 | 99,4 % |
+| DESeq2 vs limma-voom | 0,9662 | 0,756 | 92,1 % |
+| edgeR vs limma-voom | 0,9554 | 0,770 | 91,2 % |
+
+1.233 genes son diferenciales en los tres, de 1.703 en al menos uno. limma-voom
+se separa de los otros dos, que es lo esperable con tres réplicas por grupo.
+
 ### Un caso que justifica ofrecer los tres enfoques de enriquecimiento
 
 El artículo destaca homeostasis del hierro, metabolismo del sulfato,
