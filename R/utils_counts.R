@@ -61,10 +61,23 @@ quant_files_for_run <- function(output_dir, tool) {
   if (!dir.exists(aln_dir)) return(NULL)
   sdirs <- list.dirs(aln_dir, recursive = FALSE, full.names = TRUE)
   if (!length(sdirs)) return(NULL)
-  qfiles <- if (identical(tool, "salmon")) file.path(sdirs, "quant.sf")
-            else file.path(sdirs, "abundance.h5")
-  if (!all(file.exists(qfiles)) && !identical(tool, "salmon")) {
-    qfiles <- file.path(sdirs, "abundance.tsv")
+  if (identical(tool, "salmon")) {
+    qfiles <- file.path(sdirs, "quant.sf")
+  } else {
+    # kallisto escribe `abundance.h5` y `abundance.tsv` en cada directorio. El
+    # .h5 es preferible cuando se puede leer, porque lleva las réplicas
+    # inferenciales, pero leerlo exige `rhdf5`. Antes se elegia el .h5 SIEMPRE
+    # que existiera, sin comprobar si habia con que abrirlo: `load_quant_counts()`
+    # lo pasaba por `read.delim()`, que sobre un binario da «embedded nul(s)», y
+    # la matriz por gen nunca se construia. El sintoma era una ejecucion marcada
+    # como correcta, con los abundance.tsv por muestra y sin `count_matrix.tsv`.
+    h5 <- file.path(sdirs, "abundance.h5")
+    tsv <- file.path(sdirs, "abundance.tsv")
+    puede_h5 <- requireNamespace("rhdf5", quietly = TRUE)
+    qfiles <- if (puede_h5 && all(file.exists(h5))) h5 else tsv
+    if (!all(file.exists(qfiles))) {
+      qfiles <- if (all(file.exists(tsv))) tsv else h5
+    }
   }
   valid <- file.exists(qfiles)
   if (!any(valid)) return(NULL)
