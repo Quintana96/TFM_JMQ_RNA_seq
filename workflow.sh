@@ -305,8 +305,24 @@ trap 'log "ERROR: fallo en la línea ${BASH_LINENO[0]:-$LINENO}${FUNCNAME[0]:+ (
 # del log rompe la detección, y el aviso de una herramienta que mencione "Error"
 # marca como fallida una ejecución correcta. Con esto queda un dato explícito.
 RUN_STATUS_FILE=""
+# Señal que interrumpió la ejecución, si la hubo. Sin esto, matar el script
+# dejaba escrito "success": bash ejecuta el trap EXIT también al recibir
+# SIGTERM, y `$?` en ese instante puede valer 0. El resultado era una ejecución
+# a medias registrada como buena, que el harness después SALTABA por creerla
+# hecha. Medido: un subjunc interrumpido escribió exit_code 0, status success,
+# 1.232 s y 2.750 MB de pico sin haber generado ninguna matriz de conteos.
+RUN_SIGNAL=""
+trap 'RUN_SIGNAL=SIGTERM' TERM
+trap 'RUN_SIGNAL=SIGINT'  INT
+trap 'RUN_SIGNAL=SIGHUP'  HUP
+
 write_exit_status() {
     local code=$1
+    if [[ -n "$RUN_SIGNAL" ]]; then
+        code=143
+        [[ "$RUN_SIGNAL" == "SIGINT" ]] && code=130
+        [[ "$RUN_SIGNAL" == "SIGHUP" ]] && code=129
+    fi
     # Las metricas se cierran aquí y no en el camino feliz: una ejecución que
     # falla a mitad también consumio tiempo y memoria, y saber cuanto es justo
     # lo que hace falta para diagnosticarla.
@@ -320,7 +336,14 @@ write_exit_status() {
         'BEGIN{m=0} $2+0>m{m=$2+0} END{printf "%.0f", m/1024}' "$SAMPLES_FILE")
     {
         printf 'exit_code\t%s\n'        "$code"
-        printf 'status\t%s\n'           "$([[ "$code" -eq 0 ]] && echo success || echo error)"
+        # Tres estados y no dos: "interrumpido" no es lo mismo que "error". Un
+        # error significa que el pipeline falló y hay que arreglar algo; una
+        # interrupción significa que no se sabe nada, y sobre todo que no se
+        # puede dar por hecha.
+        printf 'status\t%s\n'           "$(if [[ -n "$RUN_SIGNAL" ]]; then echo interrumpido
+                                             elif [[ "$code" -eq 0 ]]; then echo success
+                                             else echo error; fi)"
+        [[ -n "$RUN_SIGNAL" ]] && printf 'senal\t%s\n' "$RUN_SIGNAL"
         printf 'finished_at\t%s\n'      "$(date '+%Y-%m-%d %H:%M:%S')"
         printf 'duration_seconds\t%s\n' "$total"
         printf 'peak_rss_mb\t%s\n'      "$pico"

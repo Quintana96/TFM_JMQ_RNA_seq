@@ -80,8 +80,15 @@ matriz_de <- function(d, pipeline = NULL) {
 etapa_pipeline <- function(d, pipeline, hilos = 6, forzar = FALSE) {
   destino <- dir_pipeline(d, pipeline)
   estado <- file.path(destino, "exit_status.tsv")
+  # Se exigen DOS cosas para saltar una etapa: que el estado diga success y que
+  # la matriz de conteos exista. El estado por sí solo no basta —una ejecución
+  # interrumpida podía quedar registrada como correcta— y la matriz es el
+  # producto real de la etapa: si no está, la etapa no está hecha, diga lo que
+  # diga el fichero de estado.
+  matriz <- file.path(destino, "04_counts", "count_matrix.tsv")
   if (!forzar && file.exists(estado) &&
-      identical(read_exit_status(destino)$status, "success")) {
+      identical(read_exit_status(destino)$status, "success") &&
+      file.exists(matriz)) {
     msg("  ", pipeline, ": ya hecho, se salta"); return(invisible("saltado"))
   }
   referencia <- if (pipeline %in% c("bowtie2", "subjunc")) d$rutas$genoma
