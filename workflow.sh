@@ -796,6 +796,10 @@ if [[ ${#TRIMMED_FASTQ[@]} -eq 0 ]]; then
     exit 1
 fi
 step qc_final "Control de calidad post-trimming con FastQC..."
+if [[ ${#TRIMMED_FASTQ[@]} -eq 0 ]]; then
+    log "Error: el recorte no dejó ningún FASTQ en $TRIMMED."
+    exit 1
+fi
 run_cmd fastqc "${TRIMMED_FASTQ[@]}" -t "$THREADS" -o "$QC"
 
 # ── Orientación de la libreria ─────────────────────────────────────────────
@@ -819,7 +823,12 @@ infer_strandedness() {
     [[ "$READ_TYPE" == "pe" ]] && pe_flags=(-p --countReadPairs)
     mkdir -p "$tmp"
     for s in 0 1 2; do
-        featureCounts -T "$THREADS" "${pe_flags[@]}" -s "$s" \
+        # `${pe_flags[@]+"${pe_flags[@]}"}` y no `"${pe_flags[@]}"`: macOS trae
+        # bash 3.2, donde expandir un array VACÍO bajo `set -u` aborta con
+        # "unbound variable". Con datos single-end pe_flags está vacío, así que
+        # la forma directa mata la ejecución justo aquí, después de haber
+        # alineado todo. No es cosmético y no se puede "simplificar".
+        featureCounts -T "$THREADS" ${pe_flags[@]+"${pe_flags[@]}"} -s "$s" \
             -t "$FEATURE_TYPE" -g "$FEATURE_ATTR" \
             -a "$ANNOTATION_FILE" -o "${tmp}/s${s}.txt" "$bam" >/dev/null 2>&1 || true
     done
