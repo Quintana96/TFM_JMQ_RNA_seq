@@ -169,3 +169,26 @@ test_that("la interfaz y el informe coinciden en que columnas son p-valores", {
     expect_true(grepl("e-", fmt_celda_num(1e-30, nm), fixed = TRUE), info = nm)
   }
 })
+
+
+test_that("el diccionario reconoce los p-valores con sufijo", {
+  # No es teorico: la tabla de comparacion ORA/GSEA nombra sus columnas
+  # `padj_ORA` y `padj_GSEA`. Con la lista de nombres exactos quedaban fuera y
+  # en la interfaz se mostraban como "0,000", que es justo el fallo que el
+  # diccionario existe para evitar. Se vio ejecutando la aplicacion.
+  expect_true(es_col_p_valor("padj_GSEA"))
+  expect_true(es_col_p_valor("padj_ORA"))
+  expect_identical(fmt_celda_num(1.55e-05, "padj_GSEA"), "1,55e-05")
+
+  # Y no se lleva por delante columnas que solo se le parecen.
+  expect_false(es_col_p_valor("NES"))
+  expect_false(es_col_p_valor("setSize"))
+  expect_false(es_col_p_valor("enrichmentScore"))
+  expect_identical(fmt_celda_num(3.409, "NES"), "3,409")
+
+  df <- data.frame(ID = "R-HSA-445355", padj_ORA = 0.001, padj_GSEA = 1.55e-05,
+                   NES = 3.409, stringsAsFactors = FALSE)
+  f <- formato_por_columna(dt_table(df), df)
+  expect_identical(unname(f[["padj_GSEA"]]), "signif:3")
+  expect_identical(unname(f[["NES"]]), "round:3")
+})

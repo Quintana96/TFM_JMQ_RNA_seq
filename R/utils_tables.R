@@ -70,7 +70,7 @@ formatear_numeros_es <- function(dt, data, decimales = 3) {
   if (!is.data.frame(data) || !ncol(data)) return(dt)
   num <- names(data)[vapply(data, is.numeric, logical(1))]
   if (!length(num)) return(dt)
-  p_val <- intersect(num, COLS_P_VALOR)
+  p_val <- num[es_col_p_valor(num)]
   resto <- setdiff(num, p_val)
   enteros <- resto[vapply(data[resto], function(x)
     is.integer(x) || all(is.na(x) | x == round(x)), logical(1))]

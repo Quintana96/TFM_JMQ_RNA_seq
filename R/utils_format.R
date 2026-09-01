@@ -63,6 +63,21 @@ trim_log_text <- function(x, max_chars = 250000L) {
 COLS_P_VALOR <- c("pvalue", "padj", "p.adjust", "qvalue", "pval", "p_value",
                   "PValue", "FDR", "P.Value", "adj.P.Val")
 
+#' TRUE si el nombre de columna designa un p-valor.
+#'
+#' La lista de arriba no basta y esto no es teorico: la tabla de comparacion
+#' ORA/GSEA nombra sus columnas `padj_ORA` y `padj_GSEA`, que no estaban, y en
+#' la interfaz salian como "0,000" —el fallo exacto que el diccionario existe
+#' para evitar—. Cualquier tabla nueva puede traer un sufijo asi, de modo que
+#' ademas del nombre exacto se reconoce el patron.
+es_col_p_valor <- function(nombre) {
+  nombre <- as.character(nombre)
+  nombre %in% COLS_P_VALOR |
+    grepl("^(p[._]?val|padj|p[._]adjust|q[._]?val|fdr)", tolower(nombre)) |
+    grepl("(^|[._])(padj|pvalue|pval|qvalue|fdr)([._]|$)", tolower(nombre)) |
+    grepl("^adj[._]p[._]val", tolower(nombre))
+}
+
 #' Un valor de tabla listo para mostrar: tres decimales, salvo los p-valores.
 #'
 #' `columna` decide el tratamiento, no el valor: un p-valor de 0,04 se ve igual
@@ -79,7 +94,7 @@ COLS_P_VALOR <- c("pvalue", "padj", "p.adjust", "qvalue", "pval", "p_value",
 fmt_celda_num <- function(x, columna, decimales = 3) {
   if (!is.numeric(x)) return(x)
   if (is.na(x)) return(NA)
-  if (columna %in% COLS_P_VALOR) {
+  if (es_col_p_valor(columna)) {
     # La notacion cientifica solo lleva coma en la mantisa: 4,42e-46.
     return(sub(".", ",", as.character(signif(x, decimales)), fixed = TRUE))
   }
