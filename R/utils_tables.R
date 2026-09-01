@@ -23,53 +23,65 @@ DT_ES <- list(
               sortDescending = ": activar para ordenar de forma descendente")
 )
 
-#' Wrapper estandar de DT::datatable con scrollX y dom ftip
-dt_table <- function(data, page_length = 10, filter = "none") {
-  datatable(
+#' Wrapper estandar de DT::datatable con scrollX y dom ftip.
+#'
+#' Formatea ademas los numeros en castellano. Va aqui, en el unico envoltorio de
+#' tablas, por el mismo motivo que el diccionario de arriba: que la convencion
+#' numerica de la aplicacion sea un solo punto de cambio y no pueda divergir
+#' entre pestanas.
+dt_table <- function(data, page_length = 10, filter = "none", decimales = 3) {
+  dt <- datatable(
     data,
     filter = filter,
     options = list(pageLength = page_length, scrollX = TRUE, dom = "ftip",
                    language = DT_ES),
     rownames = FALSE
   )
+  formatear_numeros_es(dt, data, decimales)
 }
 
-#' DataTable con los numeros a un numero fijo de decimales.
+#' Aplica a un DataTable la convencion numerica castellana.
 #'
-#' Con una excepcion que no es negociable: los p-valores. `round(4.42e-46, 3)`
-#' es 0, y un cero en la columna de significacion no es un numero redondeado
-#' sino el dato perdido; en GSE52778 dejaria a CRISPLD2, que es uno de los genes
-#' de control de la memoria, indistinguible de un gen no significativo. Esas
-#' columnas van con tres cifras SIGNIFICATIVAS, que es como se leen en cualquier
-#' tabla de expresion diferencial publicada (4.42e-46).
+#' Coma decimal y punto de millares: "12.345,679". Es la del documento del TFM y
+#' la que ya usan las tablas del harness, y las capturas de la aplicacion van
+#' dentro de ese documento.
 #'
-#' Se formatea en el lado del cliente con los formateadores de DT y no
-#' redondeando el data.frame, por dos motivos. La ordenacion y el filtro por
-#' rango siguen usando el valor completo: redondeando el dato, dos genes con
-#' padj 0,0499 y 0,0501 se ordenarian como iguales. Y las descargas entregan el
-#' data.frame intacto, de modo que lo que se recorta es la LECTURA y no el
-#' resultado.
+#' Tres tratamientos, segun lo que contenga la columna:
 #'
-#' Las columnas de valores enteros se dejan sin tocar: escribir "1.000" para un
-#' recuento de mil genes se lee como mil, y para cinco muestras "5.000" es peor
-#' todavia.
-dt_table_num <- function(data, page_length = 10, filter = "none", decimales = 3) {
-  dt <- dt_table(data, page_length = page_length, filter = filter)
+#'   - **P-valores**: tres cifras SIGNIFICATIVAS, no decimales.
+#'     `round(4.42e-46, 3)` es 0, y ese 4,42e-46 es el p ajustado de CRISPLD2 en
+#'     GSE52778, uno de los genes de control de la memoria. Ese cero no seria un
+#'     numero redondeado sino el dato perdido, y dejaria un gen significativo
+#'     indistinguible de uno que no lo es.
+#'   - **Enteros**: sin decimales, pero con separador de millares. Una libreria
+#'     de 12.345.678 lecturas es ilegible escrita del tiron, y escribirle tres
+#'     decimales es peor.
+#'   - **El resto**: `decimales` decimales.
+#'
+#' Se formatea en el lado del cliente, con los formateadores de DT, y no
+#' redondeando el data.frame. Los formateadores solo actuan cuando el tipo es
+#' 'display', asi que la ordenacion y el filtro por rango siguen usando el valor
+#' completo: redondeando el dato, dos genes con padj 0,0499 y 0,0501 se
+#' ordenarian como iguales. Y las descargas entregan el data.frame intacto, de
+#' modo que lo que cambia es la LECTURA y no el resultado.
+formatear_numeros_es <- function(dt, data, decimales = 3) {
+  # `datatable()` tambien acepta matrices, donde recorrer columnas como lista no
+  # funciona. No formatear es preferible a romper la tabla.
+  if (!is.data.frame(data) || !ncol(data)) return(dt)
   num <- names(data)[vapply(data, is.numeric, logical(1))]
   if (!length(num)) return(dt)
   p_val <- intersect(num, COLS_P_VALOR)
-  con_decimales <- setdiff(num, p_val)
-  es_entero <- vapply(data[con_decimales], function(x)
-    is.integer(x) || all(is.na(x) | x == round(x)), logical(1))
-  con_decimales <- con_decimales[!es_entero]
-  # `mark = ""` desactiva el separador de millares. La aplicacion muestra los
-  # numeros con punto decimal, a la inglesa; anadir la coma de millares mezclaria
-  # las dos convenciones en la misma celda ("12,345.678") dentro de un documento
-  # en castellano.
-  if (length(con_decimales))
-    dt <- formatRound(dt, con_decimales, digits = decimales, mark = "")
+  resto <- setdiff(num, p_val)
+  enteros <- resto[vapply(data[resto], function(x)
+    is.integer(x) || all(is.na(x) | x == round(x)), logical(1))]
+  continuas <- setdiff(resto, enteros)
+
+  if (length(continuas))
+    dt <- formatRound(dt, continuas, digits = decimales, mark = ".", dec.mark = ",")
+  if (length(enteros))
+    dt <- formatRound(dt, enteros, digits = 0, mark = ".", dec.mark = ",")
   if (length(p_val))
-    dt <- formatSignif(dt, p_val, digits = decimales, mark = "")
+    dt <- formatSignif(dt, p_val, digits = decimales, mark = ".", dec.mark = ",")
   dt
 }
 

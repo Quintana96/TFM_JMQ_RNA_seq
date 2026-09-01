@@ -1,5 +1,9 @@
 #' test-tablas-decimales.R
-#' Las tablas numericas de la pestana 4 se muestran a tres decimales.
+#' Convencion numerica de las tablas: coma decimal, punto de millares y tres
+#' decimales.
+#'
+#' Es la del documento del TFM y la que ya usan las tablas del harness, y las
+#' capturas de la aplicacion van dentro de ese documento.
 #'
 #' El caso que obliga a que esto tenga test es el p-valor. `round(4.42e-46, 3)`
 #' es 0, y ese 4,42e-46 es el p ajustado de CRISPLD2 en GSE52778, uno de los
@@ -10,17 +14,32 @@
 #' dato que viaja al widget —y por tanto el que se ordena, se filtra y se
 #' descarga— conserva toda su precision.
 
-#' Que formateador de DT le toca a cada columna, leido del propio widget.
+#' Que formateador le toca a cada columna, leido del propio widget.
 #' DT 0.34 los guarda en `columnDefs[[i]]$render`, no en `rowCallback`.
+#' Devuelve "round:N", "signif:N" o "ninguno".
 formato_por_columna <- function(dt, df) {
   out <- setNames(rep("ninguno", length(df)), names(df))
   for (e in dt$x$options$columnDefs) {
     if (is.null(e$render)) next
-    tipo <- if (grepl("formatSignif", e$render)) "signif"
-            else if (grepl("formatRound", e$render)) "round" else "otro"
-    for (t in e$targets) out[[t + 1L]] <- tipo   # targets es 0-based
+    txt <- as.character(e$render)
+    m <- regmatches(txt, regexec("DTWidget\\.format(Round|Signif)\\(data, ([0-9]+)", txt))[[1]]
+    if (!length(m)) next
+    etiqueta <- paste0(tolower(m[2]), ":", m[3])
+    for (t in e$targets) out[[t + 1L]] <- etiqueta
   }
   out
+}
+
+#' Las marcas (millares, decimal) que el widget pasa al formateador.
+marcas <- function(dt) {
+  for (e in dt$x$options$columnDefs) {
+    if (is.null(e$render)) next
+    m <- regmatches(as.character(e$render),
+                    regexec('data, [0-9]+, [0-9]+, "([^"]*)", "([^"]*)"',
+                            as.character(e$render)))[[1]]
+    if (length(m)) return(list(millares = m[2], decimal = m[3]))
+  }
+  NULL
 }
 
 tabla_deg <- function() {
@@ -35,59 +54,70 @@ tabla_deg <- function() {
     stringsAsFactors = FALSE)
 }
 
-test_that("los p-valores no se redondean a decimales, van a cifras significativas", {
-  df <- tabla_deg()
-  f <- formato_por_columna(dt_table_num(df), df)
+test_that("las tablas usan coma decimal y punto de millares", {
+  mk <- marcas(dt_table(tabla_deg()))
+  expect_identical(mk$millares, ".")
+  expect_identical(mk$decimal, ",")
+})
 
-  expect_identical(unname(f[["pvalue"]]), "signif")
-  expect_identical(unname(f[["padj"]]),   "signif")
+test_that("los p-valores no se redondean a decimales, van a cifras significativas", {
+  f <- formato_por_columna(dt_table(tabla_deg()), tabla_deg())
+  expect_identical(unname(f[["pvalue"]]), "signif:3")
+  expect_identical(unname(f[["padj"]]),   "signif:3")
 
   # La comprobacion que da sentido al test: con tres decimales, el padj de
   # CRISPLD2 seria cero.
-  expect_identical(round(df$padj[1], 3), 0)
+  expect_identical(round(tabla_deg()$padj[1], 3), 0)
 })
 
-test_that("las magnitudes continuas si van a tres decimales", {
-  df <- tabla_deg()
-  f <- formato_por_columna(dt_table_num(df), df)
-
+test_that("las magnitudes continuas van a tres decimales", {
+  f <- formato_por_columna(dt_table(tabla_deg()), tabla_deg())
   for (nm in c("baseMean", "log2FC", "lfcSE")) {
-    expect_identical(unname(f[[nm]]), "round", info = nm)
+    expect_identical(unname(f[[nm]]), "round:3", info = nm)
   }
-
-  # Y con tres, no con los cuatro que habia antes.
-  cd <- Filter(function(e) !is.null(e$render) && grepl("formatRound", e$render),
-               dt_table_num(df)$x$options$columnDefs)
-  expect_true(length(cd) > 0)
-  expect_true(grepl("formatRound(data, 3,", as.character(cd[[1]]$render), fixed = TRUE))
 })
 
-test_that("ni el texto ni los enteros se tocan", {
-  df <- tabla_deg()
-  f <- formato_por_columna(dt_table_num(df), df)
+test_that("los enteros llevan millares pero no decimales", {
+  f <- formato_por_columna(dt_table(tabla_deg()), tabla_deg())
+  # "18,000" para un recuento de 18 genes se leeria como dieciocho mil.
+  expect_identical(unname(f[["Count"]]), "round:0")
+})
 
+test_that("el texto no se toca", {
+  f <- formato_por_columna(dt_table(tabla_deg()), tabla_deg())
   expect_identical(unname(f[["gene"]]), "ninguno")
-  # Un recuento de genes escrito "18.000" se leeria como dieciocho mil.
-  expect_identical(unname(f[["Count"]]), "ninguno")
 })
 
 test_that("el formato es de lectura: el dato conserva toda su precision", {
   df <- tabla_deg()
-  dt <- dt_table_num(df)
+  dt <- dt_table(df)
 
   # Es lo que hace que ordenar por padj distinga 0,0499 de 0,0501, y lo que
   # permite que la descarga entregue el resultado y no la vista.
   expect_equal(dt$x$data$padj, df$padj)
   expect_equal(dt$x$data$log2FC, df$log2FC)
 
-  # El formateador solo actua en 'display'.
   cd <- Filter(function(e) !is.null(e$render), dt$x$options$columnDefs)
   expect_true(all(vapply(cd, function(e)
     grepl("type !== 'display'", as.character(e$render), fixed = TRUE), logical(1))))
 })
 
 test_that("una tabla sin columnas numericas no rompe", {
-  expect_silent(dt_table_num(message_df("Sin resultados DEG.")))
+  expect_silent(dt_table(message_df("Sin resultados DEG.")))
+})
+
+test_that("la convencion la aplica el envoltorio, asi que alcanza a toda la app", {
+  # No solo a la pestana 4: cualquier tabla que pase por dt_table() la hereda,
+  # que es el motivo de que el formato viva en el envoltorio y no en cada
+  # llamada. Aqui, una tabla con la forma de las de calidad.
+  qc <- data.frame(Sample = c("A", "B"),
+                   `Total Sequences` = c(12345678L, 987654L),
+                   percent_mapped = c(96.4312, 91.007),
+                   check.names = FALSE, stringsAsFactors = FALSE)
+  f <- formato_por_columna(dt_table(qc), qc)
+  expect_identical(unname(f[["Total Sequences"]]), "round:0")
+  expect_identical(unname(f[["percent_mapped"]]), "round:3")
+  expect_identical(unname(f[["Sample"]]), "ninguno")
 })
 
 
@@ -95,27 +125,37 @@ test_that("una tabla sin columnas numericas no rompe", {
 #
 # El informe HTML no usa DT: escribe las celdas a mano. Antes usaba
 # `signif(v, 4)` para todo, asi que la tabla de la interfaz y la del informe
-# mostraban el mismo gen con distinto numero de cifras.
+# mostraban el mismo gen con distinto numero de cifras y distinta convencion.
 
-test_that("fmt_celda_num da tres decimales a las magnitudes continuas", {
-  expect_identical(fmt_celda_num(2.6314159, "log2FC"), "2.631")
-  expect_identical(fmt_celda_num(-4.5, "log2FC"), "-4.500")
-  expect_identical(fmt_celda_num(3379.9876543, "baseMean"), "3379.988")
-  expect_identical(fmt_celda_num(0.1234567, "lfcSE"), "0.123")
+test_that("fmt_celda_num da tres decimales con coma a las magnitudes continuas", {
+  expect_identical(fmt_celda_num(2.6314159, "log2FC"), "2,631")
+  expect_identical(fmt_celda_num(-4.5, "log2FC"), "-4,500")
+  expect_identical(fmt_celda_num(3379.9876543, "baseMean"), "3.379,988")
+  expect_identical(fmt_celda_num(12345.6789, "baseMean"), "12.345,679")
 })
 
 test_that("fmt_celda_num conserva los p-valores pequeños", {
-  # El caso que motiva todo: con tres decimales seria "0.000".
-  expect_identical(fmt_celda_num(4.42e-46, "padj"), "4.42e-46")
-  expect_identical(fmt_celda_num(1.2345e-50, "pvalue"), "1.23e-50")
+  # El caso que motiva todo: con tres decimales seria "0,000".
+  expect_identical(fmt_celda_num(4.42e-46, "padj"), "4,42e-46")
+  expect_identical(fmt_celda_num(1.2345e-50, "pvalue"), "1,23e-50")
   # Y uno cerca del umbral sigue siendo legible como tal.
-  expect_identical(fmt_celda_num(0.049912, "padj"), "0.0499")
+  expect_identical(fmt_celda_num(0.049912, "padj"), "0,0499")
+  expect_identical(fmt_celda_num(0.0501, "padj"), "0,0501")
 })
 
-test_that("fmt_celda_num no inventa decimales en enteros ni toca el texto", {
+test_that("fmt_celda_num pone millares a los enteros y no toca el texto", {
+  expect_identical(fmt_celda_num(12345678, "Lecturas_asignadas"), "12.345.678")
   expect_identical(fmt_celda_num(18L, "Count"), "18")
   expect_identical(fmt_celda_num("CRISPLD2", "gene"), "CRISPLD2")
   expect_true(is.na(fmt_celda_num(NA_real_, "log2FC")))
+})
+
+test_that("formatear en castellano no dispara el aviso de big.mark ambiguo", {
+  # `big.mark = "."` con el decimal.mark por defecto, que tambien es ".", hace
+  # avisar a R. `fmt_int()` ya lo resolvia; el formateador de celdas lo reusa en
+  # vez de repetir el arreglo.
+  expect_silent(fmt_celda_num(12345678, "Lecturas_asignadas"))
+  expect_silent(fmt_celda_num(12345.6789, "baseMean"))
 })
 
 test_that("la interfaz y el informe coinciden en que columnas son p-valores", {
@@ -123,9 +163,9 @@ test_that("la interfaz y el informe coinciden en que columnas son p-valores", {
   # anade en un sitio y las dos tablas lo respetan.
   expect_true(all(c("pvalue", "padj", "p.adjust", "qvalue") %in% COLS_P_VALOR))
   df <- tabla_deg()
-  f <- formato_por_columna(dt_table_num(df), df)
+  f <- formato_por_columna(dt_table(df), df)
   for (nm in intersect(names(df), COLS_P_VALOR)) {
-    expect_identical(unname(f[[nm]]), "signif", info = nm)
+    expect_identical(unname(f[[nm]]), "signif:3", info = nm)
     expect_true(grepl("e-", fmt_celda_num(1e-30, nm), fixed = TRUE), info = nm)
   }
 })

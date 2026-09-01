@@ -72,14 +72,22 @@ COLS_P_VALOR <- c("pvalue", "padj", "p.adjust", "qvalue", "pval", "p_value",
 #' tres cifras SIGNIFICATIVAS, que es como se leen en cualquier tabla de
 #' expresion diferencial publicada.
 #'
-#' Sin separador de millares: la aplicacion escribe el decimal a la inglesa, y
-#' anadir la coma de millares mezclaria las dos convenciones en la misma celda.
+#' Convencion castellana —coma decimal, punto de millares— igual que
+#' `formatear_numeros_es()` en las tablas de la interfaz. Los enteros llevan
+#' separador de millares pero no decimales: una libreria de 12.345.678 lecturas
+#' es ilegible escrita del tiron, y escribirle tres decimales es peor.
 fmt_celda_num <- function(x, columna, decimales = 3) {
   if (!is.numeric(x)) return(x)
   if (is.na(x)) return(NA)
-  if (columna %in% COLS_P_VALOR) return(as.character(signif(x, decimales)))
-  if (x == round(x)) return(as.character(x))   # los enteros, tal cual
-  formatC(x, format = "f", digits = decimales)
+  if (columna %in% COLS_P_VALOR) {
+    # La notacion cientifica solo lleva coma en la mantisa: 4,42e-46.
+    return(sub(".", ",", as.character(signif(x, decimales)), fixed = TRUE))
+  }
+  # `fmt_int()` ya resuelve la ambiguedad de big.mark = "." con el decimal.mark
+  # por defecto, que tambien es "." y hace avisar a R.
+  if (x == round(x)) return(fmt_int(x))
+  formatC(x, format = "f", digits = decimales,
+          big.mark = ".", decimal.mark = ",")
 }
 
 #' Conversión segura a numérico (suprime warnings y devuelve NA)

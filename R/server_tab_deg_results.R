@@ -27,7 +27,7 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
       df_r$direction <- ifelse(df_r$log2FC >= 0, "Up", "Down")
       df_r <- df_r[, c("gene", "direction", setdiff(names(df_r), c("gene", "direction"))), drop = FALSE]
     }
-    dt_table_num(df_r, page_length = 15, filter = "top")
+    dt_table(df_r, page_length = 15, filter = "top")
   })
 
   # ── Helpers de ploteo (reutilizados en render y en descarga) ──────────────

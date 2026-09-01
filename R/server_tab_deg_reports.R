@@ -84,7 +84,7 @@ server_tab_deg_reports <- function(input, output, session, state, ctx) {
   output$deg_boot_table <- renderDT({
     r <- boot_rv()
     if (is.null(r)) return(dt_table(message_df("Sin estimación de replicabilidad.")))
-    dt_table_num(r$summary, page_length = 5)
+    dt_table(r$summary, page_length = 5)
   })
 
   output$deg_boot_plot <- plotly::renderPlotly({
