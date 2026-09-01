@@ -569,12 +569,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   output$deg_enrich_table <- renderDT({
     df <- enrich_rv()
     if (is.null(df) || !nrow(df)) return(dt_table(message_df("Sin enriquecimiento calculado.")))
-    df_r <- df
-    for (nm in intersect(c("pvalue", "p.adjust", "qvalue"), names(df_r)))
-      df_r[[nm]] <- signif(df_r[[nm]], 3)
-    for (nm in intersect(c("enrichmentScore", "NES"), names(df_r)))
-      df_r[[nm]] <- round(df_r[[nm]], 3)
-    dt_table(df_r, page_length = 15, filter = "top")
+    dt_table_num(df, page_length = 15, filter = "top")
   })
 
   output$download_enrich_table <- csv_download(
@@ -937,7 +932,7 @@ server_tab_deg_enrich <- function(input, output, session, state, ctx) {
   output$deg_enrich_compare_table <- renderDT({
     tb <- compare_table_rv()
     if (is.null(tb)) return(dt_table(message_df("Sin comparación calculada.")))
-    dt_table(tb, page_length = 15, filter = "top")
+    dt_table_num(tb, page_length = 15, filter = "top")
   })
 
   output$download_enrich_compare <- csv_download(

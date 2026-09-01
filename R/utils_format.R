@@ -54,5 +54,33 @@ trim_log_text <- function(x, max_chars = 250000L) {
   )
 }
 
+#' Columnas que llevan un p-valor y por tanto NO admiten decimales fijos.
+#'
+#' Los nombres son los de cada procedencia: `run_deg()` normaliza a
+#' `pvalue`/`padj`, las tablas de clusterProfiler traen `p.adjust` y `qvalue`, y
+#' una tabla que venga cruda de un motor conserva los suyos (`FDR` en edgeR,
+#' `adj.P.Val` en limma).
+COLS_P_VALOR <- c("pvalue", "padj", "p.adjust", "qvalue", "pval", "p_value",
+                  "PValue", "FDR", "P.Value", "adj.P.Val")
+
+#' Un valor de tabla listo para mostrar: tres decimales, salvo los p-valores.
+#'
+#' `columna` decide el tratamiento, no el valor: un p-valor de 0,04 se ve igual
+#' que cualquier otro numero pequeño, pero uno de 4,42e-46 —el p ajustado de
+#' CRISPLD2 en GSE52778— se convierte en 0 al redondearlo a tres decimales. Ese
+#' cero no es un numero redondeado, es el dato perdido. Los p-valores van con
+#' tres cifras SIGNIFICATIVAS, que es como se leen en cualquier tabla de
+#' expresion diferencial publicada.
+#'
+#' Sin separador de millares: la aplicacion escribe el decimal a la inglesa, y
+#' anadir la coma de millares mezclaria las dos convenciones en la misma celda.
+fmt_celda_num <- function(x, columna, decimales = 3) {
+  if (!is.numeric(x)) return(x)
+  if (is.na(x)) return(NA)
+  if (columna %in% COLS_P_VALOR) return(as.character(signif(x, decimales)))
+  if (x == round(x)) return(as.character(x))   # los enteros, tal cual
+  formatC(x, format = "f", digits = decimales)
+}
+
 #' Conversión segura a numérico (suprime warnings y devuelve NA)
 num_or_na <- function(x) suppressWarnings(as.numeric(x))

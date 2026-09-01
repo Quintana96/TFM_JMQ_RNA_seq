@@ -387,7 +387,9 @@ build_deg_report_html <- function(rv, diagnostics = NULL) {
   top_rows <- if (nrow(top)) paste(vapply(seq_len(nrow(top)), function(i) {
     paste0("<tr>", paste(vapply(cols, function(c) {
       v <- top[[c]][i]
-      paste0("<td>", html_escape(if (is.numeric(v)) signif(v, 4) else v), "</td>")
+      # El mismo criterio que la tabla de la pestana 4: tres decimales, y los
+      # p-valores en cifras significativas para no perderlos al redondear.
+      paste0("<td>", html_escape(fmt_celda_num(v, c)), "</td>")
     }, character(1)), collapse = ""), "</tr>")
   }, character(1)), collapse = "") else ""
 

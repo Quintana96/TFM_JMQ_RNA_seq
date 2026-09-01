@@ -34,6 +34,45 @@ dt_table <- function(data, page_length = 10, filter = "none") {
   )
 }
 
+#' DataTable con los numeros a un numero fijo de decimales.
+#'
+#' Con una excepcion que no es negociable: los p-valores. `round(4.42e-46, 3)`
+#' es 0, y un cero en la columna de significacion no es un numero redondeado
+#' sino el dato perdido; en GSE52778 dejaria a CRISPLD2, que es uno de los genes
+#' de control de la memoria, indistinguible de un gen no significativo. Esas
+#' columnas van con tres cifras SIGNIFICATIVAS, que es como se leen en cualquier
+#' tabla de expresion diferencial publicada (4.42e-46).
+#'
+#' Se formatea en el lado del cliente con los formateadores de DT y no
+#' redondeando el data.frame, por dos motivos. La ordenacion y el filtro por
+#' rango siguen usando el valor completo: redondeando el dato, dos genes con
+#' padj 0,0499 y 0,0501 se ordenarian como iguales. Y las descargas entregan el
+#' data.frame intacto, de modo que lo que se recorta es la LECTURA y no el
+#' resultado.
+#'
+#' Las columnas de valores enteros se dejan sin tocar: escribir "1.000" para un
+#' recuento de mil genes se lee como mil, y para cinco muestras "5.000" es peor
+#' todavia.
+dt_table_num <- function(data, page_length = 10, filter = "none", decimales = 3) {
+  dt <- dt_table(data, page_length = page_length, filter = filter)
+  num <- names(data)[vapply(data, is.numeric, logical(1))]
+  if (!length(num)) return(dt)
+  p_val <- intersect(num, COLS_P_VALOR)
+  con_decimales <- setdiff(num, p_val)
+  es_entero <- vapply(data[con_decimales], function(x)
+    is.integer(x) || all(is.na(x) | x == round(x)), logical(1))
+  con_decimales <- con_decimales[!es_entero]
+  # `mark = ""` desactiva el separador de millares. La aplicacion muestra los
+  # numeros con punto decimal, a la inglesa; anadir la coma de millares mezclaria
+  # las dos convenciones en la misma celda ("12,345.678") dentro de un documento
+  # en castellano.
+  if (length(con_decimales))
+    dt <- formatRound(dt, con_decimales, digits = decimales, mark = "")
+  if (length(p_val))
+    dt <- formatSignif(dt, p_val, digits = decimales, mark = "")
+  dt
+}
+
 #' Tabla FastQC filtrada a columnas relevantes
 fastqc_table <- function(out_dir) {
   fq <- fastqc_stats(out_dir)

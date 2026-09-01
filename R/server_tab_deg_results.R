@@ -27,11 +27,7 @@ server_tab_deg_results <- function(input, output, session, state, ctx) {
       df_r$direction <- ifelse(df_r$log2FC >= 0, "Up", "Down")
       df_r <- df_r[, c("gene", "direction", setdiff(names(df_r), c("gene", "direction"))), drop = FALSE]
     }
-    num_cols <- intersect(c("baseMean", "log2FC", "log2FC_shrunk",
-                            "log2FC_lower", "log2FC_upper", "lfcSE",
-                            "stat", "pvalue", "padj"), names(df_r))
-    for (nm in num_cols) df_r[[nm]] <- signif(df_r[[nm]], 4)
-    dt_table(df_r, page_length = 15, filter = "top")
+    dt_table_num(df_r, page_length = 15, filter = "top")
   })
 
   # ── Helpers de ploteo (reutilizados en render y en descarga) ──────────────
