@@ -628,7 +628,11 @@ build_deg_r_script <- function(rv) {
       if (lfc > 0)
         paste0("test <- glmTreat(fit, coef = \"", coef, "\", lfc = ", lfc, ")")
       else paste0("test <- glmQLFTest(fit, coef = \"", coef, "\")"),
-      "res <- topTags(test, n = Inf, sort.by = \"none\")$table"
+      "res <- topTags(test, n = Inf, sort.by = \"none\")$table",
+      "# topTags reporta FDR, no padj; se renombra para el resumen de abajo.",
+      "# Se indexa con [[ ]] y no con $: `res$F` haria partial matching",
+      "# con FDR, que es el mismo tropiezo que ya tuvo la app.",
+      "res$padj <- res[[\"FDR\"]]"
     ),
     "limma-voom" = c(
       "library(limma); library(edgeR)",
@@ -641,7 +645,9 @@ build_deg_r_script <- function(rv) {
         paste0("res <- topTreat(fit, coef = \"", coef, "\", number = Inf, sort.by = \"none\")"))
       else c(
         "fit <- eBayes(fit, robust = TRUE)",
-        paste0("res <- topTable(fit, coef = \"", coef, "\", number = Inf, sort.by = \"none\")"))
+        paste0("res <- topTable(fit, coef = \"", coef, "\", number = Inf, sort.by = \"none\")")),
+      "# topTable y topTreat reportan adj.P.Val, no padj.",
+      "res$padj <- res[[\"adj.P.Val\"]]"
     ),
     "Wilcoxon" = c(
       "# Wilcoxon rank-sum sobre CPM: sin modelo, no ajusta covariables.",
@@ -669,7 +675,9 @@ build_deg_r_script <- function(rv) {
         paste0("cov <- model.matrix(~ ", rv$batch, ", data = m)[, -1, drop = FALSE]")
       else "cov <- NULL",
       "res <- dear_seq(exprmat = cm, variables2test = v2t, covariates = cov,",
-      "                which_test = \"asymptotic\", preprocessed = FALSE)$pvals"
+      "                which_test = \"asymptotic\", preprocessed = FALSE)$pvals",
+      "# dearseq reporta adjPval, no padj.",
+      "res$padj <- res[[\"adjPval\"]]"
     ),
     "Swish" = c(
       "library(fishpond); library(tximport); library(SummarizedExperiment)",

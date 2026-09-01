@@ -65,6 +65,60 @@ test_that("el script exportado se ejecuta y reproduce las llamadas de significac
 })
 
 
+# ── El pie del script, motor por motor ──────────────────────────────────────
+#
+# El pie es siempre `sum(res$padj <= fdr)`, pero cada motor nombra esa columna a
+# su manera: DESeq2 da `padj`, `topTags()` da `FDR` y `topTable()` da
+# `adj.P.Val`. Sin renombrar, `NULL <= 0.05` es `logical(0)` y `sum()` devuelve
+# 0: el entregable de reproducibilidad declaraba CERO significativos en dos de
+# los tres motores que la aplicación ofrece, y lo hacía en silencio.
+#
+# Los tests de arriba no lo veian porque todos corren con DESeq2, que es el
+# unico de los tres cuya columna ya se llama `padj`.
+
+test_that("el pie del script cuenta los significativos en los tres motores", {
+  skip_if_not(requireNamespace("DESeq2", quietly = TRUE), "DESeq2 no instalado")
+  skip_if_not(requireNamespace("edgeR", quietly = TRUE), "edgeR no instalado")
+  skip_if_not(requireNamespace("limma", quietly = TRUE), "limma no instalado")
+
+  counts <- make_test_counts()
+  meta <- make_test_meta(counts)
+
+  for (motor in DEG_METHODS_PARAMETRIC) {
+    rv <- fit_rv(counts, meta, num = "ctrl", den = "trt", method = motor)
+
+    dir <- withr::local_tempdir()
+    utils::write.table(counts, file.path(dir, "counts.tsv"), sep = "\t",
+                       quote = FALSE, col.names = NA)
+    utils::write.table(meta, file.path(dir, "meta.tsv"), sep = "\t",
+                       quote = FALSE, row.names = FALSE)
+    script_path <- file.path(dir, "analisis.R")
+    writeLines(build_deg_r_script(rv), script_path)
+
+    out <- withr::with_dir(dir, {
+      tryCatch({
+        env <- new.env(parent = globalenv())
+        suppressMessages(sys.source(script_path, envir = env))
+        list(ok = TRUE, res = get("res", envir = env))
+      }, error = function(e) list(ok = FALSE, msg = conditionMessage(e)))
+    })
+    expect_true(out$ok, info = paste(motor, if (!out$ok) out$msg else ""))
+
+    # La columna que el pie lee tiene que existir de verdad, no ser NULL.
+    expect_false(is.null(out$res$padj), info = motor)
+
+    # Y tiene que dar el mismo numero que la app, que es lo que el pie promete.
+    app_n <- sum(!is.na(rv$results$padj) & rv$results$padj <= 0.05)
+    scr_n <- sum(out$res$padj <= 0.05, na.rm = TRUE)
+    expect_identical(scr_n, app_n, info = motor)
+
+    # Si el fixture no diera señal, la comparacion de arriba se cumpliria con
+    # dos ceros y el test pasaria por el motivo equivocado.
+    expect_gt(app_n, 0)
+  }
+})
+
+
 # ── Diseños con variables sustitutas ────────────────────────────────────────
 #
 # El caso que fallaba: sva + prefiltrado automático, que es el modo por defecto.
