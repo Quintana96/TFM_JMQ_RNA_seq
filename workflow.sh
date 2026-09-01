@@ -25,7 +25,11 @@ shopt -s nullglob
 # conda activate pipeline_ecoli
 # ============================================================================
 
-# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>] [--FEATURE_TYPE gene|CDS] [--FEATURE_ATTR <attr>]
+# Usage: workflow.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>] [--FEATURE_TYPE gene|CDS] [--FEATURE_ATTR <attr>] [--SOLO_VERSIONES]
+#
+# --SOLO_VERSIONES reescribe solo versions.tsv en --OUTPUT y termina, sin
+# procesar nada. Sirve para reparar la procedencia de una ejecución cuyo
+# registrador falló, sin volver a alinear los FASTQ.
 
 # Default values
 ALIGNMENT_TYPE="bowtie2"
@@ -67,14 +71,20 @@ while [[ "$#" -gt 0 ]]; do
         --FEATURE_ATTR) FEATURE_ATTR="$2"; shift 2 ;;
         --STRANDEDNESS) STRANDEDNESS="$2"; shift 2 ;;
         --THREADS) THREADS_ARG="$2"; shift 2 ;;
+        --SOLO_VERSIONES) SOLO_VERSIONES=1; shift ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
 done
 
 # Validate required arguments
-if [[ -z "${INPUT:-}" || -z "${OUTPUT:-}" || -z "${GENOME_FILE:-}" || -z "${ANNOTATION_FILE:-}" ]]; then
+if [[ "${SOLO_VERSIONES:-0}" == "1" && -z "${OUTPUT:-}" ]]; then
+    echo "Error: --SOLO_VERSIONES necesita --OUTPUT."
+    exit 1
+fi
+if [[ "${SOLO_VERSIONES:-0}" != "1" ]] && \
+   [[ -z "${INPUT:-}" || -z "${OUTPUT:-}" || -z "${GENOME_FILE:-}" || -z "${ANNOTATION_FILE:-}" ]]; then
     echo "Error: Missing required arguments."
-    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>] [--FEATURE_TYPE gene|CDS] [--FEATURE_ATTR <attr>]"
+    echo "Usage: pipeline_ecoli.sh --INPUT <path> --OUTPUT <path> --GENOME_FILE <file> --ANNOTATION_FILE <file> [--ALIGNMENT_TYPE bowtie2|salmon|kallisto] [--READ_TYPE pe|se] [--FRAGMENT_LENGTH <mean>] [--FRAGMENT_SD <sd>] [--INFERENTIAL_REPS <n>] [--FEATURE_TYPE gene|CDS] [--FEATURE_ATTR <attr>] [--SOLO_VERSIONES]"
     exit 1
 fi
 
@@ -148,6 +158,74 @@ file_size() {
     [[ -e "$1" ]] || { echo 0; return 0; }
     stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo 0
 }
+
+# ── Versiones de las herramientas ──────────────────────────────────────────
+# Sin esto es imposible reconstruir que produjo exactamente un resultado. Se ha
+# demostrado que cambiar la versión de una herramienta del pipeline altera la
+# lista de genes diferenciales (Wessels Perelo et al., NAR Genom Bioinform 2024),
+# así que la versión es parte del resultado, no un detalle de instalación.
+escribir_versiones() {
+  log "Registrando versiones de las herramientas..."
+  {
+    printf 'tool\tversion\tpath\n'
+    for t in fastqc fastp multiqc bowtie2 subjunc samtools featureCounts salmon kallisto; do
+        if command -v "$t" >/dev/null 2>&1; then
+            # Dos cuidados aquí, los dos aprendidos ejecutando.
+            #
+            # Primero, NO se canaliza hacía `head`: con `set -o pipefail`, una
+            # herramienta que sigue escribiendo después de la primera línea
+            # recibe SIGPIPE cuando head cierra, la tuberia devuelve 141 y
+            # `set -e` aborta el script. Ocurría con bowtie2, que imprime nueve
+            # líneas: la ejecución moria al registrar versiones, antes de
+            # alinear nada.
+            #
+            # Segundo, no todas aceptan `--version`: featureCounts usa `-v` y
+            # kallisto usa `version`. Y bowtie2 antepone dos líneas de aviso a
+            # la versión real. Coger la primera línea a ciegas registraba un
+            # aviso o un mensaje de error en el fichero de procedencia, que es
+            # justo el fichero que debe poder creerse.
+            case "$t" in
+                featureCounts|subjunc) v_full="$("$t" -v 2>&1 || true)" ;;
+                kallisto)      v_full="$("$t" version 2>&1 || true)" ;;
+                *)             v_full="$("$t" --version 2>&1 || true)" ;;
+            esac
+            # Primera línea no vacia que no sea un aviso ni un error, en UNA
+            # sola pasada de awk. Encadenar dos filtros donde el segundo sale
+            # pronto reproduce el mismo SIGPIPE que se acaba de corregir.
+            v="$(printf '%s\n' "$v_full" \
+                 | awk 'tolower($0) !~ /^(\[warning\]|warning|error)/ && NF { print; exit }' \
+                 || true)"
+            v="$(printf '%s' "$v" | tr -d '\r' | sed 's/\t/ /g')"
+            # bowtie2 no imprime su nombre sino la RUTA ABSOLUTA de su binario:
+            # "/…/bin/bowtie2-align-s version 2.5.5". Se recorta el directorio.
+            # No es cosmetica: quien lee este fichero busca un numero de version,
+            # y la ruta ya está en su propia columna. Ademas cualquier consumidor
+            # que extraiga "el primer digito en adelante" se traga el "3" de
+            # miniforge3 y registra media ruta como si fuera la version.
+            v="$(printf '%s' "$v" | sed 's#^/[^[:space:]]*/##')"
+            printf '%s\t%s\t%s\n' "$t" "${v:-—}" "$(command -v "$t")"
+        else
+            printf '%s\t(no instalado)\t—\n' "$t"
+        fi
+    done
+    printf 'R\t%s\t%s\n' \
+        "$(Rscript -e 'cat(as.character(getRversion()))' 2>/dev/null || echo '—')" \
+        "$(command -v Rscript || echo '—')"
+  } > "${OUTPUT}/versions.tsv"
+}
+
+# ── Reemitir solo la procedencia ───────────────────────────────────────────
+# Un fallo del propio registrador puede dejar un versions.tsv corrupto en una
+# ejecución que por lo demás fue correcta. Realinear horas de FASTQ para
+# reparar un fichero de texto no tiene sentido, y reescribirlo a mano con otro
+# script si lo tiene todavia menos: seria un script paralelo que puede divergir
+# justo en el fichero que debe poder creerse. Se reemite con ESTE codigo.
+if [[ "${SOLO_VERSIONES:-0}" == "1" ]]; then
+    mkdir -p "$OUTPUT"
+    escribir_versiones
+    echo "versions.tsv reescrito en ${OUTPUT}"
+    exit 0
+fi
 
 
 # ── Metricas de ejecución: tiempo y memoria ────────────────────────────────
@@ -583,50 +661,7 @@ RUN_ID="$(date '+%Y%m%d_%H%M%S')_$$"
 } > "${OUTPUT}/run_params.tsv"
 
 # ── Versiones de las herramientas ──────────────────────────────────────────
-# Sin esto es imposible reconstruir que produjo exactamente un resultado. Se ha
-# demostrado que cambiar la versión de una herramienta del pipeline altera la
-# lista de genes diferenciales (Wessels Perelo et al., NAR Genom Bioinform 2024),
-# así que la versión es parte del resultado, no un detalle de instalación.
-log "Registrando versiones de las herramientas..."
-{
-    printf 'tool\tversion\tpath\n'
-    for t in fastqc fastp multiqc bowtie2 subjunc samtools featureCounts salmon kallisto; do
-        if command -v "$t" >/dev/null 2>&1; then
-            # Dos cuidados aquí, los dos aprendidos ejecutando.
-            #
-            # Primero, NO se canaliza hacía `head`: con `set -o pipefail`, una
-            # herramienta que sigue escribiendo después de la primera línea
-            # recibe SIGPIPE cuando head cierra, la tuberia devuelve 141 y
-            # `set -e` aborta el script. Ocurría con bowtie2, que imprime nueve
-            # líneas: la ejecución moria al registrar versiones, antes de
-            # alinear nada.
-            #
-            # Segundo, no todas aceptan `--version`: featureCounts usa `-v` y
-            # kallisto usa `version`. Y bowtie2 antepone dos líneas de aviso a
-            # la versión real. Coger la primera línea a ciegas registraba un
-            # aviso o un mensaje de error en el fichero de procedencia, que es
-            # justo el fichero que debe poder creerse.
-            case "$t" in
-                featureCounts|subjunc) v_full="$("$t" -v 2>&1 || true)" ;;
-                kallisto)      v_full="$("$t" version 2>&1 || true)" ;;
-                *)             v_full="$("$t" --version 2>&1 || true)" ;;
-            esac
-            # Primera línea no vacia que no sea un aviso ni un error, en UNA
-            # sola pasada de awk. Encadenar dos filtros donde el segundo sale
-            # pronto reproduce el mismo SIGPIPE que se acaba de corregir.
-            v="$(printf '%s\n' "$v_full" \
-                 | awk 'tolower($0) !~ /^(\[warning\]|warning|error)/ && NF { print; exit }' \
-                 || true)"
-            v="$(printf '%s' "$v" | tr -d '\r' | sed 's/\t/ /g')"
-            printf '%s\t%s\t%s\n' "$t" "${v:-—}" "$(command -v "$t")"
-        else
-            printf '%s\t(no instalado)\t—\n' "$t"
-        fi
-    done
-    printf 'R\t%s\t%s\n' \
-        "$(Rscript -e 'cat(as.character(getRversion()))' 2>/dev/null || echo '—')" \
-        "$(command -v Rscript || echo '—')"
-} > "${OUTPUT}/versions.tsv"
+escribir_versiones
 
 # ── Huella de los ficheros de entrada ──────────────────────────────────────
 # Permite demostrar que dos ejecuciones partieron de los mismos datos, y
