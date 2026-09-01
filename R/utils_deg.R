@@ -156,12 +156,12 @@ prefilter_counts <- function(counts, min_count = 10, min_samples = NULL,
 #'
 #' Devuelve también los niveles del factor y el de referencia.
 build_design <- function(meta, ref_level = NULL, batch = NULL,
-                         design_formula = NULL) {
+                         design_formula = NULL, continuous = NULL) {
   if (!is.null(design_formula)) {
     if (is.character(design_formula)) {
       design_formula <- stats::as.formula(design_formula)
     }
-    meta <- prepare_design_meta(meta, all.vars(design_formula))
+    meta <- prepare_design_meta(meta, all.vars(design_formula), continuous)
     formula_obj <- design_formula
   } else if (!is.null(batch) && nzchar(batch) && batch %in% names(meta)) {
     meta[[batch]] <- as.factor(meta[[batch]])
@@ -487,11 +487,12 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
                            fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                            contrast_num = NULL, use_ihw = FALSE,
                            design_formula = NULL, test_coef = NULL,
-                           outliers = c("na", "refit", "keep")) {
+                           outliers = c("na", "refit", "keep"),
+                           continuous = NULL) {
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
     return(list(table = NULL, error = "DESeq2 no está instalado."))
   }
-  d <- build_design(meta, ref_level, batch, design_formula)
+  d <- build_design(meta, ref_level, batch, design_formula, continuous)
   info <- deg_engine_info(d)
   out <- tryCatch({
     dds <- DESeq2::DESeqDataSetFromMatrix(
@@ -566,11 +567,12 @@ run_deg_deseq2 <- function(counts, meta, ref_level = NULL, batch = NULL,
 run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                           contrast_num = NULL, use_ihw = FALSE,
-                          design_formula = NULL, test_coef = NULL) {
+                          design_formula = NULL, test_coef = NULL,
+                          continuous = NULL) {
   if (!requireNamespace("edgeR", quietly = TRUE)) {
     return(list(table = NULL, error = "edgeR no está instalado."))
   }
-  d <- build_design(meta, ref_level, batch, design_formula)
+  d <- build_design(meta, ref_level, batch, design_formula, continuous)
   info <- deg_engine_info(d)
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
@@ -612,12 +614,13 @@ run_deg_edger <- function(counts, meta, ref_level = NULL, batch = NULL,
 run_deg_limma <- function(counts, meta, ref_level = NULL, batch = NULL,
                           fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                           contrast_num = NULL, use_ihw = FALSE,
-                          design_formula = NULL, test_coef = NULL) {
+                          design_formula = NULL, test_coef = NULL,
+                          continuous = NULL) {
   if (!requireNamespace("limma", quietly = TRUE) ||
       !requireNamespace("edgeR", quietly = TRUE)) {
     return(list(table = NULL, error = "Se requieren limma y edgeR para limma-voom."))
   }
-  d <- build_design(meta, ref_level, batch, design_formula)
+  d <- build_design(meta, ref_level, batch, design_formula, continuous)
   info <- deg_engine_info(d)
   out <- tryCatch({
     design <- stats::model.matrix(d$formula, data = d$meta)
@@ -711,7 +714,8 @@ run_deg <- function(counts, meta,
                     fdr = 0.05, lfc_threshold = 0, shrink = TRUE,
                     contrast_num = NULL, use_ihw = FALSE,
                     design_formula = NULL, test_coef = NULL,
-                    outliers = c("na", "refit", "keep")) {
+                    outliers = c("na", "refit", "keep"),
+                    continuous = NULL) {
   method <- match.arg(method)
   outliers <- match.arg(outliers)
   lvls <- unique(as.character(meta$condition[!is.na(meta$condition) &
@@ -730,7 +734,7 @@ run_deg <- function(counts, meta,
   # Con formula libre se válida ANTES de ajustar, para cambiar un error criptico
   # de DESeq2 en ingles por un diagnóstico que dice cual es el problema.
   if (!is.null(design_formula)) {
-    v <- validate_design_formula(design_formula, meta)
+    v <- validate_design_formula(design_formula, meta, continuous)
     if (!isTRUE(v$ok)) {
       return(list(table = NULL, method = method,
                   error = paste(v$errors, collapse = " ")))
@@ -740,11 +744,13 @@ run_deg <- function(counts, meta,
   res <- switch(method,
     "DESeq2"     = run_deg_deseq2(counts, meta, ref_level, batch, fdr, lfc_threshold,
                                   shrink, contrast_num, use_ihw, design_formula, test_coef,
-                                  outliers),
+                                  outliers, continuous = continuous),
     "edgeR"      = run_deg_edger(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                 shrink, contrast_num, use_ihw, design_formula, test_coef),
+                                 shrink, contrast_num, use_ihw, design_formula, test_coef,
+                                 continuous = continuous),
     "limma-voom" = run_deg_limma(counts, meta, ref_level, batch, fdr, lfc_threshold,
-                                 shrink, contrast_num, use_ihw, design_formula, test_coef)
+                                 shrink, contrast_num, use_ihw, design_formula, test_coef,
+                                 continuous = continuous)
   )
   res$method        <- method
   res$fdr           <- fdr

@@ -253,6 +253,34 @@ server_tab_deg <- function(input, output, session, state) {
     }
   })
 
+  # ── Qué variables son continuas ────────────────────────────────────────────
+  #
+  # Con formula libre la declaración del usuario es AUTORITATIVA: lo que no esté
+  # marcado se ajusta como factor. Sin formula libre no hay nada que declarar,
+  # porque `~ condition` y `~ batch + condition` fuerzan factor de todas formas,
+  # y se devuelve NULL para que decida la heuristica de `is_continuous_var()`.
+  #
+  # La distinción existe porque esa heuristica se equivoca justo en el diseño
+  # pareado: un `subject` codificado 1..8 pasa por covariable continua y el
+  # modelo le ajusta una pendiente lineal en vez de un bloque por sujeto.
+  deg_continuous_vars <- reactive({
+    if (!isTRUE(input$deg_advanced_design)) return(NULL)
+    as.character(input$deg_continuous_vars %||% character(0))
+  })
+
+  # El selector se rellena con las columnas numéricas del samplesheet y viene
+  # premarcado con lo que la heuristica habria elegido sola: activar el diseño
+  # avanzado no cambia por si mismo el ajuste, solo lo hace declarable.
+  observe({
+    df <- meta_rv()
+    if (is.null(df) || !nrow(df)) return()
+    cand <- design_numeric_vars(df)
+    auto <- cand[vapply(cand, function(v) is_continuous_var(df[[v]]), logical(1))]
+    prev <- isolate(input$deg_continuous_vars)
+    updateSelectInput(session, "deg_continuous_vars", choices = cand,
+                      selected = if (is.null(prev)) auto else intersect(prev, cand))
+  })
+
   # ── Diseño avanzado: validación en vivo ────────────────────────────────────
   # Se válida mientras se escribe, para que el error no llegue como un mensaje
   # criptico de DESeq2 después de esperar el ajuste.
@@ -260,7 +288,8 @@ server_tab_deg <- function(input, output, session, state) {
     if (!isTRUE(input$deg_advanced_design)) return(NULL)
     df <- meta_rv()
     if (is.null(df) || !nrow(df)) return(NULL)
-    validate_design_formula(input$deg_design_formula %||% "~ condition", df)
+    validate_design_formula(input$deg_design_formula %||% "~ condition", df,
+                            deg_continuous_vars())
   })
 
   output$deg_design_feedback <- renderUI({
@@ -326,6 +355,10 @@ server_tab_deg <- function(input, output, session, state) {
       avanzado   = isTRUE(input$deg_advanced_design),
       formula    = if (isTRUE(input$deg_advanced_design)) input$deg_design_formula else NULL,
       coef       = if (isTRUE(input$deg_advanced_design)) input$deg_test_coef else NULL,
+      # El tipado de las variables cambia la MATRIZ DE DISEÑO, así que pertenece
+      # al ajuste y no a la extracción: sin esto, desmarcar `subject` no
+      # invalidaria el modelo guardado y la interfaz mostraria el anterior.
+      continuas  = if (isTRUE(input$deg_advanced_design)) input$deg_continuous_vars else NULL,
       sva        = isTRUE(input$deg_use_sva),
       n_sv       = if (isTRUE(input$deg_use_sva)) input$deg_n_sv else NULL,
       prefiltro  = input$deg_prefilter_mode,
@@ -612,7 +645,8 @@ server_tab_deg <- function(input, output, session, state) {
                 fdr = fdr_target, lfc_threshold = lfc_thr, shrink = do_shrink,
                 contrast_num = num, use_ihw = isTRUE(input$deg_use_ihw),
                 design_formula = dsg_formula, test_coef = test_coef,
-                outliers = input$deg_outliers %||% "na"),
+                outliers = input$deg_outliers %||% "na",
+                continuous = deg_continuous_vars()),
         error = function(e) list(table = NULL, error = conditionMessage(e), method = method)
       )
       }

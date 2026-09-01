@@ -37,15 +37,42 @@ is_continuous_var <- function(x, min_levels = 5L) {
   length(unique(v[!is.na(v)])) >= min_levels
 }
 
+#' Columnas numéricas del samplesheet: las únicas que pueden ser continuas.
+#'
+#' El criterio de exclusión es el mismo que abre `is_continuous_var()`, para que
+#' lo que se ofrece al usuario y lo que la heuristica decide no puedan divergir.
+design_numeric_vars <- function(meta) {
+  vars <- setdiff(design_candidate_vars(meta), "condition")
+  vars[vapply(vars, function(v) {
+    x <- meta[[v]]
+    if (is.factor(x) || is.character(x) || is.logical(x)) return(FALSE)
+    !all(is.na(suppressWarnings(as.numeric(x))))
+  }, logical(1))]
+}
+
 #' Prepara `meta` para el diseño: convierte a factor lo que no sea continuo.
 #' Devuelve también el tipo asignado a cada variable, para poder mostrarlo.
+#'
+#' `continuous` NO es una lista de añadidos: cuando se pasa, es la declaración
+#' COMPLETA de qué variables son continuas, y lo que no está en ella es un
+#' factor. Pasar `character(0)` significa "ninguna es continua", y `NULL`
+#' significa "decidelo tu", que es la heuristica de `is_continuous_var()`.
+#'
+#' La distinción importa porque la heuristica se equivoca justo en el diseño
+#' pareado, que es el caso que motivó esta familia de funciones: un `subject`
+#' codificado 1..8 es numérico y tiene más de cinco valores distintos, así que
+#' `is_continuous_var()` lo da por continuo y el modelo le ajusta una PENDIENTE
+#' LINEAL en lugar de un bloque por sujeto. El resultado no falla ni avisa:
+#' sale un ajuste plausible y equivocado. Mientras `continuous` solo pudiera
+#' AÑADIR variables, no habia forma de contradecir a la heuristica.
 prepare_design_meta <- function(meta, vars = NULL, continuous = NULL) {
   if (is.null(meta)) return(NULL)
   vars <- vars %||% design_candidate_vars(meta)
   types <- character(0)
   for (v in intersect(vars, names(meta))) {
-    force_cont <- !is.null(continuous) && v %in% continuous
-    if (force_cont || is_continuous_var(meta[[v]])) {
+    es_continua <- if (is.null(continuous)) is_continuous_var(meta[[v]])
+                   else v %in% continuous
+    if (es_continua) {
       meta[[v]] <- suppressWarnings(as.numeric(meta[[v]]))
       types[v] <- "continua"
     } else {
